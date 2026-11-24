@@ -1,0 +1,11 @@
+// Cloudflare 上的静态站点（Workers 静态资源，项目名 pairdown）。先 make build-web，再 npx wrangler deploy。
+{
+  "name": "pairdown",
+  "compatibility_date": "2026-11-23",
+  "assets": {
+    // nsh 打包出来的目录；应用只有一个页面，找不到的路径都回到它
+    "directory": "dist/web/Pairdown",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [{ "pattern": "markdown.pairwise.site", "custom_domain": true }]
+}

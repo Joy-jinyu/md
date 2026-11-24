@@ -1,7 +1,7 @@
 NSH ?= nsh
 ENTRY := App.tsx
 
-.PHONY: help dev dev-web check test verify build-web build-mac clean
+.PHONY: help dev dev-web check test verify build-web build-mac deploy-web clean
 
 help: ## 列出命令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -27,6 +27,9 @@ build-web: ## 打包静态站到 dist/web/Pairdown/
 
 build-mac: ## 打包到 dist/macos/Pairdown.app
 	$(NSH) package $(ENTRY) --target macos -o dist/macos
+
+deploy-web: build-web ## 打包并发布到 Cloudflare（markdown.pairwise.site；要先 npx wrangler login）
+	npx --yes wrangler@4 deploy
 
 clean: ## 删掉打包产物
 	rm -rf dist
