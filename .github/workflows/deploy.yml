@@ -1,0 +1,41 @@
+# main 有新提交就检查、测试、打包网页版并发布到 Cloudflare Pages（项目名 pairdown，域名 markdown.pairwise.site 在 Cloudflare 的 Pages 项目里配）。
+# 站点按「独立域名的根路径」打包（nsh.json 的 web.base 是 "/"）。
+# 要两个仓库 secret：CLOUDFLARE_API_TOKEN（只给 Pages 的编辑权限）和 CLOUDFLARE_ACCOUNT_ID；没配时只检查、测试、打包，不发布。
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # 版本和本机一致（nsh --version），升级时两边一起改
+      - name: 安装 nsh
+        env:
+          NSH_VERSION: v0.6.0
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/longbridge/nsh/$NSH_VERSION/website/public/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/nsh" component add web
+      - run: make check
+      - run: make test
+      - run: make build-web
+      - name: 发布到 Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: npx --yes wrangler@4 pages deploy dist/web/Pairdown --project-name pairdown --branch main

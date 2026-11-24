@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Pairdown：一对竖线连成 M，下面一个朝下的尖角。满幅圆角方块，网页图标用。 -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#12b3b0"/>
+      <stop offset="1" stop-color="#0b6f78"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="228" fill="url(#g)"/>
+  <g fill="none" stroke="#fff" stroke-width="88.0" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M306.0 660.0 L306.0 304.0 L512.0 530.0 L718.0 304.0 L718.0 660.0"/>
+    <path d="M438.0 706.0 L512.0 780.0 L586.0 706.0" stroke-opacity="0.72"/>
+  </g>
+</svg>

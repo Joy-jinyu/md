@@ -1,0 +1,5 @@
+.nsh/
+target/
+dist/
+worker/.dev.vars
+.DS_Store

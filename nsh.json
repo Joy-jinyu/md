@@ -1,0 +1,30 @@
+{
+  "name": "Pairdown",
+  "id": "site.pairwise.md",
+  "version": "1.0.0",
+  "build": 1,
+  "icon": {
+    "macos": "assets/icon/icon-macos.png",
+    "web": "assets/icon/icon.png"
+  },
+  "theme": "theme.json",
+  "tailwind": {
+    "ease": {
+      "settle": [0.22, 1, 0.36, 1]
+    }
+  },
+  "capabilities": {
+    "openUrl": {
+      "schemes": ["http", "https", "mailto"]
+    },
+    "application": true,
+    "picker": true,
+    "fs": {
+      "read": ["${homeDir}/Downloads"],
+      "write": ["${homeDir}/Downloads"]
+    }
+  },
+  "web": {
+    "base": "/"
+  }
+}
