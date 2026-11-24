@@ -21,9 +21,10 @@ Pairdown：用 nsh（v0.6.0，TSX）写的所见即所得 Markdown 编辑器（�
 同步      GitHub REST API（fetch），一篇文档 = 一个私有 Gist
 登录      Web：OAuth 网页授权，code 换 token 走中转 Worker（client secret 不进前端）
           macOS：OAuth Device Flow（不需要 secret）
-发布      Web：nsh package --target web → Cloudflare Pages（项目 pairdown，域名 markdown.pairwise.site；nsh.json web.base = /）
+发布      Web：make build-web → npx wrangler deploy → Cloudflare（Workers 静态资源，项目 pairdown，配置在 wrangler.jsonc）
+          线上：https://markdown.pairwise.site/（2026-11-25 首次发布；nsh.json web.base = /）
           macOS：nsh package --target macos → .app
-CI        GitHub Actions：装 nsh v0.6.0 → check → test → package web → wrangler 发布到 Cloudflare Pages（要两个仓库 secret）
+CI        GitHub Actions：装 nsh v0.6.0 → check → test → package web → wrangler deploy（要两个仓库 secret，还没配，现在是本机手动发布）
 ```
 
 <!-- [inferred] 同步目标选 Gist：一篇一个私有 Gist 最简单，不需要用户先建仓库；若改成存仓库，改这里和 src/sync/ -->

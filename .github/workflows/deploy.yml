@@ -1,6 +1,6 @@
-# main 有新提交就检查、测试、打包网页版并发布到 Cloudflare Pages（项目名 pairdown，域名 markdown.pairwise.site 在 Cloudflare 的 Pages 项目里配）。
+# main 有新提交就检查、测试、打包网页版并发布到 Cloudflare（Workers 静态资源，项目名 pairdown，域名 markdown.pairwise.site，都写在 wrangler.jsonc 里）。
 # 站点按「独立域名的根路径」打包（nsh.json 的 web.base 是 "/"）。
-# 要两个仓库 secret：CLOUDFLARE_API_TOKEN（只给 Pages 的编辑权限）和 CLOUDFLARE_ACCOUNT_ID；没配时只检查、测试、打包，不发布。
+# 要两个仓库 secret：CLOUDFLARE_API_TOKEN（给 Workers 脚本和这个域的路由的编辑权限）和 CLOUDFLARE_ACCOUNT_ID；没配时只检查、测试、打包，不发布。
 name: deploy
 
 on:
@@ -33,9 +33,9 @@ jobs:
       - run: make check
       - run: make test
       - run: make build-web
-      - name: 发布到 Cloudflare Pages
+      - name: 发布到 Cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         if: env.CLOUDFLARE_API_TOKEN != ''
-        run: npx --yes wrangler@4 pages deploy dist/web/Pairdown --project-name pairdown --branch main
+        run: npx --yes wrangler@4 deploy
