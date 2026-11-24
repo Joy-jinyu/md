@@ -1,0 +1,78 @@
+// 边界样例（实施计划 4.9、3.5 节列出的问题样例）。原文逐字节写在字符串里：CRLF、BOM 用转义表示。
+const lines = (...ls: string[]): string => ls.join("\n");
+
+export const SAMPLES: Record<string, string> = {
+  "equal-json": lines("*a*", "", "_a_", "", "---", "", "***", ""),
+  "refs-footnotes": lines(
+    "正文引用 [链接][ref]，脚注一 [^one]，脚注二 [^two]。",
+    "",
+    '[ref]: https://example.com/ref "Ref"',
+    "",
+    "[^one]: 第一个脚注。",
+    "",
+    "    第二段，缩进四格。",
+    "",
+    "[^two]: 第二个脚注",
+    "懒续行。",
+    "",
+    "[^unused]: 没有被引用的脚注。",
+    "",
+    "末尾段落 [ref] 又用了一次。",
+    "",
+  ),
+  crlf: "# 标题\r\n\r\n段落一\r\n第二行\r\n\r\n- a\r\n- b\r\n\r\n```\r\ncode\r\n```\r\n",
+  bom: "﻿# BOM 标题\n\n正文\n",
+  "no-trailing-newline": "# 标题\n\n最后一段没有换行",
+  "blank-edges": "\n\n\n# 前面有空行\n\n正文\n\n\n\n",
+  "indented-after-list": lines("- a", "- b", "", "    列表后缩进四格", "", "1. x", "", "        项里的代码", "", "段落", "", "    真正的缩进代码", ""),
+  setext: lines("Title", "=====", "", "Sub *em*", "---", "", "正文", ""),
+  "rule-not-first": lines("段落", "", "---", "", "foo: bar", "---", "", "正文", ""),
+  "tight-list-end-defs": lines("[x]: https://x.com", "", "段落 [x]", "", "1. 一", "2. 二", "", "Setext 标题", "===", "", "- a [x]", "- b", ""),
+  details: lines("前", "", "<details>", "<summary>点开</summary>", "", "内容 **粗**", "", "- 列表", "", "</details>", "", "后", ""),
+  "div-center": lines('<div align="center">', '  <img src="logo.png" width="120">', "  <h1>项目</h1>", "</div>", "", "正文", ""),
+  "comment-blank-lines": lines("前", "", "<!--", "注释第一段", "", "注释第二段", "-->", "", "后", ""),
+  "adjacent-lists": lines("- a", "- b", "", "* c", "* d", ""),
+  "duplicate-headings": lines("# 同名", "", "正文", "", "# 同名", "", "正文", "", "## 同名", ""),
+  "nested-definition": lines("> [x]: https://x.com", "", "[x]", "", "后面", ""),
+  "mixed-eol": "a\r\nb\n\nc\r\n",
+  empty: "",
+};
+
+/** 800 项松散列表 */
+export function looseList(n: number): string {
+  return Array.from({ length: n }, (_, i) => `- 第 ${i} 项`).join("\n\n") + "\n";
+}
+
+/** 和实施计划 3.5 节同形的长文：每节标题 + 引用式链接段落 + 松散列表，n=2500 约 15 万字符、7500 块 */
+export function sectionDoc(n: number): string {
+  const body = Array.from({ length: n }, (_, i) => `## 第 ${i} 节\n\n段落 **粗体** 和 \`code\` 以及 [链接][r${i % 5}]。\n\n- 项 a\n\n- 项 b\n`).join("\n");
+  return body + "\n" + Array.from({ length: 5 }, (_, i) => `[r${i}]: https://e${i}.com`).join("\n") + "\n";
+}
+
+const SECTION = (i: number): string =>
+  [
+    `## ${i % 50 === 0 ? "重复标题" : `第 ${i} 节`}`,
+    "",
+    `正文第 ${i} 段，含 **粗体**、*斜体*、\`code\`、[引用][r${i % 3}] 和脚注 [^n${i % 4}]，还有公式 $x_${i}$。`,
+    "第二行是软换行。",
+    "",
+    "- 项目一",
+    "- 项目二",
+    "  - 嵌套",
+    "",
+    "```ts",
+    `const v${i} = ${i};`,
+    "",
+    "console.log(v);",
+    "```",
+    "",
+    "> 引用一行",
+    "",
+    i % 5 === 0 ? "| a | b |\n|---|:-:|\n| 1 | 2 |\n" : "1. 有序\n2. 第二\n",
+  ].join("\n");
+
+/** 真实感的长文（约 1 万行），计时用 */
+export function longDoc(sections: number): string {
+  const defs = ["[r0]: https://a.com", "[r1]: https://b.com", "[r2]: https://c.com", "", "[^n0]: 脚注零", "[^n1]: 脚注一", "[^n2]: 脚注二", "[^n3]: 脚注三"];
+  return ["---", "title: long", "---", "", ...Array.from({ length: sections }, (_, i) => SECTION(i)), ...defs].join("\n") + "\n";
+}
