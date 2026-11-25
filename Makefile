@@ -1,7 +1,7 @@
 NSH ?= nsh
 ENTRY := App.tsx
 
-.PHONY: help dev dev-web check test test-gateway test-worker verify build-web build-mac deploy-web clean
+.PHONY: help dev dev-web dev-landing check test test-gateway test-worker verify build-web build-mac deploy-web clean
 
 help: ## 列出命令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -37,6 +37,12 @@ build-web: ## 打包静态站到 dist/web/Pairdown/
 	node scripts/web-headers.mjs dist/web/Pairdown
 	cp gateway/install.sh dist/web/Pairdown/gateway.sh
 	git rev-parse HEAD:gateway > dist/web/Pairdown/gateway.version
+	mkdir -p dist/web/Pairdown/lp
+	cp -R landing/. dist/web/Pairdown/lp/
+	cp assets/icon/icon.png dist/web/Pairdown/lp/pairdown.png
+
+dev-landing: build-web ## 本机预览落地页：http://127.0.0.1:8813/lp/
+	python3 -m http.server 8813 --bind 127.0.0.1 --directory dist/web/Pairdown
 
 build-mac: ## 打包到 dist/macos/Pairdown.app
 	$(NSH) package $(ENTRY) --target macos -o dist/macos
