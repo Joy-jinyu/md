@@ -1,7 +1,10 @@
 import { expect, open, test } from "nsh/test";
 import { RICH_MAX_CHARS, RICH_MAX_LINES, RICH_MAX_TABLE_ROWS } from "../src/features/editor/EditorScreen";
 import { linkTarget } from "../src/features/editor/links";
-import { DOC_KEY } from "../src/store/document";
+// 旧版（单篇）的正文键：存进去的那篇启动时原地成为文档库的第一篇，测试照旧在这里读写
+import { LEGACY_DOC_KEY as DOC_KEY } from "../src/store/kv";
+import { openedBody } from "./fixtures/library";
+import { memoryFs } from "./fixtures/memory-fs";
 
 const WEB = { platform: "web" as const, width: 1280, height: 860 };
 /** 存储上限（实测：键和值的字符数合计 5 MiB）。 */
@@ -152,30 +155,41 @@ test("the link check opens only http, https, mailto and anchors", () => {
   expect(linkTarget("#intro")).toEqual({ kind: "anchor", id: "intro" });
 });
 
-test("on macOS the stored document opens, and Ctrl-Shift-` strikes text through", async () => {
-  const app = await open("../App.tsx", { platform: "macos", width: 1280, height: 860, storage: { [DOC_KEY]: "# Mac\n\nbeta\n" } });
+test("on macOS the stored document moves into the library folder, opens, and Ctrl-Shift-` strikes text through", async () => {
+  const disk = memoryFs();
+  const app = await open("../App.tsx", { platform: "macos", width: 1280, height: 860, storage: { [DOC_KEY]: "# Mac\n\nbeta\n" }, modules: disk.modules });
   await app.waitFor("text:beta");
   expect(app.texts()).toContain("Mac");
+  expect(app.storage()[DOC_KEY]).toBeUndefined();
   await app.press("text:beta");
   await app.keyboard.press("home");
   await app.keyboard.press("shift+end");
   await app.keyboard.press("ctrl+shift+`");
   await app.waitFor("text:已保存", { timeout: 3000 });
-  expect(app.storage()[DOC_KEY]).toContain("~~beta~~");
+  expect(disk.library()).toEqual({ "Mac.md": "# Mac\n\n~~beta~~\n" });
 });
+
+/** 打开应用，返回取「开着的那篇存下的原文」的函数：网页里在 Storage，macOS 上是文库里唯一的那个文件。 */
+async function openOn(platform: "web" | "macos") {
+  const disk = memoryFs();
+  const app = await open("../App.tsx", { ...WEB, platform, modules: platform === "macos" ? disk.modules : {} });
+  const body = () => (platform === "macos" ? (Object.values(disk.library())[0] ?? "") : openedBody(app.storage()));
+  return { app, body };
+}
 
 for (const platform of ["web", "macos"] as const) {
   test(`${platform}: typing **bold** right after Chinese text makes it bold, and the Markdown keeps the markers`, async () => {
-    const app = await open("../App.tsx", { ...WEB, platform });
+    const { app, body } = await openOn(platform);
     await app.type("label:正文", "中文**粗体**完");
     await app.waitFor("text:已保存", { timeout: 3000 });
-    expect(app.storage()[DOC_KEY]).toBe("中文**粗体**完\n");
+    // 没有旧文档时，第一次打开新建的那篇
+    expect(body()).toBe("中文**粗体**完\n");
   });
 
   test(`${platform}: typed punctuation is stored as typed, not swapped for typographic characters`, async () => {
-    const app = await open("../App.tsx", { ...WEB, platform });
+    const { app, body } = await openOn(platform);
     await app.type("label:正文", 'npm i --save-dev x... "q" -> 2x3');
     await app.waitFor("text:已保存", { timeout: 3000 });
-    expect(app.storage()[DOC_KEY]).toBe('npm i --save-dev x... "q" -> 2x3\n');
+    expect(body()).toBe('npm i --save-dev x... "q" -> 2x3\n');
   });
 }

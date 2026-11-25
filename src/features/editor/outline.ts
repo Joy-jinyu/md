@@ -11,13 +11,25 @@ export interface Node {
 const TEXTBLOCKS = new Set(["paragraph", "heading", "codeBlock"]);
 
 /** ProseMirror 的 nodeSize：文字按字符数，叶子 1，其余 2 + 子节点。 */
-function nodeSize(node: Node): number {
+export function nodeSize(node: Node): number {
   if (node.type === "text") return node.text?.length ?? 0;
   if (!node.content) return TEXTBLOCKS.has(node.type) ? 2 : 1;
   return node.content.reduce((sum, child) => sum + nodeSize(child), 2);
 }
 
-function textOf(node: Node): string {
+/** 按文档顺序走遍每个节点（含行内的），带上它在文档里的起始位置；`visit` 返回 false 时不进它的子节点。 */
+export function eachNode(doc: Node, visit: (node: Node, pos: number) => boolean | void) {
+  const walk = (nodes: Node[], start: number) => {
+    let pos = start;
+    for (const node of nodes) {
+      if (visit(node, pos) !== false && node.content) walk(node.content, pos + 1);
+      pos += nodeSize(node);
+    }
+  };
+  walk(doc.content ?? [], 0);
+}
+
+export function textOf(node: Node): string {
   return node.type === "text" ? (node.text ?? "") : (node.content ?? []).map(textOf).join("");
 }
 
@@ -84,7 +96,5 @@ export function documentTitle(doc: Node): string {
   return heading ? textOf(heading).trim() : "";
 }
 
-/** 源码方式打开时的文档名：第一个 ATX 标题（`# …`）的文字，没有时是空串。 */
-export function markdownTitle(markdown: string): string {
-  return /^ {0,3}#{1,6}[ \t]+(.*?)[ \t#]*$/m.exec(markdown)?.[1]?.trim() ?? "";
-}
+/** 源码方式打开时的文档名（文档库列表也用它，所以放在 doc/）。 */
+export { markdownTitle } from "../../doc/title";

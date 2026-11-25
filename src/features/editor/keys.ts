@@ -1,5 +1,6 @@
 /** 命令表里的键怎么接到应用上：编辑器里由插件截，编辑器外由 keymap 绑；两条路走同一个出口。 */
 import { keymap } from "nsh";
+import { installAppMenu } from "./app-menu";
 import { type AppCommand, COMMANDS, isViewCommand } from "./commands";
 import { keyOf } from "./keybindings";
 
@@ -37,8 +38,9 @@ export function once(run: (c: AppCommand) => void): (c: AppCommand) => void {
   };
 }
 
-/** 焦点不在所见即所得编辑器里时（源码视图、查找框、页面空白处）也要生效的键。在组件渲染时调用，随组件卸载解绑。 */
+/** 焦点不在所见即所得编辑器里时（源码视图、查找框、页面空白处）也要生效的键。在组件渲染时调用，随组件卸载解绑。macOS 的菜单栏也在这时按现在的键重建。 */
 export function bindViewKeys(run: (c: AppCommand) => void) {
+  installAppMenu(run);
   for (const c of jsCommands().filter(isViewCommand)) {
     try {
       keymap.bind(toKeymapName(keyOf(c) as string), () => run(c), { when: "always" });

@@ -7,6 +7,10 @@ import { stepHeading } from "../src/features/editor/heading-step";
 import { caretPosIn, currentHeading, headingStarts, markdownTitle, type Node, topBlocks } from "../src/features/editor/outline";
 import { blockAtLine, lineOfBlock } from "../src/features/editor/source-align";
 import { createUi } from "../src/features/editor/ui-state";
+import { setSyncConfigForTests, syncConfig } from "../src/sync/config";
+
+/** 这个文件按「没配同步」来断言命令清单（真的配置现在是填好的）；配好以后多出「同步…」由下面专门的用例管。 */
+setSyncConfigForTests({ clientId: "", workerUrl: "" });
 
 const text = (t: string): Node => ({ type: "text", text: t });
 const para = (...content: Node[]): Node => ({ type: "paragraph", content });
@@ -25,10 +29,37 @@ test("the command filter puts prefix matches first and ignores case and spaces",
   expect(filterCommands(SLASH_COMMANDS, "")).toEqual(SLASH_COMMANDS);
 });
 
-test("only find, replace, the palette, settings, appearance and the file commands work in source-only documents", () => {
+test("only find, replace, the document list, the palette, settings, appearance and the file commands work in source-only documents", () => {
   const ctx: CommandContext = { ui: createUi(), session: null, askLink: () => undefined, askAtom: () => undefined, toggleSource: null };
   const usable = ids(COMMANDS.filter((c) => available(c, ctx)));
-  expect(usable).toEqual(["view.find", "view.replace", "view.palette", "view.settings", "view.appearance", "file.open", "file.saveAs"]);
+  expect(usable).toEqual([
+    "view.find",
+    "view.replace",
+    "view.documents",
+    "view.palette",
+    "view.settings",
+    "view.appearance",
+    "file.new",
+    "file.quickOpen",
+    "file.history",
+    "file.open",
+    "file.saveAs",
+    "file.exportHtml",
+  ]);
+});
+
+test("「同步…」 is only offered when sync is configured (a GitHub OAuth App client id)", () => {
+  const ctx: CommandContext = { ui: createUi(), session: null, askLink: () => undefined, askAtom: () => undefined, toggleSource: null };
+  const sync = COMMANDS.filter((c) => c.id === "file.sync");
+  const before = syncConfig();
+  try {
+    setSyncConfigForTests({ clientId: "", workerUrl: "" });
+    expect(sync.filter((c) => available(c, ctx))).toEqual([]);
+    setSyncConfigForTests({ clientId: "test-client", workerUrl: "https://api.github.com/test-auth-worker" });
+    expect(ids(sync.filter((c) => available(c, ctx)))).toEqual(["file.sync"]);
+  } finally {
+    setSyncConfigForTests(before);
+  }
 });
 
 test("selected text counts CJK characters as words and leaves line breaks out of the character count", () => {

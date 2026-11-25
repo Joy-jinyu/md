@@ -1,5 +1,6 @@
 /** 粘贴：剪贴板里是 Markdown 文本时，按 Markdown 读成节点再插入，而不是一行一段地当字面文字贴进来。 */
-import { command, type RichClipboardContent, type RichEditorSession, type RichNodeJSON, setTextSelection } from "nsh/base";
+import { command, type RichClipboardContent, type RichEditorSession, type RichNodeJSON, type RichSliceJSON, setTextSelection } from "nsh/base";
+import { isRelativeSrc } from "../../store/image-file";
 import { loadMarkdown } from "./convert";
 
 /** 行首的块记号：标题、列表、引用、代码围栏、表格行、分隔线。 */
@@ -11,6 +12,25 @@ const INLINE_SYNTAX = /\*\*[^*\n]+\*\*|`[^`\n]+`|~~[^~\n]+~~|==[^=\n]+==|!?\[[^\
  * 代码编辑器复制出来的 HTML 只有上色用的 div / span，那种按 Markdown 文本读。
  */
 const FORMATTED_HTML = /<(?:h[1-6]|ul|ol|li|table|blockquote|strong|em|b|i|a|img|code|p)\b/i;
+
+/** 粘贴进来的图片只留这几种地址：http(s) 外链、相对路径（文档库里的图）、位图的 data:（随后存进文档库）。 */
+const PASTED_IMAGE_SRC = /^(?:https?:\/\/|data:image\/(?:png|jpeg|gif|webp|avif);base64,)/i;
+
+const keepPastedImage = (src: string) => PASTED_IMAGE_SRC.test(src.trim()) || isRelativeSrc(src);
+
+function withoutUnsafeImages(nodes: RichNodeJSON[]): RichNodeJSON[] {
+  return nodes
+    .filter((n) => n.type !== "image" || keepPastedImage(String(n.attrs?.src ?? "")))
+    .map((n) => (n.content ? { ...n, content: withoutUnsafeImages(n.content as RichNodeJSON[]) } : n));
+}
+
+/**
+ * 接在编辑器的 transformPasted 上：网页、Word 里贴进来的 `<img src="javascript:…">`、`file:///…`、SVG 的 data: 这类图片节点直接丢掉，
+ * 不让它们进正文（显示时本来也不加载，但会跟着存进 Markdown、导出进 HTML）。
+ */
+export function dropUnsafeImages(slice: RichSliceJSON): RichSliceJSON {
+  return slice.content ? { ...slice, content: withoutUnsafeImages(slice.content) } : slice;
+}
 
 /** 多行文字要有块记号才算 Markdown：只有行内记号的多行按 Markdown 读会把换行并成空格。单行有行内记号就算。 */
 export const looksLikeMarkdown = (text: string) => BLOCK_SYNTAX.test(text) || (!text.trim().includes("\n") && INLINE_SYNTAX.test(text));

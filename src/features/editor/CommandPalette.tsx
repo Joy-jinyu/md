@@ -1,12 +1,26 @@
-/** 命令面板（Cmd+Shift+P）：所有现在能用的命令，加上跳到某个标题。 */
+/** 命令面板（Cmd+Shift+P）：所有现在能用的命令，加上最近的几篇文档、跳到某个标题。 */
 import { Text, untracked, View } from "nsh";
 import { Command, type CommandItem, Dialog } from "nsh/base";
+import { allDocs, currentDocId, displayName } from "../../store/library";
+import { requestLibrary } from "../library/requests";
 import { type AppCommand, available, type CommandContext, COMMANDS } from "./commands";
 import { keyOf } from "./keybindings";
 import { toKeymapName } from "./keys";
 import type { HeadingEntry } from "./outline";
+import { registerTransient } from "./ui-state";
 
 const HEADING_PREFIX = "heading:";
+const DOC_PREFIX = "doc:";
+/** 「最近文档」列几篇：再多就该用快速打开（Cmd+Shift+O）去找了。 */
+const RECENT_DOCS = 5;
+
+function recentDocs(): CommandItem[] {
+  const recent = allDocs()
+    .filter((d) => d.id !== currentDocId())
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, RECENT_DOCS);
+  return recent.map((d) => ({ id: `${DOC_PREFIX}${d.id}`, label: displayName(d) || "未命名", keywords: [d.name], group: "最近文档" }));
+}
 
 function items(ctx: CommandContext, headings: HeadingEntry[]): CommandItem[] {
   const commands = COMMANDS.filter((c) => c.id !== "view.palette" && available(c, ctx)).map((c) => ({
@@ -17,7 +31,7 @@ function items(ctx: CommandContext, headings: HeadingEntry[]): CommandItem[] {
     shortcut: keyOf(c) ? toKeymapName(keyOf(c) as string) : null,
   }));
   const jumps = headings.map((h, i) => ({ id: `${HEADING_PREFIX}${i}`, label: h.text || "（空标题）", group: "标题" }));
-  return [...commands, ...jumps];
+  return [...commands, ...recentDocs(), ...jumps];
 }
 
 /**
@@ -37,6 +51,11 @@ export function CommandPalette(props: {
     open.set(false);
     setTimeout(then, 0);
   };
+  registerTransient(() => {
+    const was = open();
+    if (was) open.set(false);
+    return was;
+  });
   let headings: HeadingEntry[] = [];
   const list = () => {
     if (!open()) return [];
@@ -44,7 +63,9 @@ export function CommandPalette(props: {
     return items(props.ctx, headings);
   };
   const select = (id: string) => {
-    if (id.startsWith(HEADING_PREFIX)) {
+    if (id.startsWith(DOC_PREFIX)) {
+      close(() => requestLibrary({ kind: "open", id: id.slice(DOC_PREFIX.length) }));
+    } else if (id.startsWith(HEADING_PREFIX)) {
       const h = headings[Number(id.slice(HEADING_PREFIX.length))];
       close(() => h && props.onJump(h));
     } else {

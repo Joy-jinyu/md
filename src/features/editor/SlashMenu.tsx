@@ -1,10 +1,13 @@
 /** 斜杠菜单：在正文里打 `/` 弹出，接着打字过滤，上下键选，回车或 Tab 确定。 */
-import { keymap, signal, Text, View } from "nsh";
+import { keymap, signal, Text, View, windowSize } from "nsh";
 import { deleteRange, type RichEditorSession, setSuggestionOpen } from "nsh/base";
 import { type AppCommand, filterCommands, SLASH_COMMANDS } from "./commands";
 import { keyOf } from "./keybindings";
 import { toKeymapName } from "./keys";
 import { SLASH_KEY } from "./rich-session";
+
+/** 菜单宽度。 */
+const MENU_WIDTH = 240;
 
 /** 一次最多显示几行，多的跟着选中项滚。 */
 const VISIBLE_ROWS = 8;
@@ -67,10 +70,12 @@ export function SlashMenu(props: { slash: SlashState }) {
   const s = props.slash;
   const start = () => Math.max(0, Math.min(s.index() - 3, s.items().length - VISIBLE_ROWS));
   const rows = () => s.items().slice(start(), start() + VISIBLE_ROWS);
+  // 浮层按自己的中点对齐光标；外面套一个两倍宽、不接点击的空盒子，菜单靠右，左边就正好落在光标处。
+  // 窗口放不下两倍宽时不套（宿主把浮层挪进窗口，菜单就贴着窗口左边），不然菜单右半截出了窗口
+  const roomy = () => windowSize().width >= MENU_WIDTH * 2 + 32;
   return (
-    // 浮层按自己的中点对齐光标；外面套一个两倍宽、不接点击的空盒子，菜单靠右，左边就正好落在光标处
-    <View style={{ pointerEvents: "box-none" }} class="w-[480px] items-end">
-      <View testID="slash-menu" accessibilityLabel="插入" class="w-[240px] rounded-(--radius) border border-border bg-popover p-1 shadow-md">
+    <View style={{ pointerEvents: "box-none", width: roomy() ? MENU_WIDTH * 2 : MENU_WIDTH }} class="items-end">
+      <View testID="slash-menu" accessibilityLabel="插入" style={{ width: MENU_WIDTH }} class="rounded-(--radius) border border-border bg-popover p-1 shadow-md">
         <Each of={rows()} key={(c) => c.id}>
           {(c) => (
             <View

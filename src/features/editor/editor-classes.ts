@@ -10,6 +10,7 @@ const heading = "mb-1.5 mt-5 font-semibold text-strong";
  * 外层盒子（content）上的 gap 对块不起作用（nsh 0.6.0 web host 实测），所以块距只能写在各个块上。
  */
 const ITEM = "-my-1.5";
+const ALERT = "pt-7 text-foreground";
 
 export const EDITOR_CLASSES: RichEditorClasses = {
   root: "flex-1 text-foreground",
@@ -29,6 +30,12 @@ export const EDITOR_CLASSES: RichEditorClasses = {
     "heading[level=5]": `${heading} text-[17px] leading-[28px]`,
     "heading[level=6]": "mb-1.5 mt-5 text-[15px] font-semibold leading-[26px] text-muted-foreground",
     blockquote: `${BLOCK} border-l-[3px] border-border-strong pl-4 text-muted-foreground`,
+    // 提示块：左边色条换成类型色，上面留 28 给类型标签（标签由 BlockOverlays 盖上去：挂件装饰的文字 web host 不显示，nsh 0.6.0 实测）
+    "blockquote[alert=note]": `${ALERT} border-alert-note`,
+    "blockquote[alert=tip]": `${ALERT} border-alert-tip`,
+    "blockquote[alert=important]": `${ALERT} border-alert-important`,
+    "blockquote[alert=warning]": `${ALERT} border-alert-warning`,
+    "blockquote[alert=caution]": `${ALERT} border-alert-caution`,
     codeBlock: `${BLOCK} rounded-(--radius-sm) bg-muted px-4 py-3 font-mono text-[14px] leading-[22px]`,
     bulletList: `${BLOCK} gap-1 pl-6`,
     orderedList: `${BLOCK} gap-1 pl-6`,
@@ -39,6 +46,10 @@ export const EDITOR_CLASSES: RichEditorClasses = {
     table: "my-3",
     tableCell: "border border-border px-3 py-0.5",
     tableHeader: "border border-border bg-muted px-3 py-0.5 font-semibold",
+    "tableCell[align=center]": "text-center",
+    "tableCell[align=right]": "text-right",
+    "tableHeader[align=center]": "text-center",
+    "tableHeader[align=right]": "text-right",
     mathBlock: BLOCK,
     diagram: BLOCK,
     rawBlock: BLOCK,
@@ -57,5 +68,8 @@ export const EDITOR_CLASSES: RichEditorClasses = {
     code: "rounded-(--radius-sm) bg-muted font-mono text-[15px]",
     link: "text-primary underline",
     highlight: "bg-warn-tint",
+    // 上下标只能缩小字号：nsh 0.6.0 的 mark 不认 translate、align-*，也不认 em 字号，字只能落在基线上（2026-11-25 web host 实测）
+    subscript: "text-[13px]",
+    superscript: "text-[13px]",
   },
 };

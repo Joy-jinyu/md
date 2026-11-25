@@ -1,0 +1,15 @@
+# Pairdown 网页版登录的中转 Worker（已部署，2026-11-25）。部署步骤见 README.md。
+# client secret 不写在这里：用 `npx wrangler secret put GITHUB_CLIENT_SECRET --config ./wrangler.toml` 存进 Worker 的 secret。
+name = "pairdown-auth"
+main = "src/worker.mts"
+compatibility_date = "2026-11-23"
+
+[vars]
+# GitHub OAuth App 的 client id（公开值），和 src/sync/config.ts 的 GITHUB_CLIENT_ID 一样
+GITHUB_CLIENT_ID = "Ov23liULOP1R8U49R9od"
+# 允许调用的页面来源，逗号分隔，写完整的 origin（协议 + 域名 + 端口）
+ALLOWED_DOMAINS = "https://markdown.pairwise.site"
+
+# 不记日志：不开 observability / logpush
+[observability]
+enabled = false

@@ -1,4 +1,5 @@
 import type { PMMark, PMNode } from "./types";
+import { imgTag, normalAlign, normalWidth } from "./img-tag";
 
 /** 写一个块时的上下文选项 */
 export interface WriteOptions {
@@ -30,6 +31,10 @@ const EMPHASIS: Record<string, { md: string; tag: string }> = {
   strike: { md: "~~", tag: "del" },
 };
 const TAGS: Record<string, string> = { underline: "u", subscript: "sub", superscript: "sup", highlight: "mark" };
+/** 下标、上标的 Typora 写法（`~x~`、`^x^`）；读入规则见 features/editor/parse.ts 的 `SCRIPT_PAIR`，两边的字符集要一致 */
+const SCRIPT: Record<string, string> = { subscript: "~", superscript: "^" };
+const SCRIPT_BODY = /^[^\s~^*_`[\]\\<>$=&!|]+$/;
+const CARET_PAIR = /\^[^\s~^*_`[\]\\<>$=&!|]+\^/;
 const ENTITY = /^&(?:#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});/;
 const AUTOLINK_START = /^<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:|[^\s<>@]+@)/;
 const WORD = /[\p{L}\p{N}]/u;
@@ -60,10 +65,12 @@ function escapeLineStart(raw: string, k: number): { s: string; len: number } | n
   return m ? { s: m[1] + "\\" + m[2], len: m[0].length } : null;
 }
 
-function escapeChar(raw: string, k: number, inLink: boolean): string {
+function escapeChar(raw: string, k: number, inLink: boolean, caret: boolean): string {
   const c = raw[k];
   const next = raw[k + 1];
   switch (c) {
+    case "^":
+      return caret ? "\\^" : "^";
     // 反斜杠紧跟 ] 时写成实体：解析器会把 \[ … \] 读成公式，哪怕那个反斜杠本身是转义出来的
     case "\\":
       return next === undefined || next === "]" || next === "\n" ? "&#92;" : "\\\\";
@@ -89,6 +96,8 @@ function escapeChar(raw: string, k: number, inLink: boolean): string {
 
 /** 文字转义：只转会被读成语法的字符，读回来必须还是同一串文字 */
 function escapeText(raw: string, lineStart: boolean, inLink: boolean): string {
+  // 成对的 ^x^ 会被读成上标：这段文字里有这样的一对才转义 ^，平常的 2^10 不加反斜杠
+  const caret = CARET_PAIR.test(raw);
   let out = "";
   let atLine = lineStart;
   for (let k = 0; k < raw.length; k++) {
@@ -104,7 +113,7 @@ function escapeText(raw: string, lineStart: boolean, inLink: boolean): string {
       k += lead.len - 1;
       continue;
     }
-    out += escapeChar(raw, k, inLink);
+    out += escapeChar(raw, k, inLink, caret);
   }
   return out;
 }
@@ -139,7 +148,7 @@ function leafLiteral(node: PMNode, ctx: InlineCtx): Tok | null {
     case "hardBreak":
       return ctx.table || ctx.heading ? { t: "lit", s: "<br>" } : { t: "lit", s: "\\\n", br: true };
     case "image":
-      return { t: "lit", s: `![${escapeText(String(a.alt ?? ""), false, true)}](${linkDest(String(a.src ?? ""))}${linkTitle(a.title)})` };
+      return { t: "lit", s: imageMarkdown(node, ctx.table === true) };
     case "mathInline":
       return { t: "lit", s: `$${String(a.tex ?? "")}$` };
     case "htmlInline":
@@ -149,6 +158,22 @@ function leafLiteral(node: PMNode, ctx: InlineCtx): Tok | null {
     default:
       return null;
   }
+}
+
+/**
+ * 图片：设了宽度或对齐写成 `<img>`（见 img-tag.ts），否则 `![alt](src "title")`。
+ * 链接里的图片不写 `<img>`：链接文字里的 HTML 读回来是普通文字（nsh 0.6.0 实测），图会变成字；所以链接里的图片不能设宽度 / 对齐（images.ts 的 `canResize`）。
+ * 表格里 alt 的换行换成空格：换行会把表格行拆开。
+ */
+function imageMarkdown(node: PMNode, table: boolean): string {
+  const a = node.attrs ?? {};
+  const src = String(a.src ?? "");
+  const alt = table ? String(a.alt ?? "").replace(/\r?\n/g, " ") : String(a.alt ?? "");
+  const width = normalWidth(a.width);
+  const align = normalAlign(a.align);
+  const linked = (node.marks ?? []).some((m) => m.type === "link");
+  if ((width || align) && !linked) return imgTag({ src, alt, title: typeof a.title === "string" && a.title !== "" ? a.title : null, width, align }, table);
+  return `![${escapeText(alt, false, true)}](${linkDest(src)}${linkTitle(a.title)})`;
 }
 
 /** 从栈顶关掉不再需要的 mark，直到栈里剩下的都还要用（保持嵌套合法） */
@@ -245,6 +270,32 @@ function simpleHighlight(toks: Tok[], a: number, b: number): boolean {
   return !(prev?.t === "text" && prev.raw.endsWith("=")) && !(next?.t === "text" && next.raw.startsWith("="));
 }
 
+/** 写出的最后一个字（`forms` 是已经定下的 mark 写法） */
+function endChar(t: Tok | undefined, forms: Map<number, [string, string]>): string {
+  if (!t) return "";
+  if (t.t === "text" || t.t === "lit") return t.s.slice(-1);
+  return forms.get(t.id)?.[t.t === "open" ? 0 : 1].slice(-1) ?? "";
+}
+
+/** 第 a 个记号在链接文字里（解析器的扩展不进链接，那里的 `~x~` 读不回下标） */
+function insideLink(toks: Tok[], a: number): boolean {
+  const open = new Set<number>();
+  for (let k = 0; k < a; k++) {
+    const t = toks[k];
+    if (t.t === "open" && t.mark.type === "link") open.add(t.id);
+    else if (t.t === "close") open.delete(t.id);
+  }
+  return open.size > 0;
+}
+
+/** 只包着一段不带记号的文字、不在链接里、前后不挨着会和它连起来的字符时，下标 / 上标写成 `~x~` / `^x^` */
+function simpleScript(toks: Tok[], a: number, b: number, ch: string, forms: Map<number, [string, string]>): boolean {
+  const inner = toks[a + 1];
+  if (b !== a + 2 || inner.t !== "text" || !SCRIPT_BODY.test(inner.raw) || insideLink(toks, a)) return false;
+  const next = toks[b + 1];
+  return !"~^[\\".includes(endChar(toks[a - 1], forms) || " ") && !(next?.t === "text" && next.s.startsWith(ch));
+}
+
 /** 链接文字就是地址本身：写成 <地址>（自动链接里不处理转义，所以要求地址里没有空白和尖括号） */
 function autolinkOf(toks: Tok[], a: number, b: number, mark: PMMark): string | null {
   const inner = toks[a + 1];
@@ -260,6 +311,8 @@ function delimiters(toks: Tok[], a: number, b: number, forms: Map<number, [strin
   if (auto) return [auto, ""];
   if (mark.type === "link") return ["[", `](${linkDest(String(mark.attrs?.href ?? ""))}${linkTitle(mark.attrs?.title)})`];
   if (mark.type === "highlight" && simpleHighlight(toks, a, b)) return ["==", "=="];
+  const script = SCRIPT[mark.type];
+  if (script && simpleScript(toks, a, b, script, forms)) return [script, script];
   const tag = TAGS[mark.type];
   if (tag) return [`<${tag}>`, `</${tag}>`];
   const e = EMPHASIS[mark.type];
@@ -303,12 +356,17 @@ function entityOf(c: string): string {
   return c === "\t" ? "&#9;" : "&#32;";
 }
 
-/** 行首、行尾的空白会被解析器吃掉，换成实体保住 */
+/**
+ * 行首、行尾的空白会被解析器吃掉，换成实体保住。例外（Markdown 本来就表达不了，写成实体反而让文件里冒出 `&#32;`）：
+ * 整段只有空白的写成空的（这一段不写）；整段最后一行有字时，行尾的空白直接去掉。
+ * 这两种再读回来少了那几个空白，是保真约定里认可的差别（见 tests/doc-roundtrip.test.ts「段尾空白」）。
+ */
 function protectEdges(s: string): string {
-  return s
-    .split("\n")
-    .map((line) => line.replace(/^[ \t]/, entityOf).replace(/[ \t](\\?)$/, (m, bs: string) => entityOf(m[0]) + bs))
-    .join("\n");
+  if (/^[ \t]*$/.test(s)) return "";
+  const lines = s.split("\n");
+  const last = lines.length - 1;
+  if (/[^ \t]/.test(lines[last])) lines[last] = lines[last].replace(/[ \t]+$/, "");
+  return lines.map((line) => line.replace(/^[ \t]/, entityOf).replace(/[ \t](\\?)$/, (m, bs: string) => entityOf(m[0]) + bs)).join("\n");
 }
 
 /**
@@ -331,6 +389,14 @@ export function isEmptyParagraph(node: PMNode): boolean {
 
 function textOf(node: PMNode): string {
   return (node.content ?? []).map((c) => c.text ?? "").join("");
+}
+
+/** 围栏后的信息串：语言 + 附加信息。没有语言但有附加信息时语言写 `text`，不然再读时附加信息的第一个词会被当成语言。 */
+function codeInfo(language: unknown, meta: unknown): string {
+  const lang = typeof language === "string" ? language : "";
+  const extra = typeof meta === "string" ? meta : "";
+  if (extra === "") return lang;
+  return `${lang || "text"} ${extra}`;
 }
 
 function fenced(code: string, info: string): string {
@@ -431,6 +497,8 @@ function writeBlocks(nodes: PMNode[], sep: (prev: PMNode, next: PMNode) => strin
   for (const node of nodes) {
     if (isEmptyParagraph(node)) continue;
     const text = blockToMarkdown(node, listOptions(node, prev, prevText));
+    // 只有空白的段落写出来是空的，和空段落一样跳过（同 save.ts 的 assemble）
+    if (text === "") continue;
     out += prev ? sep(prev, node) + text : text;
     prev = node;
     prevText = text;
@@ -453,7 +521,7 @@ export function blockToMarkdown(node: PMNode, opts: WriteOptions = {}): string {
     case "orderedList":
       return list(node, opts);
     case "codeBlock":
-      return fenced(textOf(node), [a.language, a.meta].filter((x) => typeof x === "string" && x !== "").join(" "));
+      return fenced(textOf(node), codeInfo(a.language, a.meta));
     case "diagram":
       return fenced(String(a.code ?? ""), "mermaid");
     case "mathBlock":

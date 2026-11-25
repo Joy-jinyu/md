@@ -1,15 +1,35 @@
-/** 编辑页（M1 唯一的屏幕）：读出存着的文档，按大小和能否读进编辑器选富文本或源码方式；失焦、切后台、退出时立即保存。 */
+/**
+ * 编辑页：读出文档库里开着的那一篇，按大小和能否读进编辑器选富文本或源码方式；换一篇就整个重建。
+ * 失焦、切后台、退出时立即保存；窗口重新获得焦点时和存储比对版本（另一个标签页可能改过）。
+ */
 import { effect, lifecycle, signal, untracked, View } from "nsh";
-import { Application } from "nsh/desktop";
-import { flush, loadDocument } from "../../store/document";
+import { messageOf } from "../../doc/message";
+import { droppedPaths, fileLibrary, onOpenFiles, PROBE_GATEWAY, saveBeforeLeaving } from "../../platform";
+import { chooseBackend, elsewhereWords } from "../../store/backend";
+import { checkExternal, flush, openDocument, saveState, stashUnsaved } from "../../store/document";
+import { currentDocId, markOpened, refreshLibrary, startLibrary } from "../../store/library";
 import { loadShortcutOverrides, saveShortcutOverrides, type ShortcutOverrides } from "../../store/settings";
+import { recoverUnsaved } from "../../store/unsaved";
 import { Notice } from "../../ui/notice";
 import { FileActions } from "../files/FileActions";
+import { createLibraryActions, openFallback } from "../library/actions";
+import { DocDialogs } from "../library/DocDialogs";
+import { followStoreChanges } from "../library/external";
+import { HistoryDialog } from "../library/HistoryDialog";
+import { StorageNotice } from "../library/StorageNotice";
+import { QuickOpen } from "../library/QuickOpen";
+import { dismissReceipt, receipt, say } from "../library/receipt";
+import { libraryRequest, pendingFind, requestLibrary } from "../library/requests";
 import { SettingsDialog } from "../settings/SettingsDialog";
+import { SyncHost } from "../sync/SyncHost";
+import { ConflictBar } from "./ConflictBar";
 import { setOverrides } from "./keybindings";
+import { dropImages, isImagePath } from "./images";
+import { MermaidRenderer } from "./mermaid";
 import { RichDocument } from "./RichDocument";
 import { openRich, type RichOpened } from "./rich-session";
 import { SourceDocument } from "./SourceDocument";
+import { closeTransients } from "./ui-state";
 
 /**
  * 所见即所得方式能流畅打开的上限，超过任何一个就用源码方式打开。
@@ -30,8 +50,6 @@ type Opened =
   | { kind: "rich"; doc: RichOpened }
   | { kind: "source"; markdown: string; notice: string }
   | { kind: "failed"; message: string };
-
-const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**
  * 估出的渲染量超没超上限：非空行数（表格行加权），和最长的一张表。
@@ -62,23 +80,95 @@ function choose(markdown: string): Opened {
   }
 }
 
-/** 窗口失焦、应用切到后台、退出时立即写入；写不进去的原因由顶栏的保存状态显示。 */
-function flushWhenLeaving() {
+/**
+ * 窗口失焦、应用切到后台、退出时立即写入；写不进去的原因由顶栏的保存状态显示。切到后台和关页面时先同步记一份应急键（见 store/unsaved.ts）。
+ * 重新获得焦点时：别处存过这一篇、这里没改过就直接载入（`reload`）；这里也改过就由冲突条让用户选。文档列表也重读一遍（别处可能新建、删了几篇）。
+ */
+function watchLifecycle(reload: () => void) {
+  let wasActive = true;
   effect(() => {
-    if (lifecycle() !== "active") untracked(() => void flush());
+    const active = lifecycle() === "active";
+    untracked(() => {
+      if (!active) {
+        if (lifecycle() === "background") stashUnsaved();
+        void flush();
+      }
+      else if (!wasActive) {
+        void refreshLibrary().catch((e: unknown) => console.warn("library not refreshed", e));
+        void checkExternal()
+          .then((r) => r === "reload" && reload())
+          .catch((e: unknown) => console.warn("external change not checked", e));
+      }
+      wasActive = active;
+    });
   });
-  Application.on("quit", () => flush().then(() => undefined));
+  saveBeforeLeaving(stashUnsaved, flush);
 }
 
 export function EditorScreen() {
   const opened = signal<Opened>({ kind: "loading" });
-  const openDocument = () =>
-    loadDocument().then(
-      (text) => opened.set(choose(text ?? "")),
-      (e: unknown) => opened.set({ kind: "failed", message: `没能读出本机存的文档：${messageOf(e)}` }),
-    );
-  // 键表在建编辑器会话时定下来，所以先读设置再开文档
-  void loadShortcutOverrides().then(setOverrides).then(openDocument);
+  /** 读出一篇、换上编辑器。读不到（已经不在了）返回 false，编辑页不变。 */
+  const show = async (id: string, find?: string): Promise<boolean> => {
+    let text: string | null;
+    try {
+      text = await openDocument(id);
+    } catch (e) {
+      opened.set({ kind: "failed", message: `没能读出本机存的文档：${messageOf(e)}` });
+      return false;
+    }
+    if (text === null) return false;
+    markOpened(id);
+    pendingFind.set(find ? { id, query: find } : null);
+    // 换掉编辑页之前先收起快速打开、命令面板，下一轮再换（同命令面板的 close）
+    if (closeTransients()) await new Promise((resolve) => setTimeout(resolve, 0));
+    opened.set(choose(text));
+    return true;
+  };
+  /** 开不了（已经不在了）就开最近改过的一篇，一篇都没有就新建。 */
+  const showOrFallback = async (id: string) => {
+    if (await show(id)) return;
+    say("这篇文档已经不在了（可能在别的标签页里删掉了）。", "warn");
+    await openFallback(show);
+  };
+  const reopen = async () => {
+    const id = currentDocId();
+    if (id) await showOrFallback(id);
+  };
+  const openFromSystem = (paths: string[]) => paths[0] && requestLibrary({ kind: "openPath", path: paths[0] });
+  /** 拖进窗口的：图片插进开着的文档，别的当文档打开。 */
+  const dropped = (paths: string[]) => {
+    const images = paths.filter(isImagePath);
+    if (images.length > 0) dropImages(images);
+    openFromSystem(paths.filter((p) => !isImagePath(p)));
+  };
+  // 键表在建编辑器会话时定下来，所以先读设置再开文档；存储（文库文件夹 / 网关 / 浏览器本地）定下来以后，上次没存上的改动在开文档之前并回去
+  void loadShortcutOverrides()
+    .then(setOverrides)
+    .then(() => chooseBackend(fileLibrary(), PROBE_GATEWAY))
+    .then(() => followStoreChanges(() => void reopen().then(() => say(`${elsewhereWords().changed}，已载入最新的内容。`, "info"))))
+    .then(recoverUnsaved)
+    .then((note) => note && say(note.text, note.tone))
+    .then(startLibrary)
+    .then(showOrFallback)
+    .then(() => onOpenFiles(openFromSystem))
+    .catch((e: unknown) => opened.set({ kind: "failed", message: `没能读出本机存的文档：${messageOf(e)}` }));
+
+  // 开着的这篇在别处删了：冲突条出来让人选，叠在上面的快速打开、命令面板先收起
+  effect(() => {
+    const s = saveState();
+    if (s.kind === "conflict" && s.deleted) untracked(closeTransients);
+  });
+
+  const handle = createLibraryActions(show);
+  effect(() => {
+    const request = libraryRequest();
+    if (!request) return;
+    untracked(() => {
+      libraryRequest.set(null);
+      void handle(request.request);
+    });
+  });
+
   /**
    * 设置里改了键：存下来，再把编辑页整个重建（会话的键表建好后换不了）。
    * 重建是从存储重新读文档，所以要先把没存的改动写进去；写不进去就不重建、也不改键，免得丢字，并在页面顶上说明。
@@ -90,20 +180,25 @@ export function EditorScreen() {
     settingsProblem.set(failed ? `快捷键没能存到本机（${failed}）：现在能用，重新打开后会回到原来的键。` : "");
     setOverrides(next);
     opened.set({ kind: "loading" });
-    await openDocument();
+    await reopen();
   };
-  flushWhenLeaving();
+  watchLifecycle(() => {
+    void reopen().then(() => say(`${elsewhereWords().changed}，已载入最新的内容。`, "info"));
+  });
   return (
-    <View class="flex-1 bg-background">
-      <If when={settingsProblem()}>{(message) => <Notice testID="settings-problem" message={message()} />}</If>
-      <FileActions
-        onReplaced={() => {
-          opened.set({ kind: "loading" });
-          void openDocument();
-        }}
-      />
+    <View class="flex-1 bg-background" onFileDrop={(e) => dropped(droppedPaths(e.uris))}>
+      <StorageNotice />
+      <If when={settingsProblem()}>{(message) => <Notice testID="settings-problem" message={message()} onDismiss={() => settingsProblem.set("")} />}</If>
+      <If when={receipt()}>{(m) => <Notice testID="receipt" message={m().text} tone={m().tone} onDismiss={m().tone === "warn" ? dismissReceipt : undefined} />}</If>
+      <ConflictBar onTheirs={() => void reopen()} />
+      <FileActions />
       {screen(opened())}
       <SettingsDialog onApply={(next) => void applyShortcuts(next)} />
+      <QuickOpen />
+      <HistoryDialog />
+      <DocDialogs />
+      <SyncHost reload={reopen} />
+      <MermaidRenderer />
     </View>
   );
 }

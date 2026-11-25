@@ -1,5 +1,5 @@
 /** 按钮：M1 只有顶栏和链接输入用到，两种外观、一种尺寸。看起来怎样全在这里，功能代码只传 variant。 */
-import { Text } from "nsh";
+import { Text, type ViewRef } from "nsh";
 import { Button as BaseButton } from "nsh/base";
 
 /** primary：一组里唯一的默认操作（回车对应的那个）。ghost：顶栏、弹层里的安静操作。 */
@@ -16,6 +16,8 @@ export interface ButtonProps {
   testID?: string;
   /** 加在字上的类（格式条的 B 要粗、I 要斜）；颜色仍由 variant / active 决定。 */
   labelClass?: string;
+  /** 出现时拿到键盘焦点（同 Input 的 autoFocus）：对话框打开时把焦点从正文里拿过来。 */
+  autoFocus?: boolean;
   onPress?: () => void;
 }
 
@@ -25,6 +27,7 @@ export function Button(props: ButtonProps) {
   return (
     <BaseButton
       testID={props.testID}
+      ref={(node: ViewRef) => props.autoFocus && node.focus()}
       onPress={props.onPress}
       disabled={props.disabled}
       accessibilityLabel={props.accessibilityLabel ?? props.label}

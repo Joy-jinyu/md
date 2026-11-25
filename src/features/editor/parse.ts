@@ -11,6 +11,34 @@ const EXTENSIONS = [
   { name: "toc", pattern: "^\\[(?i:toc)\\]$" },
   { name: "html", pattern: "<!--[\\s\\S]*?-->|</?[A-Za-z][A-Za-z0-9-]*(?:\\s[^<>]*)?/?>" },
 ];
+
+/**
+ * Typora 的下标 `~x~`、上标 `^x^`：中间不能有空白和别的 Markdown 记号，前面不能是没转义的同一个记号（或 `[`，那是脚注 `[^1]`）。
+ * nsh 0.6.0 的解析器把单个 ~ 也当删除线（GFM 的写法），扩展模式又只在解析完的文字上匹配（`\~x\~` 转义完也会命中），
+ * 所以解析前先把这些成对的记号换成私用区的同宽字符，扩展只认它们；解析完再把所有字符串里的换回来（2026-11-25 实测）。
+ */
+const SCRIPT_PAIR = /([~^])(?<=(?:^|[^\\~^[])(?:\\\\)*[~^])([^\s~^*_`[\]\\<>$=&!|]+)\1(?!\1)/gm;
+const SCRIPT_CHAR: Record<string, string> = { "~": "\uE000", "^": "\uE001" };
+const SCRIPT_BACK: Record<string, string> = { "\uE000": "~", "\uE001": "^" };
+const SCRIPT_EXTENSIONS = [
+  { name: "sub", pattern: "\uE000([^\uE000]+)\uE000" },
+  { name: "sup", pattern: "\uE001([^\uE001]+)\uE001" },
+];
+
+/** 把成对的 ~x~、^x^ 换成私用区字符；原文里本来就有这两个字符时不换（换回来会分不清）。没有可换的返回 null。 */
+function markScripts(text: string): string | null {
+  if (/[\uE000\uE001]/.test(text) || !/[~^]/.test(text)) return null;
+  const out = text.replace(SCRIPT_PAIR, (_m, ch: string, body: string) => SCRIPT_CHAR[ch] + body + SCRIPT_CHAR[ch]);
+  return out === text ? null : out;
+}
+
+function unmarkScripts(value: unknown): unknown {
+  if (typeof value === "string") return value.replace(/[\uE000\uE001]/g, (c) => SCRIPT_BACK[c]);
+  if (Array.isArray(value)) return value.map(unmarkScripts);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, unmarkScripts(v)]));
+  return value;
+}
+
 /** 补在候选段前的定义之后，用来结束脚注定义的续段，免得把段首的缩进代码吃进脚注 */
 const SENTINEL = "[nsh-md-slice-sentinel]: #";
 // 合并上限：块感知的切分下合并很少见；超过就退到「从这里到文末一个切片」。预算留出余量给建会话（单次 JS 调用 2000ms 上限）
@@ -298,7 +326,10 @@ function extensionsFor(text: string): typeof EXTENSIONS {
 }
 
 function parseBlocks(text: string, frontmatter: boolean): MdBlock[] {
-  return TextView.parse(text, { ...OPTIONS, frontmatter }, extensionsFor(text)).blocks as unknown as MdBlock[];
+  const marked = markScripts(text);
+  if (marked === null) return TextView.parse(text, { ...OPTIONS, frontmatter }, extensionsFor(text)).blocks as unknown as MdBlock[];
+  const blocks = TextView.parse(marked, { ...OPTIONS, frontmatter }, [...extensionsFor(marked), ...SCRIPT_EXTENSIONS]).blocks;
+  return unmarkScripts(blocks) as MdBlock[];
 }
 
 interface Source {
