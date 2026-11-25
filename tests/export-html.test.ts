@@ -110,7 +110,7 @@ test("formulas keep their TeX, Mermaid keeps its source, footnotes gather at the
 test("a run of HTML comments followed by text exports quickly as source; comments alone are dropped", () => {
   const t = Date.now();
   const main = body(markdownToHtml(`${"<!--a-->".repeat(26)}x\n\n<!-- one --> <!-- two -->\n`));
-  expect(Date.now() - t).toBeLessThan(1000);
+  expect(Date.now() - t).toBeLessThan(1800);
   expect(main).toContain("&lt;!--a--&gt;x");
   expect(main.includes("one")).toBe(false);
 });

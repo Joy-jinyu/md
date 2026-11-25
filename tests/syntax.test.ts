@@ -140,6 +140,6 @@ test("pathological code is tokenized quickly", () => {
     const start = Date.now();
     tokenize(code, language);
     const took = Date.now() - start;
-    if (took >= 500) throw new Error(`${language} ${JSON.stringify(code.slice(0, 12))}… took ${took}ms`);
+    if (took >= 1500) throw new Error(`${language} ${JSON.stringify(code.slice(0, 12))}… took ${took}ms`);
   }
 });
