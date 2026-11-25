@@ -13,7 +13,7 @@ import { tip } from "../../ui/tooltip";
 import { SIDE_LIST, SIDE_PAD, SIDE_ROW, SIDE_TEXT } from "../editor/sidebar-style";
 import { problemText } from "./external";
 import { panel, setQuery, sorted, timeLabel } from "./panel-state";
-import { historyOpen, requestLibrary } from "./requests";
+import { requestLibrary } from "./requests";
 import type { SearchResult } from "./search";
 
 /** 左右内边距 7 不是 8：边框占 1，这样框里的字落在侧栏的内容线（x=16）上，和下面行里的标题对齐。 */
@@ -84,7 +84,7 @@ function DocRow(props: { doc: DocMeta; onPicked: () => void }) {
   const expanded = () => panel.expanded() === props.doc.id;
   const name = () => displayName(props.doc);
   const problem = () => (props.doc.problem ? problemText(props.doc.problem) : null);
-  const sub = () => problem() ?? (props.doc.title && props.doc.title !== props.doc.name ? `${props.doc.name} · ${timeLabel(props.doc.updatedAt)}` : timeLabel(props.doc.updatedAt));
+  const sub = () => problem() ?? (props.doc.title && props.doc.title !== props.doc.name ? `文库名：${props.doc.name}.md · ${timeLabel(props.doc.updatedAt)}` : timeLabel(props.doc.updatedAt));
   const open = () => {
     if (!current()) requestLibrary({ kind: "open", id: props.doc.id });
     props.onPicked();
@@ -111,10 +111,8 @@ function DocRow(props: { doc: DocMeta; onPicked: () => void }) {
       </View>
       <If when={expanded()}>
         <View class="flex-row flex-wrap gap-1 pb-1 pl-2">
-          <Button testID="doc-rename" label="重命名" onPress={() => panel.renaming.set(props.doc)} />
-          <If when={current()}>
-            <Button testID="doc-history" label="版本历史" onPress={() => historyOpen.set(true)} />
-          </If>
+          <Button testID="doc-rename" label="改文库名" onPress={() => panel.renaming.set(props.doc)} />
+          <Button testID="doc-history" label="版本历史" onPress={() => requestLibrary({ kind: "history", id: props.doc.id })} />
           <Button testID="doc-delete" label="删除" onPress={() => panel.deleting.set(props.doc)} />
         </View>
       </If>

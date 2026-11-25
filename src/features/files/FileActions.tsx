@@ -4,7 +4,7 @@ import { messageOf } from "../../doc/message";
 import { saveTextFile } from "../../platform";
 import { storageKind } from "../../store/backend";
 import { latestDocument } from "../../store/document";
-import { currentDocId } from "../../store/library";
+import { currentDocId, openDocName } from "../../store/library";
 import { say } from "../library/receipt";
 import { requestLibrary } from "../library/requests";
 import { loadMarkdown } from "../editor/convert";
@@ -60,7 +60,7 @@ function imagesLeftBehind(text: string): string {
 async function saveAs() {
   try {
     const text = latestDocument();
-    say(`${(await saveTextFile(fileNameFor(text), text)).message}${imagesLeftBehind(text)}`, "info");
+    say(`${(await saveTextFile(fileNameFor(text, "md", openDocName()), text)).message}${imagesLeftBehind(text)}`, "info");
   } catch (e) {
     console.error("save as failed", e);
     say(`没能另存：${messageOf(e)}`, "warn");
@@ -73,7 +73,7 @@ async function exportHtml() {
     const text = latestDocument();
     if (tooLongToConvert(text)) return say("这篇太长，导出不了 HTML；可以另存为 .md。", "warn");
     const out = await markdownToHtmlWithImages(text, currentDocId());
-    const saved = await saveTextFile(fileNameFor(text, "html"), out.html, "text/html;charset=utf-8");
+    const saved = await saveTextFile(fileNameFor(text, "html", openDocName()), out.html, "text/html;charset=utf-8");
     say(`${saved.message}。${out.note}用浏览器打开它，可以再打印或存成 PDF。`, out.note ? "warn" : "info");
   } catch (e) {
     console.error("export html failed", e);

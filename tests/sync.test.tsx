@@ -221,8 +221,8 @@ test("syncing a document never synced lists it first; once confirmed it is uploa
   expect(JSON.parse(app.storage()[syncRecordKey(DOC.id)]).link.gistId).toBe("g1");
   expect(app.shows("id:sync-upload")).toBe(false);
   await app.press("id:sync-close");
-  await app.waitUntil(() => app.texts().some((t) => t.startsWith("已同步 ")));
-  expect(app.shows("label:同步：" + app.texts().find((t) => t.startsWith("已同步 ")) + "，打开同步面板")).toBe(true);
+  await app.waitUntil(() => app.texts().some((t) => t.startsWith("上次同步 ")));
+  expect(app.shows("label:同步：" + app.texts().find((t) => t.startsWith("上次同步 ")) + "，打开同步面板")).toBe(true);
 });
 
 const DIARY = { id: "dp", name: "日记", text: "# 日记\n\n私事\n" };
