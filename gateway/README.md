@@ -99,3 +99,8 @@ npm test        # node:test：起真网关、连真 WebSocket 跑
 - `list` 里带 `problem` 的文档显示出来但不让打开编辑；`read` 回 `not-utf8` / `too-large` 时给人看得懂的提示。
 - 图片超过 10 MiB 在页面就挡掉，不要发 `putAsset`（太大的消息网关只能断开连接，见上面的上限表）。连接被 1009 / 4004 关掉时提示原因，别立刻重连刷屏。
 - `rename` 只改文档本身，不搬它的 `assets/`。
+
+
+## 已知问题
+
+- Linux 上文库里有读不了的子目录（权限 000）时，Node 的递归监听会在内部抛 EACCES，网关可能退出（2026-11-25 CI 实测）。macOS 不受影响。对应的测试在 Linux 上跳过。
