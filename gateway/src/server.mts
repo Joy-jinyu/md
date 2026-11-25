@@ -176,7 +176,10 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
       return upgrade(req, socket, head, (ws) => ws.close(CLOSE_BUSY, "too many connections"));
     }
     upgrade(req, socket, head, (ws) => {
-      serveConnection(ws, opts.library, table, limits.helloTimeoutMs, () => opts.onClients?.(live.add(ws).size), log);
+      serveConnection(ws, opts.library, table, limits.helloTimeoutMs, () => {
+        live.add(ws);
+        opts.onClients?.(live.size);
+      }, log);
       ws.on("close", () => {
         if (live.delete(ws)) opts.onClients?.(live.size);
       });
