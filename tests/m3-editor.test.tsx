@@ -27,6 +27,16 @@ const openWeb = async (doc: string) => {
 
 type App = Awaited<ReturnType<typeof openWeb>>;
 
+/**
+ * 把光标放到 `selector` 那一行文字的第 `offset` 个字后面：按在行首再按右箭头。
+ * 0.7.0 的 `press("text:…")` 按的是整行的正中，行里的字短时落在行尾，所以不靠它定位。
+ */
+async function caretAt(app: App, selector: string, offset: number) {
+  await app.press(selector, { position: { x: 1, y: 8 } });
+  await app.keyboard.press("home");
+  for (let i = 0; i < offset; i += 1) await app.keyboard.press("arrowright");
+}
+
 async function copied(app: App, keys = "mod+shift+c"): Promise<string | null> {
   await app.keyboard.press(keys);
   await app.wait(100);
@@ -58,14 +68,16 @@ test("Cmd+D selects the word at the caret, then the next same text; Cmd+Shift+C 
 
 test("Cmd+L selects the line and then the next one; Cmd+E grows from the formatted run to the whole block", async () => {
   const { app } = await openMac("# Title\n\nfirst **bold [link](https://x.y) text** end\n\n- item\n");
-  await app.press("text:link");
+  await caretAt(app, "text:first bold link text end", "first bold li".length);
   await app.keyboard.press("mod+e");
   expect(await copied(app)).toBe("[**link**](https://x.y)");
   await app.keyboard.press("mod+e");
   expect(await copied(app)).toBe("**bold [link](https://x.y) text**");
   await app.keyboard.press("mod+e");
   expect(await copied(app)).toBe("first **bold [link](https://x.y) text** end");
-  await app.press("text:Title");
+  // 0.7.0 无头里离上一下按不到 400ms 的按算双击（不看按在哪），会选中整词；按在标题行右端，左边被格式条盖着
+  await app.wait(500);
+  await app.press("id:editor >> text:Title", { position: { x: 690, y: 20 } });
   await app.keyboard.press("mod+l");
   expect(await copied(app)).toBe("Title");
   await app.keyboard.press("mod+l");
@@ -78,7 +90,7 @@ test("copying a selection across blocks writes the blocks; with nothing selected
   await app.press("text:two");
   expect(await copied(app)).toBe(doc);
   expect(app.shows("text:没有选中内容，已把整篇的 Markdown 复制到剪贴板。")).toBe(true);
-  await app.press("text:one");
+  await caretAt(app, "text:one", 0);
   await app.keyboard.press("shift+arrowdown");
   await app.keyboard.press("shift+arrowdown");
   expect(await copied(app)).toBe("- one\n- two\n\n| a | b |\n| --- | --- |");
@@ -198,23 +210,21 @@ test("copy as Markdown with a formula block selected copies that block, not the 
   expect(await copied(app, "ctrl+alt+m")).toBe("$$\nE=mc^2\n$$");
 });
 
-test("when the clipboard cannot be written, copy as Markdown says so", async () => {
-  const app = await open("../App.tsx", {
-    platform: "web",
-    ...SIZE,
-    storage: { [DOC_KEY]: "# T\n\nbody\n" },
-    modules: {
-      nsh: {
-        "Clipboard.writeText": () => {
-          throw new Error("denied");
-        },
-      },
+test("when the clipboard cannot be written, copy as Markdown says so: whether the call fails or the system refuses", async () => {
+  const refusals = [
+    () => {
+      throw new Error("denied");
     },
-  });
-  await app.waitFor("id:editor");
-  await app.press("text:body");
-  await app.keyboard.press("ctrl+alt+m");
-  await app.waitFor("text:没能复制：写不了剪贴板。可以切到源码视图，选中后按复制键。");
+    () => "failed",
+  ];
+  for (const writeText of refusals) {
+    const app = await open("../App.tsx", { platform: "web", ...SIZE, storage: { [DOC_KEY]: "# T\n\nbody\n" }, modules: { nsh: { "Clipboard.writeText": writeText } } });
+    await app.waitFor("id:editor");
+    await app.press("text:body");
+    await app.keyboard.press("ctrl+alt+m");
+    await app.waitFor("text:没能复制：写不了剪贴板。可以切到源码视图，选中后按复制键。");
+    expect(app.shows("text:没有选中内容，已把整篇的 Markdown 复制到剪贴板。")).toBe(false);
+  }
 });
 
 test("without Intl.Segmenter a word is whole code points: emoji, CJK beyond the BMP, and apostrophes inside words", () => {

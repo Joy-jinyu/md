@@ -1,6 +1,7 @@
 /** 查找替换：查找条用的引擎接口，和所见即所得这一边的实现（源码那一边在 SourcePane 里，用编辑器自带的查找）。 */
 import { signal } from "nsh";
 import { chain, deleteRange, insertText, type RichCommand, type RichDecoration, type RichEditorSession, scrollIntoView, setTextSelection } from "nsh/base";
+import { reachSelection } from "./caret-follow";
 import type { Node } from "./outline";
 import { FIND_KEY } from "./rich-session";
 import { selectionRange } from "./selection";
@@ -154,6 +155,7 @@ export function createRichFind(session: RichEditorSession) {
   const go = (index: number) => {
     const m = matches[index];
     session.run(chain([setTextSelection(m.from, m.to), scrollIntoView()]));
+    reachSelection();
     paint(index, result().capped, null);
   };
   const step = (direction: 1 | -1) => {

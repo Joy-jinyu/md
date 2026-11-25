@@ -77,6 +77,16 @@ test("settings, storage page: the gateway's install and start commands each copy
   expect(app.clipboard()).toBe("npm install");
 });
 
+test("a copy button the system refuses says it did not copy", async () => {
+  const app = await open("../App.tsx", { ...WEB, storage: { [LEGACY_DOC_KEY]: "# T\n\nbody\n" }, modules: { nsh: { "Clipboard.writeText": () => "failed" } } });
+  await app.waitFor("text:body");
+  await app.press("id:open-settings");
+  await app.press("id:settings-tab-storage");
+  await app.press("label:复制启动命令");
+  await app.waitFor("text:没能复制");
+  expect(app.shows("text:已复制")).toBe(false);
+});
+
 test("an error receipt at the top can be copied as it reads", async () => {
   const app = await open(SYNCED_APP, { ...WEB, storage: library(), modules: { nsh: { "UrlScheme.url": "http://127.0.0.1:8811/", "UrlScheme.setUrl": () => undefined } } });
   await app.waitFor("text:本机改的");

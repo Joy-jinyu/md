@@ -13,7 +13,7 @@ import { say } from "../library/receipt";
 import { eachNode, type Node } from "./outline";
 import { selectionRange } from "./selection";
 
-/** 选择框里一次最多读多大的图：各后端里最宽的上限（网关、浏览器本地 10 MiB）；更细的上限由存储再查一遍。 */
+/** 选择框、网页拖放一次最多读多大的图：各后端里最宽的上限（网关、浏览器本地 10 MiB）；更细的上限由存储再查一遍。 */
 const PICK_MAX_BYTES = 10 * 1024 * 1024;
 /** 报结果时地址最长显示多少字。 */
 const URL_SHOWN = 60;
@@ -92,13 +92,16 @@ function docIdOrSay(): string | null {
   return id;
 }
 
-/** 一批图片字节存进文档库，在光标处插成图片。存不进去的逐张报原因，存进去的照样插。 */
-export async function insertImageBytes(session: RichEditorSession, files: { name: string; data: Uint8Array }[]) {
-  if (files.length === 0) return;
+/** 一批图片字节存进文档库，在光标处插成图片。存不进去的逐张报原因，存进去的照样插。`earlier`：之前就没读出来的几张的原因，和这里的一起报（回执只留最后一句）。 */
+export async function insertImageBytes(session: RichEditorSession, files: { name: string; data: Uint8Array }[], earlier: string[] = []) {
+  if (files.length === 0) {
+    if (earlier.length > 0) say(`没能插入图片：${earlier.join("；")}`, "warn");
+    return;
+  }
   const docId = docIdOrSay();
   if (!docId) return;
   const nodes: RichNodeJSON[] = [];
-  const failed: string[] = [];
+  const failed = [...earlier];
   for (const f of files) {
     try {
       const src = await documentStore.putAsset(docId, f.data);
@@ -239,6 +242,45 @@ export function dropImages(paths: string[]) {
   const session = target?.();
   if (!session) return say("现在不能插入图片（源码视图里，或者还没有打开文档）。切回所见即所得再拖进来", "warn");
   void insertImageFiles(session, paths);
+}
+
+/** 网页里拖进来的一个文件：浏览器只给文件本身、不给路径（`onFileDrop` 的 `files`，nsh 0.7.0 起有）。 */
+export interface DroppedFile {
+  file: File | null;
+  name: string;
+  status: "read" | "tooLarge";
+}
+
+/** 网页里拖进窗口的文件：图片插到开着的文档里光标处，别的文件不管。 */
+export function dropImageFiles(files: DroppedFile[]) {
+  const images = files.filter((f) => isImagePath(f.name));
+  if (images.length === 0) return;
+  const session = target?.();
+  if (!session) return say("现在不能插入图片（源码视图里，或者还没有打开文档）。切回所见即所得再拖进来", "warn");
+  void readDropped(session, images);
+}
+
+/** 一张张读：太大的先按大小拒（不读进内存），读不出来的只少这一张，原因和存不进去的一起报。 */
+async function readDropped(session: RichEditorSession, files: DroppedFile[]) {
+  const read: { name: string; data: Uint8Array }[] = [];
+  const failed: string[] = [];
+  for (const f of files) {
+    if (f.status !== "read" || !f.file) {
+      failed.push(`「${f.name}」太大，浏览器没读进来`);
+      continue;
+    }
+    if (f.file.size > PICK_MAX_BYTES) {
+      failed.push(`「${f.name}」超过 10 MB，先压缩一下再插入`);
+      continue;
+    }
+    try {
+      read.push({ name: f.name, data: new Uint8Array(await f.file.arrayBuffer()) });
+    } catch (e) {
+      console.warn("dropped image unreadable", e);
+      failed.push(`「${f.name}」读不出来（${messageOf(e)}）`);
+    }
+  }
+  await insertImageBytes(session, read, failed);
 }
 
 /** 粘贴的内容里有 data: 图片（网页、Word 里复制的）：编辑器照常贴进来以后，由 `storeDataImages` 存进文档库。 */

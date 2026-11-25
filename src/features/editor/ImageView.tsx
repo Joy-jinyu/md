@@ -13,6 +13,7 @@ import { pageUrl } from "../sync/page-url";
 import { noteNodeViewLayout } from "./doc-index";
 import { columnWidth, isExternalSrc, transferImage } from "./images";
 import { openLink } from "./links";
+import { nodePress } from "./node-press";
 
 type Size = { width: number; height: number };
 
@@ -98,6 +99,8 @@ function Placeholder(props: { selected: boolean; width?: number; children: JSX.E
 }
 
 function RemoteFailed(props: { src: string; text: string; selected: boolean; editor: RichNodeViewProps["editor"] }) {
+  const transfer = nodePress(() => void transferImage(props.editor, props.src));
+  const browse = nodePress(() => void openLink(props.src, () => false));
   return (
     <Placeholder selected={props.selected}>
       <Text class="text-[12px] text-muted-foreground">{props.text}</Text>
@@ -106,9 +109,13 @@ function RemoteFailed(props: { src: string; text: string; selected: boolean; edi
       </Text>
       <View class="flex-row flex-wrap gap-1">
         <If when={canTransfer()}>
-          <Button testID="image-transfer" label="转存到本地" onPress={() => void transferImage(props.editor, props.src)} />
+          <View {...transfer.mouse}>
+            <Button testID="image-transfer" label="转存到本地" onPress={transfer.onPress} />
+          </View>
         </If>
-        <Button label="在浏览器打开" accessibilityLabel="在浏览器里打开这张图片" onPress={() => void openLink(props.src, () => false)} />
+        <View {...browse.mouse}>
+          <Button label="在浏览器打开" accessibilityLabel="在浏览器里打开这张图片" onPress={browse.onPress} />
+        </View>
       </View>
     </Placeholder>
   );

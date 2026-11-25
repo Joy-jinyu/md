@@ -1,10 +1,11 @@
 /**
  * 浏览器本地的文档库：每篇两个键，正文 `md.<id>` 和说明 `md.meta.<id>`（名字、标题、改动时间、版本）。
  * 版本放在说明里，每写一次加一；写之前先比对，对不上就不写（另一个标签页改过）。
+ * 写完在 Storage 里记一笔哪篇变了（`CHANGED_KEY`），别的标签页不用等回到窗口就能跟上（`watch`）。
  */
 import { Storage } from "nsh";
 import { markdownTitle } from "../doc/title";
-import type { DocMeta, DocumentStore, ReadResult, Version, WriteResult } from "./document-store";
+import type { DocMeta, DocumentStore, ReadResult, StoreChange, Version, WriteResult } from "./document-store";
 import { historyKey } from "./history";
 import { AssetRejected, assetName, assetPathFromSrc, assetSrc, checkImage, mimeOf, sniffImage } from "./image-file";
 import { isQuotaError, type Kv, LEGACY_DOC_KEY, LOCAL_TAG, localKv, scopedKey, STASH_PREFIX } from "./kv";
@@ -24,6 +25,23 @@ const MAX_LOCAL_ASSET_BYTES = 10 * 1024 * 1024;
  * 迁移不占额外空间，跑几次都一样。它在有说明之前（第一次保存之前）由 `list` 按正文补出来。
  */
 export const FIRST_DOC_ID = "document";
+
+/**
+ * 「哪篇刚写过」的记号键，值是 `<id> <时间>`，每次写完、新建、改名、删除后记一笔。别的标签页靠 `Storage.on("change")` 收到它：
+ * 正文在 IndexedDB 里，那边的写入别的标签页收不到通知；存在 Storage 里时也不看说明键，因为说明先写、正文后写，先到的说明会让对方读到旧正文配新版本。
+ */
+export const CHANGED_KEY = "md.local.changed";
+
+/** 别的标签页改了 Storage 里的 `key` → 哪篇变了：记号键给出那一篇，整个清空（`key` 是 null）算全部，别的键不管。 */
+export function changedDocs(key: string | null | undefined, value: string | null | undefined): StoreChange | null {
+  if (key === null || key === undefined) return { ids: [], all: true };
+  if (key !== CHANGED_KEY || !value) return null;
+  return { ids: [value.split(" ")[0]], all: false };
+}
+
+const announce = (id: string) => {
+  Storage.setItem(CHANGED_KEY, `${id} ${Date.now()}`).catch((e: unknown) => console.warn("change not announced to other tabs", e));
+};
 
 export const bodyKey = (id: string) => `md.${id}`;
 export const metaKey = (id: string) => `${META_PREFIX}${id}`;
@@ -197,15 +215,27 @@ export function createLocalStore(open: () => Promise<Kv> = localKv): DocumentSto
     list: async () => list(await ready()),
     read: async (id) => read(await ready(), id),
     sweepAssets: async (id, text) => sweepAssets(await ready(), id, text),
-    write: async (id, text, baseVersion) => write(await ready(), id, text, baseVersion),
+    async write(id, text, baseVersion) {
+      const result = await write(await ready(), id, text, baseVersion);
+      if (result.ok) announce(id);
+      return result;
+    },
     async create(name, text) {
       const kv = await ready();
       const meta = describe(newId(), cleanName(name), text, 1);
       await kv.update([], () => ({ puts: { [bodyKey(meta.id)]: text, [metaKey(meta.id)]: encodeMeta(meta) }, result: undefined }));
+      announce(meta.id);
       return meta;
     },
-    rename: async (id, name) => rename(await ready(), id, name),
-    remove: async (id) => remove(await ready(), id),
+    async rename(id, name) {
+      const meta = await rename(await ready(), id, name);
+      announce(id);
+      return meta;
+    },
+    async remove(id) {
+      await remove(await ready(), id);
+      announce(id);
+    },
     async putAsset(docId, bytes) {
       const name = assetName(bytes, checkImage(bytes, MAX_LOCAL_ASSET_BYTES));
       const kv = await ready();
@@ -220,6 +250,12 @@ export function createLocalStore(open: () => Promise<Kv> = localKv): DocumentSto
       if (!(value instanceof Uint8Array)) return null;
       const ext = sniffImage(value);
       return ext ? { mime: mimeOf(ext), bytes: value } : null;
+    },
+    watch(onChange) {
+      return Storage.on("change", ({ key, value }) => {
+        const change = changedDocs(key, value);
+        if (change) onChange(change);
+      });
     },
   };
 }
