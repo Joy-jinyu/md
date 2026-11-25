@@ -35,7 +35,18 @@ pairdown config imageHostHeader "Authorization: Bearer xxx"      # 上传时带�
 pairdown config imageHostUrlPath data.url                        # 返回的 JSON 里图片地址在哪；auto 自动找
 ```
 
-自动找依次试 `url`、`data.url`、`data.links.url`、`result.0`、`data.0`；返回不是 JSON 时把整段当地址。拿到的必须是 http(s) 地址。配置存在 `~/.pairdown/config.json` 的 `imageHost` 里（文件权限 600）；请求头的值不回给页面（页面只看得到名字）、不进日志。从源码直接跑的网关也读写这个文件。上传地址是用户自己填的，可以是本机地址（PicGo server 就在 127.0.0.1），不做内网检查。
+也可以直接用一个 **GitHub 仓库**当图床（网关内置，不用别的工具）：
+
+```bash
+pairdown config imageHostGithub 用户/仓库     # 仓库要是公开的
+pairdown config imageHostToken github_pat_…   # fine-grained token：只选这一个仓库，Contents 给读写
+pairdown config imageHostBranch main          # 默认 main
+pairdown config imageHostDir images           # 默认 images
+```
+
+图片提交到 `<目录>/<内容哈希>.<扩展名>`（同一张图不重复提交），正文写 `https://raw.githubusercontent.com/<仓库>/<分支>/<目录>/<文件>`。令牌和请求头一样只存在 config.json 里。命令行里敲令牌会留在 shell 历史里，介意就在页面的设置里填。
+
+上传接口的自动找依次试 `url`、`data.url`、`data.links.url`、`result.0`、`data.0`；返回不是 JSON 时把整段当地址。拿到的必须是 http(s) 地址。配置存在 `~/.pairdown/config.json` 的 `imageHost` 里（文件权限 600）；请求头的值不回给页面（页面只看得到名字）、不进日志。从源码直接跑的网关也读写这个文件。上传地址是用户自己填的，可以是本机地址（PicGo server 就在 127.0.0.1），不做内网检查。
 
 ## 从源码安装
 
