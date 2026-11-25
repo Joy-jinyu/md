@@ -1,5 +1,5 @@
 /**
- * 顶栏里的同步入口：一个文字按钮，字就是状态（未登录 / 同步中… / 已同步 时间 / N 件事要选 / 同步出错），点开同步面板。没配置时不出现。
+ * 顶栏里的同步入口：一个文字按钮，字就是状态（未登录 / 同步中… / 上次同步时间 / N 件事要选 / 同步出错），点开同步面板。没配置时不出现。
  * `compact`（窄窗口）：只留图标和短状态，读屏名照旧是完整的状态。布局见 DESIGN.md「M5：同步」。
  */
 import { Text } from "nsh";
@@ -34,7 +34,7 @@ export function syncLabel(): { text: string; short: string; spoken: string; aler
   const at = lastSyncAt();
   // 没同步过时字就是「同步」，读屏名换成说状态，免得读成「同步：同步」
   if (!at) return { text: "同步", short: "", spoken: "还没同步过", alert: false };
-  const text = `已同步 ${shortTime(at)}`;
+  const text = `上次同步 ${shortTime(at)}`;
   return { text, short: "", spoken: text, alert: false };
 }
 

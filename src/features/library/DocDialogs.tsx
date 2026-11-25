@@ -51,7 +51,7 @@ function RenameDialog() {
       testID="rename"
       open={panel.renaming() !== null}
       animation="fade"
-      accessibilityLabel="重命名文档"
+      accessibilityLabel="修改文库名"
       closeOnEscape
       closeOnBackdropPress
       onOpenChange={({ open }) => !open && close()}
@@ -60,8 +60,8 @@ function RenameDialog() {
     >
       <EscapeCloses onEscape={close} />
       <View class="gap-3 rounded-(--radius) border border-border bg-popover p-4">
-        <Text class="text-sm font-medium text-strong">重命名文档</Text>
-        <Text class="select-text text-xs leading-5 text-muted-foreground">名字是文件名（另存为、以后存成文件时用）。列表里优先显示正文的第一个标题。</Text>
+        <Text class="text-sm font-medium text-strong">修改文库名</Text>
+        <Text class="select-text text-xs leading-5 text-muted-foreground">文库用这个名字保存。另存为优先用正文标题命名；没有标题时用文库名。</Text>
         <Input
           testID="rename-input"
           autoFocus
@@ -69,7 +69,7 @@ function RenameDialog() {
           onChange={({ value }) => draft.set(value)}
           onSubmit={() => void submit()}
           submitBehavior="submit"
-          accessibilityLabel="新名字"
+          accessibilityLabel="新文库名"
           autoCapitalize="none"
           autoCorrect={false}
           class={FIELD}
@@ -77,7 +77,7 @@ function RenameDialog() {
         <If when={problem()}>{(text) => <Text class="select-text text-xs text-destructive">{text()}</Text>}</If>
         <View class="flex-row justify-end gap-1">
           <Button testID="rename-cancel" label="取消" onPress={close} />
-          <Button testID="rename-confirm" label="改名" variant="primary" onPress={() => void submit()} />
+          <Button testID="rename-confirm" label="保存文库名" variant="primary" onPress={() => void submit()} />
         </View>
       </View>
     </Dialog>

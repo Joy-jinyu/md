@@ -99,6 +99,28 @@ test("renaming changes the name shown for a document without a heading", async (
   expect(app.storage()[bodyKey("dc")]).toBe(GAMMA);
 });
 
+test("a heading and a different file name are both identified in the document list and rename dialog", async () => {
+  const meta = JSON.parse((LIBRARY as Record<string, string>)[metaKey("da")]);
+  const app = await openLibrary({ [metaKey("da")]: JSON.stringify({ ...meta, name: "Draft", title: "Alpha" }) });
+  await app.waitFor("text:first doc");
+  await showDocuments(app);
+  await app.waitUntil(() => app.texts().some((t) => t.startsWith("文库名：Draft.md")));
+  await app.press("id:doc-more-da");
+  await app.press("id:doc-rename");
+  await app.waitFor("text:修改文库名");
+  expect(app.shows("label:新文库名")).toBe(true);
+});
+
+test("the version history of another document can be opened from its row", async () => {
+  const app = await openLibrary({ [historyKey("db")]: JSON.stringify([{ at: 5, text: "# Beta\n\nolder second doc\n" }]) });
+  await app.waitFor("text:first doc");
+  await showDocuments(app);
+  await app.press("id:doc-more-db");
+  await app.press("id:doc-history");
+  await app.waitFor("id:history-preview >> text:# Beta\n\nolder second doc\n");
+  expect(app.storage()[LAST_OPENED_KEY]).toBe("db");
+});
+
 test("deleting asks first; cancel keeps the document, confirming removes it with its history", async () => {
   const app = await openLibrary({ [historyKey("db")]: JSON.stringify([{ at: 5, text: "old beta" }]) });
   await showDocuments(app);

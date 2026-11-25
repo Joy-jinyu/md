@@ -63,6 +63,7 @@ test("save as on the desktop writes the document to Downloads under its title, w
 test("a file name comes from the title, without characters a file name cannot hold", () => {
   expect(fileNameFor("# Trip: plan / v2?\n\ntext\n")).toBe("Trip plan v2.md");
   expect(fileNameFor("no heading here\n")).toBe("未命名.md");
+  expect(fileNameFor("no heading here\n", "md", "未命名 2")).toBe("未命名 2.md");
   expect(fileNameFor("# ...hidden\n")).toBe("hidden.md");
   // 标题里的路径写法进不了文件名，也不会变成点开头的隐藏文件
   expect(fileNameFor("# ../../x\n")).toBe("x.md");
