@@ -46,14 +46,14 @@ const SELECTION_DELAY = 120;
 
 function readStats(session: RichEditorSession) {
   const doc = session.getJSON() as Node;
-  return { title: documentTitle(doc), counts: `${session.words()} 词 · ${session.characters()} 字符`, headings: headingStarts(doc) };
+  return { title: documentTitle(doc), counts: `${session.words()} 字词 · ${session.characters()} 字符`, headings: headingStarts(doc) };
 }
 
 function readSelected(session: RichEditorSession): string {
   const { from, to } = selectionRange(session);
   if (from === to) return "";
   const text = session.textBetween(from, to, "\n");
-  return `选中 ${countWords(text)} 词 · ${countChars(text)} 字符`;
+  return `选中 ${countWords(text)} 字词 · ${countChars(text)} 字符`;
 }
 
 function jumpTo(session: RichEditorSession, heading: HeadingEntry) {

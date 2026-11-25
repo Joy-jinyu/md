@@ -39,6 +39,11 @@ test("Escape closes the slash menu and leaves the slash typed", async () => {
   expect(await saved(app)).toBe("/\n");
 });
 
+test("the top bar labels Chinese characters as character-words", async () => {
+  const app = await openDoc("评审临时文档\n");
+  await app.waitFor("text:6 字词 · 6 字符");
+});
+
 test("the command palette runs a block command and jumps to a heading", async () => {
   const app = await openDoc("# Title\n\nalpha\n\n## Second\n\nbeta\n");
   await app.press("text:alpha");
@@ -138,7 +143,7 @@ test("selecting text shows the format bar, and its bold button bolds the selecti
   await app.keyboard.press("home");
   await app.keyboard.press("shift+end");
   await app.waitFor("id:format-bar");
-  await app.waitFor("text:选中 2 词 · 10 字符");
+  await app.waitFor("text:选中 2 字词 · 10 字符");
   await app.press("id:bar-bold");
   expect(await saved(app)).toBe("# Notes\n\n**alpha beta**\n");
 });
@@ -224,7 +229,7 @@ test("the top bar follows edits made in the source view", async () => {
   await app.waitUntil(() => app.texts().some((t) => t.endsWith("字符") && !t.includes("词")), { timeout: 2000 });
   await app.press("id:toggle-source");
   await app.waitFor("label:正文");
-  await app.waitUntil(() => app.texts().some((t) => / 词 · /.test(t)), { timeout: 2000 });
+  await app.waitUntil(() => app.texts().some((t) => / 字词 · /.test(t)), { timeout: 2000 });
 });
 
 test("editing the document closes an open formula edit box without applying it", async () => {
