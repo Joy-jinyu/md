@@ -20,6 +20,8 @@ export type GatewayOptions = {
   transfer?: Partial<TransferDeps>;
   limits?: Partial<Limits>;
   log?: (s: string) => void;
+  /** 连着（已握手）的页面数变了时调。 */
+  onClients?: (count: number) => void;
 };
 
 /** 防止一个页面（或本机别的程序）把网关拖垮的上限。 */
@@ -174,8 +176,10 @@ export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
       return upgrade(req, socket, head, (ws) => ws.close(CLOSE_BUSY, "too many connections"));
     }
     upgrade(req, socket, head, (ws) => {
-      serveConnection(ws, opts.library, table, limits.helloTimeoutMs, () => live.add(ws), log);
-      ws.on("close", () => live.delete(ws));
+      serveConnection(ws, opts.library, table, limits.helloTimeoutMs, () => opts.onClients?.(live.add(ws).size), log);
+      ws.on("close", () => {
+        if (live.delete(ws)) opts.onClients?.(live.size);
+      });
     });
   });
 
