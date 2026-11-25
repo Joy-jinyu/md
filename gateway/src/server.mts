@@ -3,6 +3,7 @@ import type { Duplex } from "node:stream";
 import { WebSocketServer, type WebSocket } from "ws";
 import { checkHost, checkUpgrade } from "./auth.mts";
 import { describeError, GatewayError } from "./errors.mts";
+import { parseImageHost, readImageHost, uploadImage, viewOf, writeImageHost } from "./image-host.mts";
 import type { Library } from "./library.mts";
 import {
   CLOSE_BUSY, CLOSE_NO_HELLO, CLOSE_ORIGIN, CLOSE_VERSION, HELLO_TIMEOUT_MS, LISTEN_HOST, MAX_ASSET_BYTES, MAX_MESSAGE_BYTES,
@@ -20,6 +21,10 @@ export type GatewayOptions = {
   transfer?: Partial<TransferDeps>;
   limits?: Partial<Limits>;
   log?: (s: string) => void;
+  /** 网关的 config.json：图床配置存在里面。不给就没有图床（查是没设置，设置回 not-supported）。 */
+  configPath?: string;
+  /** 往图床发请求用的 fetch（测试换掉）。 */
+  uploadFetch?: typeof fetch;
   /** 连着（已握手）的页面数变了时调。 */
   onClients?: (count: number) => void;
 };
@@ -52,9 +57,10 @@ const str = (m: Msg, key: string): string => {
 const optStr = (m: Msg, key: string): string | undefined => (m[key] === undefined ? undefined : str(m, key));
 
 /** 每种请求怎么做。返回值就是回包里的 result。 */
-function handlers(lib: Library, transfer: TransferDeps, maxTransfers: number): { [K in Exclude<Op, "hello">]: Handler } {
+function handlers(lib: Library, transfer: TransferDeps, maxTransfers: number, hostOps: Pick<{ [K in Op]: Handler }, "imageHost" | "setImageHost" | "uploadImage">): { [K in Exclude<Op, "hello">]: Handler } {
   let transfers = 0;
   return {
+    ...hostOps,
     list: async () => ({ docs: await lib.list() }),
     read: (m) => lib.read(str(m, "path")),
     write: (m) => lib.write(str(m, "path"), str(m, "text"), str(m, "baseVersion")),
@@ -84,6 +90,29 @@ function handlers(lib: Library, transfer: TransferDeps, maxTransfers: number): {
       } finally {
         transfers--;
       }
+    },
+  };
+}
+
+/** 图床的三个请求。上传和下载共用不了计数，但一次只传一张、有超时，不另设上限。 */
+function imageHostHandlers(configPath: string | undefined, fetchFn: typeof fetch | undefined): Pick<{ [K in Op]: Handler }, "imageHost" | "setImageHost" | "uploadImage"> {
+  const current = () => (configPath ? readImageHost(configPath) : Promise.resolve(null));
+  return {
+    imageHost: async () => {
+      const host = await current();
+      return { host: host ? viewOf(host) : null };
+    },
+    setImageHost: async (m) => {
+      if (!configPath) throw new GatewayError("not-supported", "这个网关没有配置文件，存不了图床设置");
+      await writeImageHost(configPath, m.host === null ? null : parseImageHost(m.host, await current()));
+      return {};
+    },
+    uploadImage: async (m) => {
+      const data = str(m, "data");
+      if (data.length > MAX_ASSET_BASE64) throw new GatewayError("too-large", "图片超过 10 MiB");
+      const host = await current();
+      if (!host) throw new GatewayError("no-image-host", "还没有设置图床");
+      return { url: await uploadImage(host, Buffer.from(data, "base64"), fetchFn) };
     },
   };
 }
@@ -146,7 +175,7 @@ function serveConnection(ws: WebSocket, lib: Library, table: ReturnType<typeof h
 export async function startGateway(opts: GatewayOptions): Promise<Gateway> {
   const log = opts.log ?? ((s: string) => console.log(s));
   const limits = { ...DEFAULT_LIMITS, ...opts.limits };
-  const table = handlers(opts.library, { ...defaultTransferDeps, ...opts.transfer }, limits.maxTransfers);
+  const table = handlers(opts.library, { ...defaultTransferDeps, ...opts.transfer }, limits.maxTransfers, imageHostHandlers(opts.configPath, opts.uploadFetch));
   const http = createServer((_req, res) => res.writeHead(404).end());
   const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
   const live = new Set<WebSocket>();

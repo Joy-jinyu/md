@@ -1,4 +1,4 @@
-/** 本机存的设置（现在只有改过的快捷键）。和文档正文一样，只有 store 碰 Storage。 */
+/** 本机存的设置（改过的快捷键、「不用图床」）。和文档正文一样，只有 store 碰 Storage。 */
 import { Storage } from "nsh";
 
 /** 设置的存储键。 */
@@ -15,15 +15,36 @@ function readOverrides(raw: unknown): ShortcutOverrides {
   return Object.fromEntries(entries);
 }
 
+/** 整个设置对象；没存过是空对象，存坏了抛错。 */
+async function readSettings(): Promise<Record<string, unknown>> {
+  const text = await Storage.getItem(SETTINGS_KEY);
+  if (!text) return {};
+  const raw: unknown = JSON.parse(text);
+  return typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+}
+
+/** 只改设置里的一项，别的项原样留着；写不进去时返回原因。 */
+async function saveSetting(key: string, value: unknown): Promise<string | null> {
+  try {
+    const now = await readSettings().catch((e: unknown) => {
+      console.warn("settings unreadable, starting over", e);
+      return {};
+    });
+    await Storage.setItem(SETTINGS_KEY, JSON.stringify({ ...now, [key]: value }));
+    return null;
+  } catch (e) {
+    console.error("settings not saved", e);
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
 /**
  * 读出改过的快捷键。存的内容坏了（不是 JSON、形状不对）就当没改过：设置坏了不能让应用打不开。
  * 这里只看形状；命令 id 认不认识、键能不能用由 `keybindings.ts` 再筛。
  */
 export async function loadShortcutOverrides(): Promise<ShortcutOverrides> {
   try {
-    const text = await Storage.getItem(SETTINGS_KEY);
-    if (!text) return {};
-    return readOverrides((JSON.parse(text) as { shortcuts?: unknown }).shortcuts);
+    return readOverrides((await readSettings()).shortcuts);
   } catch (e) {
     console.warn("settings unreadable, using defaults", e);
     return {};
@@ -31,12 +52,17 @@ export async function loadShortcutOverrides(): Promise<ShortcutOverrides> {
 }
 
 /** 写入改过的快捷键；写不进去时返回原因。 */
-export async function saveShortcutOverrides(shortcuts: ShortcutOverrides): Promise<string | null> {
+export const saveShortcutOverrides = (shortcuts: ShortcutOverrides) => saveSetting("shortcuts", shortcuts);
+
+/** 用户选过「不用图床」：插图时没设置图床也不再问。读不出来当没选过。 */
+export async function loadSkipImageHost(): Promise<boolean> {
   try {
-    await Storage.setItem(SETTINGS_KEY, JSON.stringify({ shortcuts }));
-    return null;
+    return (await readSettings()).skipImageHost === true;
   } catch (e) {
-    console.error("settings not saved", e);
-    return e instanceof Error ? e.message : String(e);
+    console.warn("settings unreadable, asking about the image host", e);
+    return false;
   }
 }
+
+/** 记下「不用图床」（false 是重新问）；写不进去时返回原因。 */
+export const saveSkipImageHost = (skip: boolean) => saveSetting("skipImageHost", skip);
