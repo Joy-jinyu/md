@@ -2,15 +2,27 @@
 
 让线上页面（https://markdown.pairwise.site/）读写本机一个文件夹（文库）里的 `.md` 文档和图片。网关是一个 Node 进程，只听 `127.0.0.1`，页面用 WebSocket 连它。方案见实施计划第 10 节。
 
-## 一条命令装好并启动
+## 一条命令装好
 
 ```bash
 curl -fsSL https://markdown.pairwise.site/gateway.sh | sh
-# 换文库文件夹或加别的参数：
+# 第一次装时就换文库文件夹：
 curl -fsSL https://markdown.pairwise.site/gateway.sh | sh -s -- --library ~/notes
 ```
 
-脚本是本目录的 `install.sh`（`make build-web` 时放到站点根目录）：把网关下载到 `~/.pairdown/gateway`、装依赖、启动；不带参数时文库是 `~/Documents/Pairdown`（没有就建）。再跑一遍就是更新并启动。
+脚本是本目录的 `install.sh`（`make build-web` 时放到站点根目录）。它把网关装到 `~/.pairdown`，在 macOS 上注册成 launchd 后台服务（`~/Library/LaunchAgents/site.pairwise.md.gateway.plist`，登录后自动启动、退出后自动拉起），并装上 `pairdown` 命令（链到 `/usr/local/bin`、`/opt/homebrew/bin`、`~/.local/bin` 里第一个能写的）。已经装过再跑，只提示已安装并显示状态。别的系统没有后台服务，脚本在前台启动。
+
+```bash
+pairdown                          # 状态和配置
+pairdown config library ~/notes   # 换文库文件夹（自动重启）
+pairdown config origins http://127.0.0.1:8811   # 额外放行的页面来源，none 清空
+pairdown config autoUpdate off    # 关掉自动更新
+pairdown start | stop | restart | logs | update | uninstall
+```
+
+配置在 `~/.pairdown/config.json`，日志在 `~/.pairdown/gateway.log`。
+
+**自动更新**（`src/update.mts`，只有装成后台服务才有）：有页面连上来时（最多 10 分钟一次）取 `https://markdown.pairwise.site/gateway.version`（`make build-web` 写的，是 `gateway/` 目录的 git 树哈希），和装的时候记下的不一样就在后台重新下载 `main` 分支的 `gateway/`，等没有页面连着了退出，由 launchd 拉起新版。也就是说：这个仓库 `main` 分支上的网关代码会在装了的机器上自动运行，和第一次 `curl | sh` 是同一份信任。
 
 ## 从源码安装
 
