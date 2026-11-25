@@ -7,6 +7,9 @@ const WEB = { platform: "web" as const, width: 1280, height: 860 };
 /** 仓库里现成的一张 PNG，当成剪贴板上的截图粘贴。 */
 const ICON = "assets/icon/icon.png";
 const HOST = { url: "https://up.example.com/api", field: "file", urlPath: "", headerNames: ["Authorization"] };
+const GITHUB = { kind: "github", repo: "me/pics", branch: "main", dir: "images", hasToken: true };
+/** 假网关认的令牌（fixtures/fake-gateway.ts 的 goodToken）。 */
+const GOOD_TOKEN = "github_pat_good";
 
 /** 连着假网关打开应用（`params` 设假网关，见 fixtures/gateway-socket.ts），等正文出来。 */
 async function openOnGateway(params: Record<string, unknown> = {}) {
@@ -97,7 +100,7 @@ test("an image the image host does not take is stored locally and the receipt sa
   await pasteImage(app);
   await app.waitFor("id:receipt");
   await app.waitUntil(() => receiptSays(app, "1 张没传上图床，先存在本地：「"), { timeout: 3000 });
-  expect(receiptSays(app, "图床没传成")).toBe(true);
+  expect(receiptSays(app, "图床回了 HTTP 500")).toBe(true);
   expect(await markdownMatching(app, /assets\//)).toBe("# A\n\nbody![](assets/img1.png)\n");
 });
 
@@ -151,4 +154,51 @@ test("without the gateway, the storage page says image hosts need it", async () 
   await app.press("id:settings-tab-storage");
   expect(receiptSays(app, "图床要连着本机网关才能用")).toBe(true);
   expect(app.shows("id:image-host")).toBe(false);
+});
+
+test("GitHub repository: picking it in the dialog checks the repository and asks for a token, then the pasted image gets the raw address", async () => {
+  const app = await openOnGateway();
+  await pasteImage(app);
+  await app.waitFor("id:image-host-ask");
+  await app.press("id:image-host-kind-github");
+  expect(app.shows("label:GitHub 仓库（当前）")).toBe(true);
+  await app.type("label:仓库", "not a repo");
+  await app.press("id:image-host-save");
+  await app.waitFor("id:image-host-problem");
+  expect(receiptSays(app, "仓库要写成「用户/仓库」")).toBe(true);
+  await app.clear("label:仓库");
+  await app.type("label:仓库", "me/pics");
+  await app.press("id:image-host-save");
+  await app.waitFor("text:要填令牌（GitHub 的 personal access token）");
+  await app.type("label:令牌", GOOD_TOKEN);
+  await app.press("id:image-host-save");
+  await app.waitUntil(() => !app.shows("id:image-host-ask"), { timeout: 3000 });
+  expect(await markdownMatching(app, /raw\.githubusercontent/)).toBe("# A\n\nbody![](https://raw.githubusercontent.com/me/pics/main/images/up1.png)\n");
+  await openStorageSettings(app);
+  await app.waitFor("text:GitHub 仓库：me/pics");
+  for (const line of ["分支：main", "目录：images", "令牌：已设置（值不显示）"]) expect(receiptSays(app, line)).toBe(true);
+  expect(receiptSays(app, GOOD_TOKEN)).toBe(false);
+});
+
+test("GitHub repository: changing the branch with the token left empty keeps the saved token", async () => {
+  const app = await openOnGateway({ imageHost: GITHUB, githubToken: GOOD_TOKEN });
+  await openStorageSettings(app);
+  await app.waitFor("text:GitHub 仓库：me/pics");
+  await app.press("id:image-host-edit");
+  expect(app.shows("label:GitHub 仓库（当前）")).toBe(true);
+  await app.clear("label:分支");
+  await app.type("label:分支", "pages");
+  await app.press("id:image-host-save");
+  await app.waitFor("text:分支：pages");
+  await app.press("id:settings-done");
+  await pasteImage(app);
+  expect(await markdownMatching(app, /raw\.githubusercontent/)).toBe("# A\n\nbody![](https://raw.githubusercontent.com/me/pics/pages/images/up1.png)\n");
+});
+
+test("GitHub repository: when GitHub refuses the upload, the receipt gives the gateway's reason and the image is stored locally", async () => {
+  const app = await openOnGateway({ imageHost: GITHUB, githubToken: "github_pat_expired" });
+  await pasteImage(app);
+  await app.waitUntil(() => receiptSays(app, "GitHub 不认这个令牌（401）：令牌不对或者过期了"), { timeout: 3000 });
+  expect(receiptSays(app, "1 张没传上图床，先存在本地")).toBe(true);
+  expect(await markdownMatching(app, /assets\//)).toBe("# A\n\nbody![](assets/img1.png)\n");
 });

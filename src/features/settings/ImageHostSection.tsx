@@ -12,13 +12,17 @@ type Loaded = { kind: "loading" } | { kind: "ready"; host: ImageHostView | null 
 const LINE = "select-text text-xs leading-5 text-muted-foreground";
 
 function HostLines(props: { host: ImageHostView }) {
-  const h = () => props.host;
+  const lines = (): string[] => {
+    const h = props.host;
+    if (h.kind === "github") return [`GitHub 仓库：${h.repo}`, `分支：${h.branch}`, `目录：${h.dir}`, `令牌：${h.hasToken ? "已设置（值不显示）" : "没有"}`];
+    const headers = h.headerNames.length > 0 ? `${h.headerNames.join("、")}（值不显示）` : "没有";
+    return [`上传地址：${h.url}`, `文件字段名：${h.field}`, `请求头：${headers}`, `图片地址的位置：${h.urlPath || "自动找"}`];
+  };
   return (
     <View testID="image-host-current" class="gap-0.5">
-      <Text class={LINE}>{`上传地址：${h().url}`}</Text>
-      <Text class={LINE}>{`文件字段名：${h().field}`}</Text>
-      <Text class={LINE}>{`请求头：${h().headerNames.length > 0 ? `${h().headerNames.join("、")}（值不显示）` : "没有"}`}</Text>
-      <Text class={LINE}>{`图片地址的位置：${h().urlPath || "自动找"}`}</Text>
+      <Each of={lines()} key={(line) => line}>
+        {(line) => <Text class={LINE}>{line()}</Text>}
+      </Each>
     </View>
   );
 }
