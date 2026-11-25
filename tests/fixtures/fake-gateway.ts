@@ -37,6 +37,8 @@ export function fakeGateway(seed: Record<string, string>) {
     noImageHostOps: false,
     /** uploadImage 一律回这个错误码（图床挂了）；null 是传得上。 */
     uploadFails: null as string | null,
+    /** uploadImage 晚多少毫秒回（图床慢）。 */
+    uploadDelay: 0,
     /** 传上去的张数：图床地址按它编号。 */
     uploads: 0,
   };
@@ -161,7 +163,7 @@ export function fakeGateway(seed: Record<string, string>) {
           open = false;
           return hangUp(events, 1006);
         }
-        setTimeout(() => events.message(JSON.stringify(reply)), 0);
+        setTimeout(() => events.message(JSON.stringify(reply)), m.op === "uploadImage" ? state.uploadDelay : 0);
       },
       close() {
         if (!open) return;

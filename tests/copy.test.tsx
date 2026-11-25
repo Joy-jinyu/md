@@ -65,11 +65,11 @@ test("web: the edit keys in a dialog's input reach neither the editor nor the ap
   expect(app.storage()[LEGACY_DOC_KEY]).toContain("x");
 });
 
-test("settings, storage page: the gateway's one-line start command copies with one press", async () => {
+test("settings, gateway page: the gateway's one-line start command copies with one press", async () => {
   const app = await open("../App.tsx", { ...WEB, storage: { [LEGACY_DOC_KEY]: "# T\n\nbody\n" } });
   await app.waitFor("text:body");
   await app.press("id:open-settings");
-  await app.press("id:settings-tab-storage");
+  await app.press("id:settings-tab-gateway");
   await app.press("label:复制启动命令");
   expect(app.clipboard()).toBe("curl -fsSL https://markdown.pairwise.site/gateway.sh | sh");
   await app.waitFor("text:已复制");
@@ -79,7 +79,7 @@ test("a copy button the system refuses says it did not copy", async () => {
   const app = await open("../App.tsx", { ...WEB, storage: { [LEGACY_DOC_KEY]: "# T\n\nbody\n" }, modules: { nsh: { "Clipboard.writeText": () => "failed" } } });
   await app.waitFor("text:body");
   await app.press("id:open-settings");
-  await app.press("id:settings-tab-storage");
+  await app.press("id:settings-tab-gateway");
   await app.press("label:复制启动命令");
   await app.waitFor("text:没能复制");
   expect(app.shows("text:已复制")).toBe(false);
