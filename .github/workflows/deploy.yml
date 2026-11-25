@@ -25,7 +25,7 @@ jobs:
       # 版本和本机一致（nsh --version），升级时两边一起改
       - name: 安装 nsh
         env:
-          NSH_VERSION: v0.6.0
+          NSH_VERSION: v0.7.0
         run: |
           curl -fsSL "https://raw.githubusercontent.com/longbridge/nsh/$NSH_VERSION/website/public/install.sh" | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"

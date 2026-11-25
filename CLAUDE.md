@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-Pairdown：用 nsh（v0.6.0，TSX）写的所见即所得 Markdown 编辑器（品牌名 2026-11-24 定，仓库和应用 id 仍叫 md / `site.pairwise.md`），Web 和 macOS 共用一份代码。文档只以 Markdown 文本保存在本地，登录 GitHub 后可以同步。AI agent 按本文件和 `EXECUTION.md` 设计、实现、验证；提交和对外操作要用户授权。
+Pairdown：用 nsh（v0.7.0，TSX；2026-11-25 从 0.6.0 升上来）写的所见即所得 Markdown 编辑器（品牌名 2026-11-24 定，仓库和应用 id 仍叫 md / `site.pairwise.md`），Web 和 macOS 共用一份代码。文档只以 Markdown 文本保存在本地，登录 GitHub 后可以同步。AI agent 按本文件和 `EXECUTION.md` 设计、实现、验证；提交和对外操作要用户授权。
 
 **冲突优先级**：`EXECUTION.md`（执行铁律）> `DESIGN.md` / 本文件 > 「当前阶段」里还没做的设想
 
@@ -22,7 +22,7 @@ Pairdown：用 nsh（v0.6.0，TSX）写的所见即所得 Markdown 编辑器（�
           · 网页、没有网关：浏览器本地，IndexedDB（额度按磁盘算），打不开时 nsh Storage（上限 5MB）
           文件类后端的 id 是文库内相对路径、版本是内容 SHA-256；写入带版本，对不上不覆盖（冲突条）。版本历史、应急键、设置、上次打开哪篇放本机 Storage / IndexedDB
           外部改动：网关推送；macOS 没有文件监听接口，窗口重新获得焦点时比对
-          打开文件 / 另存为：系统选择框读入，存成文档库里的一篇新文档；浏览器下载、桌面存进「下载」文件夹（nsh 0.6.0 没有保存对话框）
+          打开文件 / 另存为：系统选择框读入，存成文档库里的一篇新文档；浏览器下载、桌面存进「下载」文件夹（nsh 没有保存对话框，0.7.0 也没有，2026-11-25 查 `.nsh/types/`）
 同步      GitHub REST API（fetch），一篇文档 = 一个私有 Gist
 登录      Web：OAuth 网页授权，code 换 token 走中转 Worker（client secret 不进前端）
           macOS：OAuth Device Flow（不需要 secret）
@@ -31,7 +31,7 @@ Pairdown：用 nsh（v0.6.0，TSX）写的所见即所得 Markdown 编辑器（�
           build-web 末尾由 scripts/web-headers.mjs 从 nsh.json 生成 _headers（响应头里的 connect-src 白名单等，见 .claude/rules/security.md「外链图片」）；
           本地开发页（make dev-web）不发这些头，不受这层保护
           macOS：nsh package --target macos → .app
-CI        GitHub Actions：装 nsh v0.6.0、Node 24 → make verify（check、页面测试、网关测试、Worker 测试）→ package web → wrangler deploy（要两个仓库 secret，还没配，现在是本机手动发布）
+CI        GitHub Actions：装 nsh v0.7.0、Node 24 → make verify（check、页面测试、网关测试、Worker 测试）→ package web → wrangler deploy（要两个仓库 secret，还没配，现在是本机手动发布）
 ```
 
 <!-- [inferred] 同步目标选 Gist：一篇一个私有 Gist 最简单，不需要用户先建仓库；若改成存仓库，改这里和 src/sync/ -->
@@ -88,7 +88,13 @@ md/
 - **Markdown 是唯一事实来源**：存储、同步、导出都只存 Markdown 字符串；ProseMirror JSON 不落盘。schema、扩展或转换层一改，就要过「Markdown → 编辑器 → Markdown」往返测试（`tests/doc-roundtrip.test.ts`）。
 - **保真约定**（细节见实施计划第 4 节）：没改过的顶层块保存时逐字节写回原文（一个列表、一张表格算一个块）；改过的块按固定写法重写，重写结果再读一遍必须不变；不认识的语法当原文保留，不丢、不加转义。
 - **编辑器必须带扩展建会话**：至少 `extensions: [StarterKit, TableKit]`。不带扩展的默认 schema 会把表格拆成段落（实测）。`StarterKit` 已含高亮、下划线、上下标，再加一次会报「two extensions are named …」。
-- **大文档走源码方式**：RichEditor 没有虚拟滚动，整篇一次渲染。超过 `EditorScreen.tsx` 里的 `RICH_MAX_CHARS` / `RICH_MAX_LINES` / `RICH_MAX_TABLE_ROWS`（单张表格行数）任意一条就用源码方式打开；实测数字在实施计划 9.4 节，改上限前先重测。表格列宽拖拽必须关着（`schema.ts`），开着时表格一多 web host 会崩。
+- **大文档走源码方式**：nsh 0.6.0 的 RichEditor 整篇一次渲染；0.7.0 起只挂视口附近的块，打开快了很多，但每敲一个字仍随全文变慢（2026-11-25 复测，数字在 `EditorScreen.tsx` 上限旁的注释里，上限没改）。超过 `EditorScreen.tsx` 里的 `RICH_MAX_CHARS` / `RICH_MAX_LINES` / `RICH_MAX_TABLE_ROWS`（单张表格行数）任意一条就用源码方式打开；实测数字在实施计划 9.4 节，改上限前先重测。表格列宽拖拽必须关着（`schema.ts`）：0.6.0 时表格一多 web host 会崩；0.7.0 多表不崩了，但单张 500 行的表开着就 wasm 内存越界。
+- **nsh 0.7.0 的变化和坑**（2026-11-25 升级时实测，细节见各处注释）：
+  - 长文档只挂视口附近的块：从没显示过的块 `scrollIntoView` 不滚、`coordsAtPos` / `nodeRect` 是 null。跳转（查找、大纲、目录、脚注、Cmd+D、源码视图切回）设好选区后都要调 `caret-follow.tsx` 的 `reachSelection()`；盖在块上的东西（提示块标签）滚动停下后重量（`BlockOverlays` 的 `scrolled`）。
+  - 节点视图里的按钮：上一下点击不在编辑器里时（刚打开、刚从侧栏跳来），这一下只报 `onMouseUp` 不报 `onPress`，按钮用 `node-press.ts` 的 `nodePress`。
+  - `Clipboard.writeText` 拒收时 resolve 成 `"failed"`，写剪贴板经 `src/ui/clipboard.ts`。回车分段保留粗体等 mark（跟 Tiptap，用户定跟随）。
+  - macOS 关掉最后一个窗口应用不退出：关窗按钮改成藏窗口、先存盘，点程序坞图标再显示（`platform/index.ts` 的 `keepWindowOnClose`）。
+  - 测试驱动：`press("text:…")` 按的是整行正中（行内的字没有自己的视图，短行落到行尾），要落在字上用 `{ position }` 或键盘；两次 press 不到 400ms 算双击（不看位置）；同一个命令的键 40ms 内按两次会被 `keys.ts` 的 `once` 去重，连按之间 `wait(100)`；`nsh test` 默认并行，`make test` 用 `--jobs 1`。
 - **JS 单次调用有 2000ms 预算**（超了 nsh 直接中断，实测报 `a call into JS exceeded its budget of 2000 ms`）：整篇解析、序列化这类重活要量过耗时，大文档要分片。
 - **平台分支只在 `src/platform/index.ts`**：只有它读 nsh 的 `platform.name`；`features/` 和 `ui/` 只调它导出的函数。
 - **存储只走 `src/store/`**：其他模块不直接调 `Storage`、不直接碰 IndexedDB，键名也只在 store 里定义。

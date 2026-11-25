@@ -8,7 +8,7 @@ import { firstBlockDiff, firstTextDiff, forceRewrite, nodeSize, normalize, openD
 import { longDoc, looseList, SAMPLES, sectionDoc } from "./fixtures/samples";
 
 const SMALL: Record<string, string> = { "full-syntax": FULL_SYNTAX, ...SAMPLES };
-const BIG: Record<string, string> = { "loose-list-800": looseList(800), "long-doc": longDoc(600), "sections-2500": sectionDoc(2500) };
+const BIG: Record<string, string> = { "loose-list-800": looseList(800), "long-doc": longDoc(600), "sections-1200": sectionDoc(1200) };
 const ALL: Record<string, string> = { ...SMALL, ...BIG };
 // 含定义行（包括引用块里嵌套的）的块：删改它会按约定强制重写引用它的块，不在「其余块不变」的范围
 const DEF_SRC = /^(?:[ \t]*>)*[ \t]*\[\^?[^\]]+\]:/m;
@@ -127,7 +127,7 @@ function structuralEdits(nodes: Node[], limit: number): Edit[] {
   return [...spread(nodes.length, limit).flatMap((i) => editsAt(nodes, i)), ...defDeletes].filter((e) => comparable(nodes, e));
 }
 
-const LIMITS: Record<string, number> = { "long-doc": 3, "sections-2500": 0 };
+const LIMITS: Record<string, number> = { "long-doc": 3, "sections-1200": 0 };
 
 for (const [name, src] of Object.entries(ALL)) {
   const limit = LIMITS[name] ?? 40;

@@ -1,5 +1,6 @@
 /** 命令表里的键怎么接到应用上：编辑器里由插件截，编辑器外由 keymap 绑；两条路走同一个出口。 */
 import { keymap } from "nsh";
+import { showWindow } from "../../platform";
 import { installAppMenu } from "./app-menu";
 import { type AppCommand, COMMANDS, isViewCommand } from "./commands";
 import { keyOf } from "./keybindings";
@@ -38,12 +39,22 @@ export function once(run: (c: AppCommand) => void): (c: AppCommand) => void {
   };
 }
 
-/** 焦点不在所见即所得编辑器里时（源码视图、查找框、页面空白处）也要生效的键。在组件渲染时调用，随组件卸载解绑。macOS 的菜单栏也在这时按现在的键重建。 */
+/**
+ * 焦点不在所见即所得编辑器里时（源码视图、查找框、页面空白处）也要生效的键。在组件渲染时调用，随组件卸载解绑。macOS 的菜单栏也在这时按现在的键重建。
+ * macOS 关窗后窗口只是藏着，这些键照样收得到（无头测试里是这样，真窗口里由菜单栏接，见 platform 的 `setMenuBar`）：先把窗口显示出来再做。
+ */
 export function bindViewKeys(run: (c: AppCommand) => void) {
   installAppMenu(run);
   for (const c of jsCommands().filter(isViewCommand)) {
     try {
-      keymap.bind(toKeymapName(keyOf(c) as string), () => run(c), { when: "always" });
+      keymap.bind(
+        toKeymapName(keyOf(c) as string),
+        () => {
+          showWindow();
+          run(c);
+        },
+        { when: "always" },
+      );
     } catch (e) {
       // 平台不让绑的键（或设置里混进来的坏键名）只丢这一条，不能让整个编辑页渲染不出来
       console.error("shortcut not bound", c.id, keyOf(c), e);

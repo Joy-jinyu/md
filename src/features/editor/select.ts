@@ -1,6 +1,7 @@
 /** 选词、选行、选格式范围（Typora 的 Cmd+D / L / E，实施计划 4.4）。只在一个文本块里算：段落、标题、代码块。 */
 import { chain, type RichEditorSession, scrollIntoView, setCellSelection, setTextSelection } from "nsh/base";
 import type { PMMark, PMNode } from "../../doc/types";
+import { reachSelection } from "./caret-follow";
 import { eachNode, nodeSize } from "./outline";
 import { selectionRange } from "./selection";
 
@@ -76,6 +77,7 @@ const blockAt = (blocks: TextBlock[], pos: number) => blocks.find((b) => pos >= 
 
 function select(session: RichEditorSession, from: number, to: number) {
   session.run(chain([setTextSelection(from, to), scrollIntoView()]));
+  reachSelection();
 }
 
 /** 分词器：Intl.Segmenter 的形状。可以从外面传进 `wordAround`（测试里用替身走有分词器的那条路）。 */

@@ -71,6 +71,8 @@ test("the same key enters and leaves the source view", async () => {
   await app.press("text:body");
   await app.keyboard.press("mod+alt+/");
   await app.waitFor("label:Markdown 源码");
+  // 隔开真人连按的最短间隔：同一个命令 40ms 内只算一次（keys.ts 的 once），0.7.0 的无头测试两步之间可能不到 40ms
+  await app.wait(100);
   await app.keyboard.press("mod+alt+/");
   await app.waitUntil(() => !app.shows("label:Markdown 源码"), { timeout: 3000 });
 });

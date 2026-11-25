@@ -1,6 +1,6 @@
 /** 平台差异的唯一位置：features 只引这里导出的值。 */
-import { keymap, platform } from "nsh";
-import { Application, Menu } from "nsh/desktop";
+import { cleanup, keymap, platform } from "nsh";
+import { Application, currentWindow, Menu, type WindowRef } from "nsh/desktop";
 import type { FileLibrary } from "../store/backend";
 import { createFileStore, LIBRARY_FOLDER, locateFile, readFileBytes } from "./macos/file-store";
 import { saveToDownloads } from "./macos/save";
@@ -91,21 +91,77 @@ export async function saveTextFile(name: string, text: string, type?: string): P
 }
 
 /**
- * 离开时把没写的改动存下来。`stash` 同步记下改动、返回记没记稳；`save` 是正常的写入。
+ * 离开时把没写的改动存下来。`stash` 同步记下改动（应急键）、返回记没记稳；`save` 是正常的写入，返回存没存上。要在组件渲染时调（监听跟着组件走）。
  * 浏览器里关标签页、刷新、跳走时 IndexedDB 的写入来不及提交（2026-11-25 实测丢字），所以先 `stash`：
  * 记稳了直接放行；没记稳就不放行，浏览器会问要不要离开，同时照常 `save`。页面真的没了（`quit`）时再记一次。
- * 别处：退出时等 `save`（nsh 最多等 200ms）。
+ * 别处（macOS 应用）：要退出时先记应急键再存，存上了才退；没存上（文件刚被别的程序改过、写不进去）就不退，把窗口显示出来让人看冲突条。
+ * 已经拦过一次、又要退时照退：改动在应急键里，下次打开时并回去——不然磁盘一直写不进去时应用就退不掉了。真退出（`quit`，nsh 最多等 200ms）时再记一次、存一次。
  */
-export function saveBeforeLeaving(stash: () => boolean, save: () => Promise<unknown>) {
+export function saveBeforeLeaving(stash: () => boolean, save: () => Promise<boolean>) {
   if (!IN_BROWSER) {
-    Application.on("quit", () => save().then(() => undefined));
+    let refused = false;
+    cleanup(
+      Application.on("quitRequest", () => {
+        const stashed = stash();
+        void save().then((ok) => {
+          if (ok || (refused && stashed)) return Application.quit();
+          refused = true;
+          Application.cancelQuitRequest();
+          showWindow();
+        });
+      }),
+    );
+    cleanup(
+      Application.on("quit", () => {
+        stash();
+        return save().then(() => undefined);
+      }),
+    );
     return;
   }
-  Application.on("quitRequest", () => {
-    if (stash()) Application.quit();
-    else void save();
+  cleanup(
+    Application.on("quitRequest", () => {
+      if (stash()) Application.quit();
+      else void save();
+    }),
+  );
+  cleanup(Application.on("quit", () => void stash()));
+}
+
+/** macOS 应用的主窗口（`keepWindowOnClose` 时记下）：窗口收着时 `showWindow` 用它。 */
+let mainWindow: WindowRef | null = null;
+
+/** 把收起的窗口显示出来、放到最前（macOS 关窗只是把窗口藏起来）。没有窗口的地方什么都不做。 */
+export function showWindow() {
+  mainWindow?.show();
+  mainWindow?.focus();
+}
+
+/**
+ * macOS 关窗：nsh 0.7.0 起关掉最后一个窗口应用不退出、留在程序坞（用户 2026-11-25 定：跟随）。窗口真关掉的话里面的内容跟着拆掉，
+ * 点程序坞图标时没有东西可显示，所以关窗按钮改成把窗口藏起来：先记应急键（`stash`）、再存盘（`save`），存上了才藏；
+ * 没存上（文件刚被别的程序改过、删了、写不进去）窗口留着，冲突条、保存状态露在外面让人处理。
+ * 点程序坞图标（`reopen`）时再显示，文档、光标、撤销都还在，显示后调 `back`（藏着的时候文件可能被别的程序改过）。
+ * 只能在组件渲染时调（`currentWindow()` 的要求）。别处什么都不做（网页关标签页见 `saveBeforeLeaving`）。
+ */
+export function keepWindowOnClose(stash: () => boolean, save: () => Promise<boolean>, back: () => void) {
+  if (platform.name !== "macos") return;
+  const win = currentWindow();
+  mainWindow = win;
+  cleanup(() => {
+    if (mainWindow === win) mainWindow = null;
   });
-  Application.on("quit", () => void stash());
+  win.set({ closeOnPress: false });
+  win.on("closePress", () => {
+    stash();
+    void save().then((ok) => ok && win.hide());
+  });
+  cleanup(
+    Application.on("reopen", () => {
+      showWindow();
+      back();
+    }),
+  );
 }
 
 /** 这台设备上的文库文件夹：macOS 应用是 `~/Documents/Pairdown`，别处没有（网页里用网关或浏览器本地）。 */
@@ -121,6 +177,16 @@ export interface MenuCommand {
   onSelect: () => void;
 }
 
+/** 菜单命令选中时先把收起的窗口显示出来：窗口收着时菜单栏照样能用，命令做了却看不见。 */
+const showingWindow = (commands: MenuCommand[]): MenuCommand[] =>
+  commands.map((c) => ({
+    ...c,
+    onSelect: () => {
+      showWindow();
+      c.onSelect();
+    },
+  }));
+
 /**
  * 放好系统菜单栏（只有 macOS 应用有，别处什么都不做）：应用菜单、文件、编辑（系统自带的撤销、剪切这些）、视图、窗口。
  * 文件和视图两个菜单里放什么由编辑页给。再调一次就整个换掉。
@@ -129,9 +195,9 @@ export function setMenuBar(file: MenuCommand[], view: MenuCommand[]) {
   if (platform.name !== "macos") return;
   Menu.setApplicationMenu([
     { label: "Pairdown", submenu: [{ role: "about" }, { type: "separator" }, { role: "hide" }, { role: "hideOthers" }, { role: "showAll" }, { type: "separator" }, { role: "quit" }] },
-    { label: "文件", submenu: file },
+    { label: "文件", submenu: showingWindow(file) },
     { label: "编辑", submenu: [{ role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" }] },
-    { label: "视图", submenu: view },
+    { label: "视图", submenu: showingWindow(view) },
     { label: "窗口", submenu: [{ role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "toggleFullScreen" }] },
   ]);
 }
@@ -141,11 +207,14 @@ export const locateOpenedFile = locateFile;
 
 /**
  * 系统交来要打开的文件（访达里「打开方式」、双击、拖到程序坞图标，和拖进窗口）：macOS 应用里才有，给的是绝对路径。
- * 启动前就来了的文件 nsh 会在挂上监听时补交。返回停止监听的函数。
+ * 窗口收着时先显示出来。启动前就来了的文件 nsh 会在挂上监听时补交。返回停止监听的函数。
  */
 export function onOpenFiles(handler: (paths: string[]) => void): () => void {
   if (platform.name !== "macos") return () => undefined;
-  return Application.on("openFiles", ({ paths }) => handler(paths));
+  return Application.on("openFiles", ({ paths }) => {
+    showWindow();
+    handler(paths);
+  });
 }
 
 /** 拖进窗口的文件（`file:` 地址）→ 绝对路径；只在 macOS 应用里处理，别处给空。 */
