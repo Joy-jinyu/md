@@ -2,7 +2,17 @@
 
 让线上页面（https://markdown.pairwise.site/）读写本机一个文件夹（文库）里的 `.md` 文档和图片。网关是一个 Node 进程，只听 `127.0.0.1`，页面用 WebSocket 连它。方案见实施计划第 10 节。
 
-## 安装
+## 一条命令装好并启动
+
+```bash
+curl -fsSL https://markdown.pairwise.site/gateway.sh | sh
+# 换文库文件夹或加别的参数：
+curl -fsSL https://markdown.pairwise.site/gateway.sh | sh -s -- --library ~/notes
+```
+
+脚本是本目录的 `install.sh`（`make build-web` 时放到站点根目录）：把网关下载到 `~/.pairdown/gateway`、装依赖、启动；不带参数时文库是 `~/Documents/Pairdown`（没有就建）。再跑一遍就是更新并启动。
+
+## 从源码安装
 
 要 Node 23.6 以上（直接跑 TypeScript，不用编译；本机开发用的是 v25）。
 
