@@ -10,12 +10,15 @@ import { isRelativeSrc, mimeOf, sniffImage } from "../../store/image-file";
 import { currentDocId } from "../../store/library";
 import { Button } from "../../ui/button";
 import { pageUrl } from "../sync/page-url";
+import { noteNodeViewLayout } from "./doc-index";
 import { columnWidth, isExternalSrc, transferImage } from "./images";
 import { openLink } from "./links";
 
+type Size = { width: number; height: number };
+
 type Shown =
-  | { kind: "loading" }
-  | { kind: "ready"; url: string; width: number; height: number }
+  | { kind: "loading"; size?: Size }
+  | ({ kind: "ready"; url: string } & Size)
   | { kind: "remoteFailed"; text: string }
   | { kind: "problem"; text: string };
 
@@ -27,6 +30,15 @@ const attrOf = (p: RichNodeViewProps, name: string) => {
   return v === null || v === undefined ? "" : String(v);
 };
 
+/** 设了宽度、没载入过的图片在载入前的占位高度：不知道比例，取一个体感上不太高也不太矮的值，载入后变一次到真实高度。 */
+const UNKNOWN_HEIGHT = 120;
+
+/**
+ * 这次运行里载入过的图片的原图大小：节点视图重建（改了别处、撤销、重开文档）时直接按它占位，不回到「正在载入图片…」再跳回图片高度。
+ * 外链和内嵌图片按地址记，文档库里的图片按「文档 id + 路径」记（blob 地址每次重建都换）。
+ */
+const knownSizes = new Map<string, Size>();
+
 /** 显示宽度：百分比按正文列算；像素和原图都不超过正文列。 */
 function displayWidth(width: string, natural: number): number {
   const col = columnWidth();
@@ -36,8 +48,7 @@ function displayWidth(width: string, natural: number): number {
 }
 
 /** 相对路径：取字节 → 按文件头认类型 → blob 地址 → 量原图大小。 */
-async function loadAsset(src: string, keep: (url: string) => void): Promise<Shown> {
-  const docId = currentDocId();
+async function loadAsset(docId: string | null, src: string, keep: (url: string) => void): Promise<Shown> {
   if (!docId) return { kind: "problem", text: `找不到图片：${src}` };
   try {
     const asset = await documentStore.getAsset(docId, src);
@@ -47,6 +58,7 @@ async function loadAsset(src: string, keep: (url: string) => void): Promise<Show
     const url = URL.createObjectURL(new Blob([asset.bytes], { type: mimeOf(ext) }));
     keep(url);
     const size = await Image.getSize(url);
+    knownSizes.set(`${docId}\n${src}`, size);
     return { kind: "ready", url, width: size.width, height: size.height };
   } catch (e) {
     console.warn("image not loaded", src, e);
@@ -58,6 +70,7 @@ async function loadAsset(src: string, keep: (url: string) => void): Promise<Show
 async function loadDirect(src: string, failed: () => Shown): Promise<Shown> {
   try {
     const size = await Image.getSize(src);
+    knownSizes.set(src, size);
     return { kind: "ready", url: src, width: size.width, height: size.height };
   } catch (e) {
     console.warn("image not loaded", src.slice(0, 80), e);
@@ -71,12 +84,12 @@ function remoteFailure(src: string): string {
   return "外链图片没载入：地址不对、对方网站不让引用，或者没有网络";
 }
 
-function Placeholder(props: { selected: boolean; children: JSX.Element }) {
+function Placeholder(props: { selected: boolean; width?: number; children: JSX.Element }) {
   return (
     <View
       testID="image-placeholder"
       class="max-w-full gap-1 rounded-(--radius-sm) border border-dashed bg-muted px-3 py-2"
-      style={{ maxWidth: columnWidth() }}
+      style={props.width ? { width: props.width, height: UNKNOWN_HEIGHT, maxWidth: columnWidth() } : { maxWidth: columnWidth() }}
       classList={{ "border-primary": props.selected, "border-border-strong": !props.selected }}
     >
       {props.children}
@@ -109,27 +122,34 @@ export function ImageView(p: RichNodeViewProps) {
     blob = null;
   };
   let generation = 0;
+  let loadedSrc: string | null = null;
   effect(() => {
     const src = attrOf(p, "src").trim();
+    // 选中、取消选中、改宽度和对齐时节点的属性会整份换新，这个 effect 也会重跑；地址没变就不重新载入，不然会先回到占位再跳回图片（闪一下、下面的内容跳动）
+    if (src === loadedSrc) return;
+    loadedSrc = src;
     untracked(() => {
       release();
       const mine = ++generation;
       const settle = (next: Shown) => mine === generation && shown.set(next);
-      if (isExternalSrc(src)) {
+      if (isExternalSrc(src) || DATA_RASTER.test(src)) {
+        const known = knownSizes.get(src);
+        if (known) return settle({ kind: "ready", url: src, ...known });
         settle({ kind: "loading" });
-        return void loadDirect(src, () => ({ kind: "remoteFailed", text: remoteFailure(src) })).then(settle);
+        const failed = (): Shown => (isExternalSrc(src) ? { kind: "remoteFailed", text: remoteFailure(src) } : { kind: "problem", text: "内嵌图片载入失败" });
+        return void loadDirect(src, failed).then(settle);
       }
-      if (DATA_RASTER.test(src)) return void loadDirect(src, () => ({ kind: "problem", text: "内嵌图片载入失败" })).then(settle);
       if (!isRelativeSrc(src)) return settle({ kind: "problem", text: `不支持的图片地址：${src.slice(0, 80)}。只显示文档旁边 assets/ 里的图、http(s) 外链和内嵌的位图；把图片重新插入一次（粘贴或「插入图片…」）就会存进文档库` });
-      settle({ kind: "loading" });
-      void loadAsset(src, (url) => (mine === generation ? (blob = url) : URL.revokeObjectURL(url))).then(settle);
+      const docId = currentDocId();
+      settle({ kind: "loading", size: knownSizes.get(`${docId}\n${src}`) });
+      void loadAsset(docId, src, (url) => (mine === generation ? (blob = url) : URL.revokeObjectURL(url))).then(settle);
     });
   });
   cleanup(release);
 
   const align = () => attrOf(p, "align");
   const alt = () => attrOf(p, "alt");
-  const box = (s: Extract<Shown, { kind: "ready" }>) => {
+  const box = (s: Size) => {
     const w = displayWidth(attrOf(p, "width"), s.width);
     return { width: w, height: Math.round((w * s.height) / Math.max(1, s.width)) };
   };
@@ -145,8 +165,15 @@ export function ImageView(p: RichNodeViewProps) {
       case "remoteFailed":
         return <RemoteFailed src={attrOf(p, "src").trim()} text={s.text} selected={p.selected} editor={p.editor} />;
       case "loading":
+        if (s.size) {
+          return (
+            <View class="rounded-(--radius-sm) border-2" classList={{ "border-primary": p.selected, "border-transparent": !p.selected }}>
+              <View testID="image-sized-placeholder" accessibilityLabel="正在载入图片" class="bg-muted" style={box(s.size)} />
+            </View>
+          );
+        }
         return (
-          <Placeholder selected={p.selected}>
+          <Placeholder selected={p.selected} width={attrOf(p, "width") ? displayWidth(attrOf(p, "width"), 0) : undefined}>
             <Text class="text-[12px] text-muted-foreground">正在载入图片…</Text>
           </Placeholder>
         );
@@ -160,6 +187,7 @@ export function ImageView(p: RichNodeViewProps) {
   };
   return (
     <View
+      onLayout={noteNodeViewLayout}
       style={align() ? { width: columnWidth() } : undefined}
       classList={{ "items-start": align() === "left", "items-center": align() === "center", "items-end": align() === "right" }}
     >
