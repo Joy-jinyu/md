@@ -78,6 +78,8 @@ export type ErrorCode =
   | "bad-url" // transfer：不是 http / https，或地址写错
   | "forbidden-address" // transfer：解析到回环 / 内网等地址（含重定向之后）
   | "fetch-failed" // transfer：下载失败、超时、状态码不是 2xx、重定向太多
+  | "no-image-host" // uploadImage：还没设置图床
+  | "upload-failed" // uploadImage：图床不回、超时、状态码不是 2xx，或返回里找不到图片地址
   | "not-supported"
   | "internal";
 
@@ -86,6 +88,19 @@ export type DocProblem = "not-utf8" | "too-large";
 
 /** 文档列表里的一项。path 是文库内的相对路径，用 / 分隔，也是文档的 id。能正常编辑的文档没有 problem 字段。 */
 export type DocMeta = { path: string; size: number; mtimeMs: number; problem?: DocProblem };
+
+/**
+ * 图床：一个收 multipart/form-data 的上传接口（PicGo 的自定义图床那种）。配置存在网关的 config.json 里，上传由网关发。
+ * url：上传地址（http / https）。field：放图片的表单字段名。urlPath：返回的 JSON 里图片地址在哪（`data.url` 这样的点路径）；
+ * 空串是自动找（url、data.url、data.links.url、result.0、data.0 里第一个是 http(s) 地址的）。
+ */
+export type ImageHostSettings = { url: string; field: string; urlPath: string };
+
+/** 页面看到的图床配置：请求头里可能有密钥，只给名字、不给值。 */
+export type ImageHostView = ImageHostSettings & { headerNames: string[] };
+
+/** 页面要存的图床配置：headers 不给就保留网关里原来的（页面拿不到原值，改别的项时不用重填）。 */
+export type ImageHostInput = ImageHostSettings & { headers?: Record<string, string> };
 
 /**
  * 每种请求的参数和成功结果。
@@ -111,6 +126,12 @@ export type RequestMap = {
   getAsset: { params: { doc?: string; src: string }; result: { path: string; mime: string; data: string } };
   /** download：外链图片下载进 assets/。upload（本地 → 图床）还没做，回 not-supported。 */
   transfer: { params: { direction: "download" | "upload"; url: string; doc?: string }; result: { path: string; src: string } };
+  /** 现在的图床配置，没设置是 null。旧网关不认这三个 op，回 bad-request。 */
+  imageHost: { params: {}; result: { host: ImageHostView | null } };
+  /** 设置图床；host 为 null 是清掉。地址不是 http(s) 回 bad-url。 */
+  setImageHost: { params: { host: ImageHostInput | null }; result: {} };
+  /** data 是图片字节的 base64：按文件头认类型后传到图床，返回图床给的图片地址。没设置图床回 no-image-host。 */
+  uploadImage: { params: { data: string }; result: { url: string } };
 };
 
 export type Op = keyof RequestMap;

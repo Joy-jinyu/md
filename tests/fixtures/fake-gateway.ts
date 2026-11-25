@@ -28,6 +28,14 @@ export function fakeGateway(seed: Record<string, string>) {
     hello: null as object | null,
     /** transfer 的结果，按地址：给 base64 就当下载成功，给错误码就失败；没列的回 fetch-failed。 */
     downloads: {} as Record<string, { data: string } | { code: string }>,
+    /** 图床配置（页面看到的样子）；null 是没设置。 */
+    imageHost: null as { url: string; field: string; urlPath: string; headerNames: string[] } | null,
+    /** 旧网关：不认图床的三个 op，回 bad-request。 */
+    noImageHostOps: false,
+    /** uploadImage 一律回这个错误码（图床挂了）；null 是传得上。 */
+    uploadFails: null as string | null,
+    /** 传上去的张数：图床地址按它编号。 */
+    uploads: 0,
   };
   /** 图片：文库内路径 → base64。名字按内容编号，同一张图只存一份。 */
   const assets = new Map<string, string>();
@@ -81,9 +89,33 @@ export function fakeGateway(seed: Record<string, string>) {
         if (!got) return fail("fetch-failed", "下载失败");
         return "code" in got ? fail(got.code, got.code) : { ok: true, result: storeAsset(m.doc, got.data) };
       }
+      case "imageHost":
+      case "setImageHost":
+      case "uploadImage":
+        return imageHostAnswer(m as unknown as Record<string, unknown>);
       default:
         return fail("not-supported", "不支持");
     }
+  }
+
+  function imageHostAnswer(m: Record<string, unknown>): object {
+    if (state.noImageHostOps) return fail("bad-request", "unknown op");
+    if (m.op === "imageHost") return { ok: true, result: { host: state.imageHost } };
+    if (m.op === "setImageHost") {
+      const host = m.host as { url: string; field: string; urlPath: string; headers?: Record<string, string> } | null;
+      if (host === null) {
+        state.imageHost = null;
+        return { ok: true, result: {} };
+      }
+      if (!/^https?:\/\//.test(host.url)) return fail("bad-url", "bad url");
+      const headerNames = host.headers ? Object.keys(host.headers) : (state.imageHost?.headerNames ?? []);
+      state.imageHost = { url: host.url, field: host.field, urlPath: host.urlPath, headerNames };
+      return { ok: true, result: {} };
+    }
+    if (!state.imageHost) return fail("no-image-host", "no image host");
+    if (state.uploadFails) return fail(state.uploadFails, "upload failed");
+    state.uploads += 1;
+    return { ok: true, result: { url: `https://img.example.com/up${state.uploads}.png` } };
   }
 
   /** 和真 WebSocket 一样：哪一边关的，过一会儿都会报一次 close。 */

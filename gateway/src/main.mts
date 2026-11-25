@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { allowedOrigins } from "./auth.mts";
 import { parseCli, USAGE } from "./cli.mts";
 import { Library } from "./library.mts";
@@ -24,7 +26,8 @@ const origins = allowedOrigins(options.origins);
 // 只有装成后台服务（install.sh）才带这个环境变量；从源码直接跑不自动更新
 const managedRoot = process.env.PAIRDOWN_HOME;
 const onClients = managedRoot ? autoUpdater(managedRoot, (s) => console.log(s)) : undefined;
-const gateway = await startGateway({ library, port: options.port, origins, onClients }).catch((e: Error) => {
+const configPath = join(managedRoot ?? join(homedir(), ".pairdown"), "config.json");
+const gateway = await startGateway({ library, port: options.port, origins, onClients, configPath }).catch((e: Error) => {
   console.error(`启动失败：${e.message}`);
   process.exit(1);
 });
