@@ -21,7 +21,8 @@ import { QuickOpen } from "../library/QuickOpen";
 import { dismissReceipt, receipt, say } from "../library/receipt";
 import { libraryRequest, pendingFind, requestLibrary } from "../library/requests";
 import { ImageHostDialog } from "../settings/ImageHostDialog";
-import { SettingsDialog } from "../settings/SettingsDialog";
+import { ImageUploadConfirm } from "../settings/ImageUploadConfirm";
+import { SettingsScreen } from "../settings/SettingsScreen";
 import { SyncHost } from "../sync/SyncHost";
 import { ConflictBar } from "./ConflictBar";
 import { setOverrides } from "./keybindings";
@@ -206,11 +207,12 @@ export function EditorScreen() {
       <ConflictBar onTheirs={() => void reopen()} />
       <FileActions />
       {screen(opened())}
-      <SettingsDialog onApply={(next) => void applyShortcuts(next)} />
+      <SettingsScreen onApply={(next) => void applyShortcuts(next)} />
       <QuickOpen />
       <HistoryDialog />
       <DocDialogs />
       <ImageHostDialog />
+      <ImageUploadConfirm />
       <SyncHost reload={reopen} />
       <MermaidRenderer />
     </View>

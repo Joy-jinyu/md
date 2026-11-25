@@ -202,3 +202,62 @@ test("Escape with settings open over the find bar does not close the find bar", 
   await app.wait(300);
   expect(app.shows("id:find-bar")).toBe(true);
 });
+
+test("settings is a page of categories: the current one is named for screen readers, and Back returns the keyboard to the document", async () => {
+  const app = await openApp("hello\n");
+  await app.waitFor("text:hello");
+  await app.press("text:hello");
+  await app.keyboard.press("mod+,");
+  await app.waitFor("id:settings");
+  expect(app.shows("label:快捷键（当前）")).toBe(true);
+  await app.press("id:settings-tab-storage");
+  await app.waitFor("id:storage-kind");
+  expect(app.shows("label:存储（当前）")).toBe(true);
+  expect(app.shows("label:快捷键（当前）")).toBe(false);
+  await app.press("id:settings-done");
+  await app.waitUntil(() => !app.shows("id:settings"), { timeout: 3000 });
+  await app.wait(100);
+  await app.keyboard.press("z");
+  const text = await saved(app);
+  expect(text.replace("z", "")).toBe("hello\n");
+});
+
+test("on a narrow window the categories come first, and one opens on its own page", async () => {
+  const app = await open("../App.tsx", { platform: "web", width: 375, height: 760, storage: { [DOC_KEY]: "hello\n" } });
+  await app.waitFor("text:hello");
+  await app.keyboard.press("mod+,");
+  await app.waitFor("id:settings-tab-sync");
+  expect(app.shows("id:shortcut-search")).toBe(false);
+  await app.press("id:settings-tab-sync");
+  await app.waitFor("id:sync-settings");
+  expect(app.shows("id:settings-tab-storage")).toBe(false);
+  await app.press("id:settings-to-list");
+  await app.waitFor("id:settings-tab-storage");
+  await app.press("id:settings-done");
+  await app.waitUntil(() => !app.shows("id:settings"), { timeout: 3000 });
+  expect(app.shows("text:hello")).toBe(true);
+});
+
+test("the macOS app has no gateway category, and its image host category says only the web version can use one", async () => {
+  const disk = memoryFs({ "Alpha.md": "hello\n" });
+  const app = await open("../App.tsx", { platform: "macos", width: 1280, height: 860, modules: disk.modules });
+  await app.waitFor("text:hello");
+  await app.press("id:open-settings");
+  await app.waitFor("id:settings");
+  expect(app.shows("id:settings-tab-gateway")).toBe(false);
+  await app.press("id:settings-tab-image-host");
+  await app.waitFor("text:只有网页版能连本机网关。");
+});
+
+test("connected to the gateway, its category shows the connection and the image host category shows the image host", async () => {
+  const app = await open("./fixtures/gateway-app.tsx", { ...WEB, host: { params: { docs: { "a.md": "# A\n\nbody\n" } } } });
+  await app.waitFor("text:body");
+  await app.press("id:open-settings");
+  await app.press("id:settings-tab-gateway");
+  await app.waitFor("id:gateway-status");
+  expect(app.shows("text:已连接")).toBe(true);
+  expect(app.shows("id:gateway-howto")).toBe(false);
+  await app.press("id:settings-tab-image-host");
+  await app.waitFor("id:image-host");
+  expect(app.shows("id:image-host-needs-gateway")).toBe(false);
+});

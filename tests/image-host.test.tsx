@@ -12,8 +12,8 @@ const GITHUB = { kind: "github", repo: "me/pics", branch: "main", dir: "images",
 const GOOD_TOKEN = "github_pat_good";
 
 /** 连着假网关打开应用（`params` 设假网关，见 fixtures/gateway-socket.ts），等正文出来。 */
-async function openOnGateway(params: Record<string, unknown> = {}) {
-  const app = await open("./fixtures/gateway-app.tsx", { ...WEB, host: { params: { docs: { "a.md": "# A\n\nbody\n" }, ...params } } });
+async function openOnGateway(params: Record<string, unknown> = {}, storage: Record<string, string> = {}) {
+  const app = await open("./fixtures/gateway-app.tsx", { ...WEB, storage, host: { params: { docs: { "a.md": "# A\n\nbody\n" }, ...params } } });
   await app.waitFor("text:body");
   return app;
 }
@@ -24,6 +24,16 @@ async function pasteImage(app: App) {
   await app.keyboard.press("end");
   await app.paste("label:正文", { files: [ICON] });
 }
+
+/** 设置了图床时粘贴：确认框里点「上传」。 */
+async function pasteAndUpload(app: App) {
+  await pasteImage(app);
+  await app.waitFor("id:image-upload-ask");
+  await app.press("id:image-upload-yes");
+}
+
+/** 选过「上传，以后不再问」。 */
+const AUTO_UPLOAD = { [SETTINGS_KEY]: JSON.stringify({ autoUploadImages: true }) };
 
 /** 整篇的 Markdown（「复制为 Markdown」，网页里是 Ctrl+Alt+M），等到它符合 `pattern`。 */
 async function markdownMatching(app: App, pattern: RegExp) {
@@ -36,13 +46,13 @@ const receiptSays = (app: App, words: string) => app.texts().some((t) => t.inclu
 
 async function openStorageSettings(app: App) {
   await app.press("id:open-settings");
-  await app.press("id:settings-tab-storage");
+  await app.press("id:settings-tab-image-host");
   await app.waitFor("id:image-host");
 }
 
 test("with an image host set, a pasted image is uploaded and the text gets the image host's address", async () => {
   const app = await openOnGateway({ imageHost: HOST });
-  await pasteImage(app);
+  await pasteAndUpload(app);
   expect(await markdownMatching(app, /img\.example/)).toBe("# A\n\nbody![](https://img.example.com/up1.png)\n");
   expect(app.shows("id:image-host-ask")).toBe(false);
 });
@@ -97,7 +107,7 @@ test("choosing not to use an image host stores locally and stops asking; the set
 
 test("an image the image host does not take is stored locally and the receipt says why", async () => {
   const app = await openOnGateway({ imageHost: HOST, uploadFails: "upload-failed" });
-  await pasteImage(app);
+  await pasteAndUpload(app);
   await app.waitFor("id:receipt");
   await app.waitUntil(() => receiptSays(app, "1 张没传上图床，先存在本地：「"), { timeout: 3000 });
   expect(receiptSays(app, "图床回了 HTTP 500")).toBe(true);
@@ -113,12 +123,17 @@ test("a gateway too old for image hosts does not ask: the image is stored locall
   await app.waitFor("text:本机网关版本太旧，不支持图床。更新网关后再试");
 });
 
-test("data: images pasted from a web page go to the image host when one is set, and are stored locally without asking when not", async () => {
+test("data: images pasted from a web page go to the image host only when uploads need no confirming, and are stored locally without asking otherwise", async () => {
   const html = `<p><img src="data:image/png;base64,${base64(RED_PNG)}"></p>`;
-  const withHost = await openOnGateway({ imageHost: HOST });
+  const withHost = await openOnGateway({ imageHost: HOST }, AUTO_UPLOAD);
   await withHost.press("text:body");
   await withHost.paste("label:正文", { html, text: "" });
   expect(await markdownMatching(withHost, /img\.example/)).toContain("![](https://img.example.com/up1.png)");
+  const unconfirmed = await openOnGateway({ imageHost: HOST });
+  await unconfirmed.press("text:body");
+  await unconfirmed.paste("label:正文", { html, text: "" });
+  expect(await markdownMatching(unconfirmed, /assets\//)).toContain("![](assets/img1.png)");
+  expect(unconfirmed.shows("id:image-upload-ask")).toBe(false);
   const without = await openOnGateway();
   await without.press("text:body");
   await without.paste("label:正文", { html, text: "" });
@@ -151,7 +166,7 @@ test("without the gateway, the storage page says image hosts need it", async () 
   const app = await open("../App.tsx", { ...WEB, storage: { [LEGACY_DOC_KEY]: "# T\n\nbody\n" } });
   await app.waitFor("text:body");
   await app.press("id:open-settings");
-  await app.press("id:settings-tab-storage");
+  await app.press("id:settings-tab-image-host");
   expect(receiptSays(app, "图床要连着本机网关才能用")).toBe(true);
   expect(app.shows("id:image-host")).toBe(false);
 });
@@ -191,14 +206,51 @@ test("GitHub repository: changing the branch with the token left empty keeps the
   await app.press("id:image-host-save");
   await app.waitFor("text:分支：pages");
   await app.press("id:settings-done");
-  await pasteImage(app);
+  await pasteAndUpload(app);
   expect(await markdownMatching(app, /raw\.githubusercontent/)).toBe("# A\n\nbody![](https://raw.githubusercontent.com/me/pics/pages/images/up1.png)\n");
 });
 
 test("GitHub repository: when GitHub refuses the upload, the receipt gives the gateway's reason and the image is stored locally", async () => {
   const app = await openOnGateway({ imageHost: GITHUB, githubToken: "github_pat_expired" });
-  await pasteImage(app);
+  await pasteAndUpload(app);
   await app.waitUntil(() => receiptSays(app, "GitHub 不认这个令牌（401）：令牌不对或者过期了"), { timeout: 3000 });
   expect(receiptSays(app, "1 张没传上图床，先存在本地")).toBe(true);
   expect(await markdownMatching(app, /assets\//)).toBe("# A\n\nbody![](assets/img1.png)\n");
+});
+
+test("with an image host set, pasting first asks; the upload is announced at once and again when done", async () => {
+  const app = await openOnGateway({ imageHost: GITHUB, githubToken: GOOD_TOKEN, uploadDelay: 400 });
+  await pasteImage(app);
+  await app.waitFor("id:image-upload-ask");
+  expect(receiptSays(app, "把 1 张图片传到图床？")).toBe(true);
+  expect(receiptSays(app, "会传到 GitHub 仓库 me/pics")).toBe(true);
+  await app.press("id:image-upload-yes");
+  await app.waitUntil(() => receiptSays(app, "正在把 1 张图片传到图床…"), { timeout: 3000 });
+  await app.waitUntil(() => receiptSays(app, "1 张图片已传到图床"), { timeout: 3000 });
+  expect(await markdownMatching(app, /raw\.githubusercontent/)).toContain("https://raw.githubusercontent.com/me/pics/main/images/up1.png");
+});
+
+/** 正文里已经有图了（那一行不再只是「body」）：光标还在原处，直接再贴。 */
+const again = (app: App) => app.paste("label:正文", { files: [ICON] });
+
+test("declining the upload stores the image locally and asks again next time; choosing not to be asked uploads from then on", async () => {
+  const app = await openOnGateway({ imageHost: HOST });
+  await pasteImage(app);
+  await app.waitFor("id:image-upload-ask");
+  await app.press("id:image-upload-local");
+  expect(await markdownMatching(app, /assets\//)).toBe("# A\n\nbody![](assets/img1.png)\n");
+  await again(app);
+  await app.waitFor("id:image-upload-ask");
+  await app.press("id:image-upload-always");
+  await markdownMatching(app, /img\.example/);
+  expect(JSON.parse(app.storage()[SETTINGS_KEY] ?? "{}").autoUploadImages).toBe(true);
+  await again(app);
+  expect((await markdownMatching(app, /up2\.png/)).match(/img\.example/g)?.length).toBe(2);
+  expect(app.shows("id:image-upload-ask")).toBe(false);
+  // 设置页能改回「先问」
+  await openStorageSettings(app);
+  await app.waitFor("text:插入图片时直接上传，不先问。");
+  await app.press("id:image-host-auto-toggle");
+  await app.waitFor("text:插入图片时先问要不要上传。");
+  expect(JSON.parse(app.storage()[SETTINGS_KEY] ?? "{}").autoUploadImages).toBe(false);
 });

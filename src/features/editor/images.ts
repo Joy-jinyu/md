@@ -104,7 +104,9 @@ export async function insertImageBytes(session: RichEditorSession, files: { name
   }
   const docId = docIdOrSay();
   if (!docId) return;
-  const target = await uploadTarget(true);
+  const target = await uploadTarget(true, files.length);
+  // 上传要几秒：马上说一声，免得以为没反应又贴一次
+  if (target) say(`正在把 ${files.length} 张图片传到图床…`, "info");
   const nodes: RichNodeJSON[] = [];
   const failed = [...earlier];
   const local: string[] = [];
@@ -121,6 +123,7 @@ export async function insertImageBytes(session: RichEditorSession, files: { name
   if (nodes.length > 0 && !session.insertContent(nodes)) failed.push("图片存好了，但插不进光标所在的位置");
   const parts = [failed.length > 0 ? `没能插入图片：${failed.join("；")}` : "", notUploadedText(local)].filter(Boolean);
   if (parts.length > 0) say(parts.join("。"), "warn");
+  else if (target) say(`${nodes.length} 张图片已传到图床`, "info");
 }
 
 /** 「插入图片」：弹系统的选择框选图（可以多选），存进文档库后插到光标处。 */
@@ -179,11 +182,11 @@ export function storeDataImages(session: RichEditorSession, tries = DATA_IMAGE_T
   }, wait);
 }
 
-/** 设置了图床就传图床（没设置不问，存本地）。 */
+/** 设置了图床、且选过「以后不再问」才传图床（这里不弹框问），否则存本地。 */
 async function storeSources(session: RichEditorSession, sources: string[]) {
   const docId = docIdOrSay();
   if (!docId) return;
-  const target = await uploadTarget(false);
+  const target = await uploadTarget(false, sources.length);
   const failed: string[] = [];
   const local: string[] = [];
   for (const src of sources) {
