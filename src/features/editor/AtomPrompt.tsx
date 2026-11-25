@@ -105,7 +105,7 @@ export function AtomPrompt(props: { prompt: AtomPromptState; kind: AtomKind }) {
       />
       <If when={p.error()}>
         {(message) => (
-          <Text testID="atom-error" role="alert" class="text-[12px] leading-[18px] text-destructive">
+          <Text testID="atom-error" role="alert" class="select-text text-[12px] leading-[18px] text-destructive">
             {message()}
           </Text>
         )}

@@ -2,7 +2,7 @@
 
 网页版 Pairdown 用 GitHub 的网页授权登录：GitHub 授权后带着 `code` 回到页面，页面要拿 `code` 换 token。换 token 要 client secret，而且 `github.com/login/oauth/access_token` 不支持浏览器跨域，所以经这个 Cloudflare Worker 中转。macOS 应用走 Device Flow，不用它。
 
-它只做一件事：`POST /token`，请求体 `{"code", "state", "code_verifier", "redirect_uri"}`（只认这四个字段；`redirect_uri` 的来源也得在 `ALLOWED_DOMAINS` 里），来源（`Origin`）必须在 `ALLOWED_DOMAINS` 里；带上 client id 和 client secret，连同 `code_verifier`、`redirect_uri` 去 GitHub 换 token，返回 `{"access_token", "token_type", "scope"}`，失败时返回 `{"error": "<GitHub 的错误码>"}`。请求体超过 2KB 回 413（先看 Content-Length，再边读边数，不整个读进来）。`state` 由页面自己校验，Worker 不转发给 GitHub。不记日志（没有 `console.*`，`wrangler.toml` 里关了 observability）。
+它只做一件事：`POST /token`，请求体 `{"code", "state", "code_verifier", "redirect_uri"}`（只认这四个字段；`redirect_uri` 必须逐字符等于 `ALLOWED_DOMAINS` 里某个来源加 `/`，也就是 OAuth App 登记的回调地址），来源（`Origin`）必须在 `ALLOWED_DOMAINS` 里；带上 client id 和 client secret，连同 `code_verifier`、`redirect_uri` 去 GitHub 换 token，返回 `{"access_token", "token_type", "scope"}`，失败时返回 `{"error": "<GitHub 的错误码>"}`。请求体超过 2KB 回 413（先看 Content-Length，再边读边数，不整个读进来）。`state` 由页面自己校验，Worker 不转发给 GitHub。不记日志（没有 `console.*`，`wrangler.toml` 里关了 observability）。
 
 网页登录用 PKCE（S256）：页面发起授权时生成 `code_verifier`、把它的 SHA-256 作为 `code_challenge` 带给 GitHub 授权页，回来换 token 时由这里转交 `code_verifier`。GitHub 的 OAuth App 文档写了支持（`code_challenge_method` 只收 `S256`），App 设置里不用另外打开。
 
@@ -28,7 +28,7 @@ GitHub → Settings → Developer settings → OAuth Apps → New OAuth App:
 |---|---|
 | Application name | Pairdown |
 | Homepage URL | `https://markdown.pairwise.site/` |
-| Authorization callback URL | `https://markdown.pairwise.site/`（网页登录回到这里；页面传的 `redirect_uri` 是当前页面地址去掉参数，必须在它之下） |
+| Authorization callback URL | `https://markdown.pairwise.site/`（网页登录回到这里；页面传的 `redirect_uri` 固定是这一个，见 `src/sync/config.ts` 的 `OAUTH_CALLBACK_URL`，两边必须逐字符一致） |
 | Enable Device Flow | 勾上（macOS 应用要用） |
 
 建好后记下 **Client ID**，再点 Generate a new client secret 记下 **client secret**（只显示一次，不要存进仓库）。权限（scope）由应用请求时指定，只要 `gist`。

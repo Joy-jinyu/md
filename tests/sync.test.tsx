@@ -115,6 +115,20 @@ test("web sign-in from the registered page opens GitHub's authorize page", async
   expect(JSON.parse(app.storage()["md.sync.oauthState"]).redirectUri).toBe("https://markdown.pairwise.site/");
 });
 
+test("web sign-in always sends GitHub the registered callback as redirect_uri, whatever else is on the page address", async () => {
+  const pages = ["https://markdown.pairwise.site/?iss=https%3A%2F%2Fgithub.com%2Flogin%2Foauth", "https://markdown.pairwise.site/index.html", "https://markdown.pairwise.site/?foo=1#bar"];
+  for (const page of pages) {
+    const app = await pressWebSignIn(page);
+    await app.waitUntil(() => app.openedUrls().length === 1);
+    const url = new URL(app.openedUrls()[0]);
+    expect(url.origin + url.pathname).toBe("https://github.com/login/oauth/authorize");
+    expect([...url.searchParams.keys()]).toEqual(["client_id", "scope", "state", "redirect_uri", "allow_signup", "code_challenge", "code_challenge_method"]);
+    expect(url.searchParams.get("redirect_uri")).toBe("https://markdown.pairwise.site/");
+    expect(url.search.includes("redirect_uri=https%3A%2F%2Fmarkdown.pairwise.site%2F&")).toBe(true);
+    expect(JSON.parse(app.storage()["md.sync.oauthState"]).redirectUri).toBe("https://markdown.pairwise.site/");
+  }
+});
+
 test("GitHub's own error codes are explained even when the sign-in was started on another page; other errors without a matching state are refused as before", async () => {
   const cases = [
     ["redirect_uri_mismatch", "GitHub 不认这个页面的回调地址（redirect_uri_mismatch），没有登录：网页登录只在 markdown.pairwise.site 可用。"],

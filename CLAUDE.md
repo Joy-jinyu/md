@@ -28,6 +28,8 @@ Pairdown：用 nsh（v0.6.0，TSX）写的所见即所得 Markdown 编辑器（�
           macOS：OAuth Device Flow（不需要 secret）
 发布      Web：make build-web → npx wrangler deploy → Cloudflare（Workers 静态资源，项目 pairdown，配置在 wrangler.jsonc）
           线上：https://markdown.pairwise.site/（2026-11-25 首次发布；nsh.json web.base = /）
+          build-web 末尾由 scripts/web-headers.mjs 从 nsh.json 生成 _headers（响应头里的 connect-src 白名单等，见 .claude/rules/security.md「外链图片」）；
+          本地开发页（make dev-web）不发这些头，不受这层保护
           macOS：nsh package --target macos → .app
 CI        GitHub Actions：装 nsh v0.6.0、Node 24 → make verify（check、页面测试、网关测试、Worker 测试）→ package web → wrangler deploy（要两个仓库 secret，还没配，现在是本机手动发布）
 ```
@@ -132,7 +134,7 @@ S0 其余各项的状态见计划第 6 节。
 |------|---------|--------|
 | 本地存储 | macOS：~/Documents/Pairdown 的 .md 文件；Web：装了本机网关用网关文库的 .md 文件，没装用 IndexedDB（退路 Storage 5MB）。带版本历史（放浏览器 / 应用本机存储）；图片见下一行 | macOS 选文库文件夹 |
 | 同步 | 手动「同步」，一篇一个私有 Gist；冲突、一边删了都让用户选；首次上传先列出来确认；图片不同步。OAuth App 和 Worker 已配，线上已启用 | 自动同步、按段合并 |
-| 图片 | 粘贴 / 选择框 / macOS 拖入的图片存进文档库（文件类后端在文档旁的 `assets/`，浏览器本地在 IndexedDB），正文写相对路径；可调宽度、对齐（写成 `<img>`）。外链图片不自动加载，连着网关时可转存到本地；浏览器拖放不收图片 | 上传到图床 / 仓库（「本地 → 图床」网关回 not-supported，没做） |
+| 图片 | 粘贴 / 选择框 / macOS 拖入的图片存进文档库（文件类后端在文档旁的 `assets/`，浏览器本地在 IndexedDB），正文写相对路径；可调宽度、对齐（写成 `<img>`）。外链图片直接显示（载不出来有占位），连着网关时可转存到本地；浏览器拖放不收图片 | 上传到图床 / 仓库（「本地 → 图床」网关回 not-supported，没做） |
 | 导入导出 | 打开 .md（导入成文档库里的一篇新文档；macOS 文库里的原地编辑）、另存为 .md、导出 HTML（图片内联；超过 2 万行或 100 万字不导出） | PDF（不做，代选待确认） |
 | 公式 | 用 TextView 排版（不能当普通文字读入：内置写出会把 `_`、`\` 转义坏，实测） | — |
 | Mermaid | 出图：`assets/vendor/mermaid/` 里的 mermaid 12.3.0（打包进应用，有图时才载入）在藏起来的 WebView 里画成 SVG，当图片显示（`src/features/editor/mermaid.tsx`）；语法错误显示源码 + 原因；导出 HTML 内联成图片 | 甘特图等宽图在窄屏上只等比缩小，不能横向滚动 |

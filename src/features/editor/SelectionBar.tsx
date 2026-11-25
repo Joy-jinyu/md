@@ -99,7 +99,7 @@ export function LinkCard(props: { session: RichEditorSession; link: LinkPromptSt
   };
   return (
     <View testID="link-card" accessibilityLabel="链接" class={`${BAR} gap-1`}>
-      <Text style={{ numberOfLines: 1 }} class="max-w-[240px] px-2 text-xs text-muted-foreground">
+      <Text style={{ numberOfLines: 1 }} class="max-w-[240px] select-text px-2 text-xs text-muted-foreground">
         {props.link.href()}
       </Text>
       <Button label="打开" accessibilityLabel="打开链接" onPress={() => void openLink(props.link.href(), props.onAnchor)} />

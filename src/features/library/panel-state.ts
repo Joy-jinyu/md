@@ -63,13 +63,15 @@ const pad = (n: number) => String(n).padStart(2, "0");
 /** 几点几分（`14:03`）：文档列表和顶栏的同步时间都用它。 */
 export const hourMinute = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-/** 改动时间：今天的只写几点几分，今年的写月日，更早的写年月日；不知道（换存法前的那篇还没存过）写「更早」。 */
+/** 改动时间分档（DESIGN.md「文档列表」）：今天、昨天写几点几分，今年更早的写月日加时分，往年写年月日；不知道（换存法前的那篇还没存过）就直说。 */
 export function timeLabel(at: number, now = Date.now()): string {
-  if (at <= 0) return "更早";
+  if (at <= 0) return "改动时间未知";
   const d = new Date(at);
   const today = new Date(now);
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
   const hm = hourMinute(d);
   if (d.toDateString() === today.toDateString()) return `今天 ${hm}`;
+  if (d.toDateString() === yesterday.toDateString()) return `昨天 ${hm}`;
   if (d.getFullYear() === today.getFullYear()) return `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
 }

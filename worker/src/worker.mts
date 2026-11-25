@@ -56,15 +56,8 @@ function preflight(origin: string): Response {
 
 const isField = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= MAX_FIELD && /^[\w.-]+$/.test(v);
 
-/** 回调地址得是允许的来源下的页面（GitHub 还会和授权时的比对）。 */
-function isRedirect(v: unknown, env: Env): v is string {
-  if (typeof v !== "string" || v.length > MAX_FIELD * 2) return false;
-  try {
-    return allowedOrigins(env).has(new URL(v).origin);
-  } catch {
-    return false;
-  }
-}
+/** 回调地址只认「允许的来源 + /」逐字符相等：这就是 OAuth App 登记的回调地址，页面只会发这一个（src/sync/config.ts 的 OAUTH_CALLBACK_URL）。 */
+const isRedirect = (v: unknown, env: Env): v is string => typeof v === "string" && [...allowedOrigins(env)].some((o) => v === `${o}/`);
 
 /** 读请求体，最多 MAX_BODY 字节：先看 Content-Length，再边读边数，超了就停（不把大请求整个读进内存）。超了是 null。 */
 async function readLimited(request: Request): Promise<string | null> {

@@ -1,4 +1,4 @@
-/** 图标按钮：只有一个图标的 ghost 按钮（30 见方）。没有字，所以读屏名和悬停提示必须给。 */
+/** 图标按钮：只有一个图标的 ghost 按钮（30 见方，`compact` 时 28）。没有字，所以读屏名和悬停提示必须给。 */
 import { Button as BaseButton } from "nsh/base";
 import { Icon, type IconName } from "./icon";
 import { tip } from "./tooltip";
@@ -9,6 +9,8 @@ export interface IconButtonProps {
   label: string;
   /** 这一项正开着（大纲已展开）：图标变主色，底留着悬停的洗色。 */
   active?: boolean;
+  /** 侧栏这类紧凑的地方：28 见方、`radius-sm`，和旁边 28 高的控件一样高。 */
+  compact?: boolean;
   testID?: string;
   onPress?: () => void;
 }
@@ -20,8 +22,8 @@ export function IconButton(props: IconButtonProps) {
       onPress={props.onPress}
       accessibilityLabel={props.label}
       tooltip={tip(props.label)}
-      class="size-[30px] items-center justify-center rounded-(--radius) transition duration-180 ease-settle hover:bg-hover active:scale-[0.97] active:bg-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none motion-reduce:active:scale-100"
-      classList={{ "bg-hover": !!props.active }}
+      class="items-center justify-center transition duration-180 ease-settle hover:bg-hover active:scale-[0.97] active:bg-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none motion-reduce:active:scale-100"
+      classList={{ "bg-hover": !!props.active, "size-[30px] rounded-(--radius)": !props.compact, "size-7 rounded-(--radius-sm)": !!props.compact }}
     >
       <Icon name={props.icon} color={props.active ? "primary" : "muted-foreground"} />
     </BaseButton>

@@ -124,7 +124,7 @@ type Editor = ReturnType<typeof createShortcutEditor>;
 function KeyCap(props: { text: string }) {
   return (
     <View class="rounded-(--radius-sm) bg-secondary px-1.5 py-0.5">
-      <Text style={{ fontVariant: ["tabular-nums"] }} class="text-[11px] text-foreground">
+      <Text style={{ fontVariant: ["tabular-nums"] }} class="select-text text-[11px] text-foreground">
         {props.text}
       </Text>
     </View>
@@ -180,7 +180,7 @@ function CommandRow(props: { command: AppCommand; editor: Editor }) {
   return (
     <View testID={`shortcut-${c.id}`}>
       <View class="min-h-9 flex-row items-center gap-2 rounded-(--radius-sm) px-2" classList={{ "bg-hover": isRecording() }}>
-        <Text style={{ numberOfLines: 1 }} class="min-w-0 flex-1 text-[13px] text-foreground">
+        <Text style={{ numberOfLines: 1 }} class="min-w-0 flex-1 select-text text-[13px] text-foreground">
           {c.label}
         </Text>
         <If
@@ -199,7 +199,7 @@ function CommandRow(props: { command: AppCommand; editor: Editor }) {
       <If when={mine()}>
         {(n) => (
           <View testID="shortcut-note" role="alert" class="mb-1 flex-row items-center gap-2 rounded-(--radius-sm) bg-warn-tint px-2 py-1">
-            <Text class="min-w-0 flex-1 text-xs leading-5 text-warn">{n().text}</Text>
+            <Text class="min-w-0 flex-1 select-text text-xs leading-5 text-warn">{n().text}</Text>
             <If when={n().swap}>
               <Button testID="shortcut-swap" label="换给这条" onPress={() => ed.swap(c)} />
               <Button label="取消" onPress={ed.cancel} />
@@ -218,7 +218,7 @@ function SystemKeys() {
       <Each of={SYSTEM_KEYS} key={(k) => k.label}>
         {(k) => (
           <View class="min-h-9 flex-row items-center gap-2 px-2">
-            <Text class="min-w-0 flex-1 text-[13px] text-muted-foreground">{k().label}</Text>
+            <Text class="min-w-0 flex-1 select-text text-[13px] text-muted-foreground">{k().label}</Text>
             <Each of={k().keys} key={(name) => name}>
               {(name) => <KeyCap text={keymap.label(name())} />}
             </Each>
@@ -233,7 +233,7 @@ function Footer(props: { editor: Editor; onDone: () => void }) {
   const ed = props.editor;
   return (
     <View class="flex-row items-center gap-2 border-t border-border px-4 py-3">
-      <Text class="min-w-0 flex-1 text-xs text-muted-foreground">改键后编辑页会重新载入，撤销记录清空</Text>
+      <Text class="min-w-0 flex-1 select-text text-xs text-muted-foreground">改键后编辑页会重新载入，撤销记录清空</Text>
       <Button
         testID="shortcut-reset-all"
         label={ed.confirmReset() ? "再点一次确认" : "全部恢复默认"}

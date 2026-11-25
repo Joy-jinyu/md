@@ -41,7 +41,7 @@ function markdownAttributes(): RichExtension {
 }
 
 /**
- * 图片节点：换掉 StarterKit 自带的那个，好挂自己的视图（相对路径向存储要字节、外链不自动加载）。
+ * 图片节点：换掉 StarterKit 自带的那个，好挂自己的视图（相对路径向存储要字节、外链直接载入、载不出来有占位）。
  * inline：Markdown 的图片在段落里；allowBase64：粘贴网页 HTML 里的 data: 图片先留下，再转存进文档库。
  */
 function imageExtension(view: AtomNodeView | undefined): RichExtension {

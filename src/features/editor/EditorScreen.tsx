@@ -189,7 +189,7 @@ export function EditorScreen() {
     <View class="flex-1 bg-background" onFileDrop={(e) => dropped(droppedPaths(e.uris))}>
       <StorageNotice />
       <If when={settingsProblem()}>{(message) => <Notice testID="settings-problem" message={message()} onDismiss={() => settingsProblem.set("")} />}</If>
-      <If when={receipt()}>{(m) => <Notice testID="receipt" message={m().text} tone={m().tone} onDismiss={m().tone === "warn" ? dismissReceipt : undefined} />}</If>
+      <If when={receipt()}>{(m) => <Notice testID="receipt" message={m().text} tone={m().tone} copyable={m().tone === "warn"} onDismiss={m().tone === "warn" ? dismissReceipt : undefined} />}</If>
       <ConflictBar onTheirs={() => void reopen()} />
       <FileActions />
       {screen(opened())}

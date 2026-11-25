@@ -83,7 +83,7 @@ export function HistoryDialog() {
       <View class="overflow-hidden rounded-(--radius) border border-border bg-popover">
         <View class="gap-0.5 border-b border-border px-4 py-3">
           <Text class="text-sm font-medium text-strong">版本历史</Text>
-          <Text style={{ numberOfLines: 1 }} class="text-xs text-muted-foreground">
+          <Text style={{ numberOfLines: 1 }} class="select-text text-xs text-muted-foreground">
             {name()}
           </Text>
         </View>
@@ -92,7 +92,7 @@ export function HistoryDialog() {
             <If
               when={snapshots().length > 0}
               else={
-                <Text testID="history-empty" class="px-4 py-6 text-xs leading-5 text-muted-foreground">
+                <Text testID="history-empty" class="select-text px-4 py-6 text-xs leading-5 text-muted-foreground">
                   {problem() || "这篇还没有历史版本。保存时，距上一个版本超过 5 分钟、或者改动比较大，会自动留一份。"}
                 </Text>
               }
@@ -103,7 +103,7 @@ export function HistoryDialog() {
                 </Each>
               </Scroll>
               <Scroll testID="history-preview" class="h-[280px] bg-background">
-                <Text class="px-4 py-3 font-mono text-[12px] leading-5 text-foreground">{preview()}</Text>
+                <Text class="select-text px-4 py-3 font-mono text-[12px] leading-5 text-foreground">{preview()}</Text>
               </Scroll>
             </If>
           )}

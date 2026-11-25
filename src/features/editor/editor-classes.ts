@@ -14,7 +14,7 @@ const ALERT = "pt-7 text-foreground";
 
 export const EDITOR_CLASSES: RichEditorClasses = {
   root: "flex-1 text-foreground",
-  content: "mx-auto w-full max-w-[760px] px-8 pb-80 pt-10",
+  content: "mx-auto w-full max-w-[760px] px-8 pb-10 pt-10",
   placeholder: "text-faint",
   listMarker: "text-muted-foreground",
   // 上边 13 = 段落的上留白 6 + 让 16 高的框在 30 的行高里居中的 7

@@ -1,6 +1,6 @@
 /**
  * 图片节点的视图：相对路径向存储要字节、转成 blob 地址显示（Image 只拿到这个地址，用完回收）；
- * 外链（http / https）不自动加载（打开文档就向第三方发请求，见 DESIGN.md「图片」），显示地址和「转存到本地」「在浏览器打开」；
+ * 外链（http / https）直接交给 Image 载入（网页上靠响应头的 CSP 只放开图片，见 .claude/rules/security.md）；载入失败显示地址、原因和「在浏览器打开」「转存到本地」；
  * 载入中、找不到、载入失败、地址不支持都有占位，不留空白。宽度按百分比或像素，对齐左 / 中 / 右。
  */
 import { cleanup, effect, Image, type JSX, signal, Text, untracked, View } from "nsh";
@@ -9,13 +9,14 @@ import { canTransfer, documentStore } from "../../store/backend";
 import { isRelativeSrc, mimeOf, sniffImage } from "../../store/image-file";
 import { currentDocId } from "../../store/library";
 import { Button } from "../../ui/button";
+import { pageUrl } from "../sync/page-url";
 import { columnWidth, isExternalSrc, transferImage } from "./images";
 import { openLink } from "./links";
 
 type Shown =
   | { kind: "loading" }
   | { kind: "ready"; url: string; width: number; height: number }
-  | { kind: "external" }
+  | { kind: "remoteFailed"; text: string }
   | { kind: "problem"; text: string };
 
 /** 内嵌的 data: 图片直接给 Image 显示：只认位图类型（SVG 能带脚本，不显示）。 */
@@ -53,14 +54,21 @@ async function loadAsset(src: string, keep: (url: string) => void): Promise<Show
   }
 }
 
-async function loadData(src: string): Promise<Shown> {
+/** 地址直接交给 Image（内嵌位图、外链）：先量原图大小，失败时显示 `failed()`。 */
+async function loadDirect(src: string, failed: () => Shown): Promise<Shown> {
   try {
     const size = await Image.getSize(src);
     return { kind: "ready", url: src, width: size.width, height: size.height };
   } catch (e) {
-    console.warn("inline image not loaded", e);
-    return { kind: "problem", text: "内嵌图片载入失败" };
+    console.warn("image not loaded", src.slice(0, 80), e);
+    return failed();
   }
+}
+
+/** 外链载入失败的原因。https 页面里的 http 图片：浏览器先试着换成 https，换不成就拦下，应用分不出是哪种失败，只按地址和页面推断。 */
+function remoteFailure(src: string): string {
+  if (/^http:/i.test(src) && /^https:/i.test(pageUrl() ?? "")) return "外链图片没载入：这是 http 地址，https 的网页里浏览器不让载入（换成 https 地址，或在浏览器里打开）";
+  return "外链图片没载入：地址不对、对方网站不让引用，或者没有网络";
 }
 
 function Placeholder(props: { selected: boolean; children: JSX.Element }) {
@@ -68,6 +76,7 @@ function Placeholder(props: { selected: boolean; children: JSX.Element }) {
     <View
       testID="image-placeholder"
       class="max-w-full gap-1 rounded-(--radius-sm) border border-dashed bg-muted px-3 py-2"
+      style={{ maxWidth: columnWidth() }}
       classList={{ "border-primary": props.selected, "border-border-strong": !props.selected }}
     >
       {props.children}
@@ -75,10 +84,10 @@ function Placeholder(props: { selected: boolean; children: JSX.Element }) {
   );
 }
 
-function ExternalImage(props: { src: string; selected: boolean; editor: RichNodeViewProps["editor"] }) {
+function RemoteFailed(props: { src: string; text: string; selected: boolean; editor: RichNodeViewProps["editor"] }) {
   return (
     <Placeholder selected={props.selected}>
-      <Text class="text-[12px] text-muted-foreground">外链图片（不自动加载：打开文档就会向别的网站发请求）</Text>
+      <Text class="text-[12px] text-muted-foreground">{props.text}</Text>
       <Text style={{ numberOfLines: 1 }} class="font-mono text-[13px] text-foreground">
         {props.src}
       </Text>
@@ -106,8 +115,11 @@ export function ImageView(p: RichNodeViewProps) {
       release();
       const mine = ++generation;
       const settle = (next: Shown) => mine === generation && shown.set(next);
-      if (isExternalSrc(src)) return settle({ kind: "external" });
-      if (DATA_RASTER.test(src)) return void loadData(src).then(settle);
+      if (isExternalSrc(src)) {
+        settle({ kind: "loading" });
+        return void loadDirect(src, () => ({ kind: "remoteFailed", text: remoteFailure(src) })).then(settle);
+      }
+      if (DATA_RASTER.test(src)) return void loadDirect(src, () => ({ kind: "problem", text: "内嵌图片载入失败" })).then(settle);
       if (!isRelativeSrc(src)) return settle({ kind: "problem", text: `不支持的图片地址：${src.slice(0, 80)}。只显示文档旁边 assets/ 里的图、http(s) 外链和内嵌的位图；把图片重新插入一次（粘贴或「插入图片…」）就会存进文档库` });
       settle({ kind: "loading" });
       void loadAsset(src, (url) => (mine === generation ? (blob = url) : URL.revokeObjectURL(url))).then(settle);
@@ -130,8 +142,8 @@ export function ImageView(p: RichNodeViewProps) {
             <Image testID="image" src={s.url} role="image" accessibilityLabel={alt() || "图片"} style={box(s)} />
           </View>
         );
-      case "external":
-        return <ExternalImage src={attrOf(p, "src").trim()} selected={p.selected} editor={p.editor} />;
+      case "remoteFailed":
+        return <RemoteFailed src={attrOf(p, "src").trim()} text={s.text} selected={p.selected} editor={p.editor} />;
       case "loading":
         return (
           <Placeholder selected={p.selected}>

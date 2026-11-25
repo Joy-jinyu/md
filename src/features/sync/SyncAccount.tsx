@@ -6,9 +6,9 @@ import { cleanup, Clipboard, Text, View } from "nsh";
 import { messageOf } from "../../doc/message";
 import { SIGN_IN_FLOW } from "../../platform";
 import { beginDeviceLogin, beginWebLogin, cancelDeviceLogin, currentAccount, deviceLogin, signOut } from "../../sync/account";
-import { withoutCallback } from "../../sync/auth";
 import { OAUTH_CALLBACK_ORIGIN, syncConfigured } from "../../sync/config";
 import { Button } from "../../ui/button";
+import { CopyButton } from "../../ui/copy-button";
 import { openLink } from "../editor/links";
 import { say } from "../library/receipt";
 import { discoverRemote, resetSyncView } from "./engine";
@@ -25,10 +25,10 @@ const CREDENTIAL = WEB
 export function SyncExplain() {
   return (
     <View class="gap-1">
-      <Text testID="sync-explain" class="text-xs leading-5 text-muted-foreground">
+      <Text testID="sync-explain" class="select-text text-xs leading-5 text-muted-foreground">
         同步只上传文档正文（Markdown 文字）：一篇一个私密 Gist，不公开列出，但拿到链接的人能看。图片不同步（Gist 的接口只收文字），正文里的图片地址照原样上传；版本历史和设置不上传。同步要手动点「立即同步」。
       </Text>
-      <Text testID="sync-credential" class="text-xs leading-5 text-muted-foreground">
+      <Text testID="sync-credential" class="select-text text-xs leading-5 text-muted-foreground">
         {`${CREDENTIAL}退出登录不会撤销 GitHub 上的授权，可以在 GitHub 的设置（Settings → Applications → Authorized OAuth Apps）里撤销。`}
       </Text>
     </View>
@@ -39,7 +39,7 @@ function NotConfigured() {
   return (
     <View testID="sync-not-configured" class="gap-1">
       <Text class="text-[13px] font-medium text-strong">同步还没配置</Text>
-      <Text class="text-xs leading-5 text-muted-foreground">
+      <Text class="select-text text-xs leading-5 text-muted-foreground">
         {`要先建一个 GitHub OAuth App，把它的 client id 填进 src/sync/config.ts 的 GITHUB_CLIENT_ID${WEB ? "；网页版还要部署换 token 的中转 Worker（worker/ 文件夹），把地址填进 AUTH_WORKER_URL" : "，并在 App 设置里打开 Device Flow"}。配好以后重新打包，这里就能登录。`}
       </Text>
     </View>
@@ -60,7 +60,7 @@ async function startWebLogin() {
   if (!here) return say("读不到这个页面的地址，没法登录。", "warn");
   if (originOf(here) !== OAUTH_CALLBACK_ORIGIN) return say(`网页登录只在 ${new URL(OAUTH_CALLBACK_ORIGIN).host} 可用：GitHub 只把登录送回那里登记的地址。`, "warn");
   try {
-    const url = await beginWebLogin(withoutCallback(here));
+    const url = await beginWebLogin();
     if (!(await openLink(url, () => false))) say("浏览器没让打开 GitHub 的授权页（可能拦了弹出窗口），允许本站打开新窗口后再试。", "warn");
     else say("已在新标签页打开 GitHub 授权页。授权后那一页会完成登录，回到这里就能同步。", "info");
   } catch (e) {
@@ -96,10 +96,13 @@ function DeviceSteps() {
       <If when={state().kind === "waiting" ? (state() as Extract<ReturnType<typeof deviceLogin>, { kind: "waiting" }>).code : null}>
         {(code) => (
           <View testID="device-code" class="gap-2 rounded-(--radius-sm) bg-muted px-3 py-2">
-            <Text class="text-xs text-muted-foreground">{`打开 ${code().verificationUri}，输入这个码并授权：`}</Text>
-            <Text class="font-mono text-xl font-semibold text-strong">
-              {code().userCode}
-            </Text>
+            <Text class="select-text text-xs text-muted-foreground">{`打开 ${code().verificationUri}，输入这个码并授权：`}</Text>
+            <View class="flex-row items-center gap-2">
+              <Text class="select-text font-mono text-xl font-semibold text-strong">
+                {code().userCode}
+              </Text>
+              <CopyButton testID="copy-device-code" text={code().userCode} label="复制验证码" />
+            </View>
             <View class="flex-row flex-wrap gap-1">
               <Button testID="device-open" label="复制并打开" variant="primary" onPress={() => void copyAndOpen(code().userCode, code().verificationUri)} />
               <Button testID="device-cancel" label="取消" onPress={cancelDeviceLogin} />
@@ -110,9 +113,12 @@ function DeviceSteps() {
       </If>
       <If when={state().kind === "failed" ? (state() as { message: string }).message : null}>
         {(message) => (
-          <Text testID="sign-in-problem" role="alert" class="text-xs leading-5 text-destructive">
-            {message()}
-          </Text>
+          <View class="flex-row items-start gap-2">
+            <Text testID="sign-in-problem" role="alert" class="min-w-0 flex-1 select-text text-xs leading-5 text-destructive">
+              {message()}
+            </Text>
+            <CopyButton testID="copy-sign-in-problem" text={message()} label="复制出错原因" />
+          </View>
         )}
       </If>
     </View>
@@ -123,7 +129,7 @@ function SignIn() {
   const busy = () => deviceLogin().kind === "starting" || deviceLogin().kind === "waiting";
   return (
     <View class="gap-2">
-      <Text class="text-xs leading-5 text-muted-foreground">{WEB ? "点了会在新标签页打开 GitHub 的授权页，只要 Gist 权限。" : "点了会给你一个验证码，在 GitHub 上输入它授权，只要 Gist 权限。"}</Text>
+      <Text class="select-text text-xs leading-5 text-muted-foreground">{WEB ? "点了会在新标签页打开 GitHub 的授权页，只要 Gist 权限。" : "点了会给你一个验证码，在 GitHub 上输入它授权，只要 Gist 权限。"}</Text>
       <View class="flex-row">
         <Button
           testID="sign-in"
@@ -153,7 +159,7 @@ function SignedIn(props: { login: string }) {
   };
   return (
     <View class="flex-row items-center gap-2">
-      <Text testID="sync-account" style={{ numberOfLines: 1 }} class="min-w-0 flex-1 text-[13px] font-medium text-strong">
+      <Text testID="sync-account" style={{ numberOfLines: 1 }} class="min-w-0 flex-1 select-text text-[13px] font-medium text-strong">
         {`已登录：@${props.login}`}
       </Text>
       <Button testID="sign-out" label="退出登录" onPress={() => void out()} />
