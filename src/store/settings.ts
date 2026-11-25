@@ -66,3 +66,16 @@ export async function loadSkipImageHost(): Promise<boolean> {
 
 /** 记下「不用图床」（false 是重新问）；写不进去时返回原因。 */
 export const saveSkipImageHost = (skip: boolean) => saveSetting("skipImageHost", skip);
+
+/** 用户选过「上传，以后不再问」：设置了图床时插图直接上传，不先确认。读不出来当没选过。 */
+export async function loadAutoUpload(): Promise<boolean> {
+  try {
+    return (await readSettings()).autoUploadImages === true;
+  } catch (e) {
+    console.warn("settings unreadable, confirming uploads", e);
+    return false;
+  }
+}
+
+/** 记下「上传前不用问」（false 是每次先问）；写不进去时返回原因。 */
+export const saveAutoUpload = (auto: boolean) => saveSetting("autoUploadImages", auto);

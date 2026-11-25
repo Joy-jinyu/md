@@ -1,16 +1,12 @@
-/** 设置对话框，两页：「快捷键」列出全部命令和它的键，可以改、清除、恢复默认；「存储」见 StoragePanel.tsx。布局见 DESIGN.md「屏幕：设置」。 */
-import { effect, keymap, Scroll, signal, Text, untracked, View } from "nsh";
-import { Dialog, Input } from "nsh/base";
+/** 设置里的「快捷键」一类：列出全部命令和它的键，可以改、清除、恢复默认。布局见 DESIGN.md「屏幕：设置」。 */
+import { keymap, signal, Text, View } from "nsh";
+import { Input } from "nsh/base";
 import { IN_BROWSER, SYSTEM_KEYS } from "../../platform";
 import type { ShortcutOverrides } from "../../store/settings";
 import { Button } from "../../ui/button";
 import { type AppCommand, COMMANDS, isViewCommand } from "../editor/commands";
-import { browserMayTake, canonical, conflictOf, currentOverrides, fromKeymapName, keyOf, recordableKeystrokes, rejectReason, sanitize } from "../editor/keybindings";
+import { browserMayTake, canonical, conflictOf, currentOverrides, fromKeymapName, keyOf, recordableKeystrokes, rejectReason } from "../editor/keybindings";
 import { toKeymapName } from "../editor/keys";
-import { returnFocusToEditor } from "../editor/ui-state";
-import { settingsOpen, settingsPage } from "./open";
-import { StoragePanel } from "./StoragePanel";
-import { SyncPanel } from "./SyncPanel";
 
 /** 行下面的一条话：拒绝的原因、提醒，或者撞键时等用户选。 */
 interface RowNote {
@@ -47,7 +43,8 @@ function rowsFor(query: string, draft: ShortcutOverrides): Row[] {
   return rows;
 }
 
-function createShortcutEditor() {
+/** 改键的草稿和操作：设置页打开时建一份，回到编辑页时交出草稿。 */
+export function createShortcutEditor() {
   const draft = signal<ShortcutOverrides>({});
   const recording = signal<string | null>(null);
   const note = signal<RowNote | null>(null);
@@ -119,7 +116,8 @@ function createShortcutEditor() {
   };
 }
 
-type Editor = ReturnType<typeof createShortcutEditor>;
+export type ShortcutEditor = ReturnType<typeof createShortcutEditor>;
+type Editor = ShortcutEditor;
 
 function KeyCap(props: { text: string }) {
   return (
@@ -229,136 +227,42 @@ function SystemKeys() {
   );
 }
 
-function Footer(props: { editor: Editor; onDone: () => void }) {
+/** 搜索框、「全部恢复默认」和命令表。`autoFocus`：设置页一打开就在这一类时，焦点给搜索框。 */
+export function ShortcutsPanel(props: { editor: ShortcutEditor; autoFocus: boolean }) {
   const ed = props.editor;
   return (
-    <View class="flex-row items-center gap-2 border-t border-border px-4 py-3">
-      <Text class="min-w-0 flex-1 select-text text-xs text-muted-foreground">改键后编辑页会重新载入，撤销记录清空</Text>
-      <Button
-        testID="shortcut-reset-all"
-        label={ed.confirmReset() ? "再点一次确认" : "全部恢复默认"}
-        labelClass={ed.confirmReset() ? "text-destructive" : ""}
-        disabled={Object.keys(ed.draft()).length === 0}
-        onPress={ed.resetAll}
-      />
-      <Button testID="settings-done" label="完成" variant="primary" onPress={props.onDone} />
-    </View>
-  );
-}
-
-type Page = "shortcuts" | "storage" | "sync";
-
-function PageTab(props: { page: Page; label: string; current: () => Page; onPick: (page: Page) => void }) {
-  const on = () => props.current() === props.page;
-  return (
-    <View
-      testID={`settings-tab-${props.page}`}
-      role="tab"
-      accessibilityLabel={props.label}
-      accessibilityState={{ selected: on() }}
-      onPress={() => props.onPick(props.page)}
-      class="h-7 items-center justify-center rounded-(--radius-sm) px-3 hover:bg-hover active:bg-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      classList={{ "bg-pressed": on() }}
-    >
-      <Text class="text-sm" classList={{ "font-semibold text-strong": on(), "text-muted-foreground": !on() }}>
-        {props.label}
-      </Text>
-    </View>
-  );
-}
-
-/**
- * 对话框开着、没在录键时 Esc 关掉它。走应用级 keymap（最新的绑定先跑），不靠对话框自己的 closeOnEscape：
- * macOS 窗口里从 Cmd+, 或菜单打开时焦点还在编辑器里，第一下 Esc 被编辑器接走，要按两下才关（2026-11-25 用户实测）；
- * 查找条用的也是这个办法，一下就关。录键时由 KeyRecorder 的 Esc 绑定取消录键。
- */
-function EscapeCloses(props: { onEscape: () => void }) {
-  keymap.bind("escape", props.onEscape, { when: "always" });
-  return null;
-}
-
-/** `onApply`：关掉对话框时键有变化才调，交出整理过的改动。 */
-export function SettingsDialog(props: { onApply: (next: ShortcutOverrides) => void }) {
-  const ed = createShortcutEditor();
-  const page = signal<Page>("shortcuts");
-  effect(() => {
-    if (!settingsOpen()) return;
-    untracked(() => {
-      ed.open();
-      const wanted = settingsPage();
-      if (wanted) page.set(wanted);
-      settingsPage.set(null);
-    });
-  });
-  const close = () => {
-    if (!settingsOpen()) return;
-    settingsOpen.set(false);
-    returnFocusToEditor();
-    const next = sanitize(ed.draft());
-    if (JSON.stringify(next) !== JSON.stringify(currentOverrides())) props.onApply(next);
-  };
-  return (
-    <Dialog
-      testID="settings"
-      open={settingsOpen()}
-      animation="fade"
-      accessibilityLabel="设置"
-      closeOnEscape={ed.recording() === null}
-      closeOnBackdropPress
-      onOpenChange={({ open }) => !open && close()}
-      backdropClass="bg-scrim"
-      class="mx-auto mt-16 w-full max-w-[640px] px-4"
-    >
-      <If when={ed.recording() === null}>
-        <EscapeCloses onEscape={close} />
-      </If>
-      <View class="overflow-hidden rounded-(--radius) border border-border bg-popover">
-        <View class="flex-row items-center gap-3 border-b border-border px-4 py-3">
-          <View role="tablist" class="shrink-0 flex-row gap-1">
-            <PageTab page="shortcuts" label="快捷键" current={page} onPick={(p) => page.set(p)} />
-            <PageTab page="storage" label="存储" current={page} onPick={(p) => page.set(p)} />
-            <PageTab page="sync" label="同步" current={page} onPick={(p) => page.set(p)} />
-          </View>
-          <If when={page() === "shortcuts"}>
-          <Input
-            testID="shortcut-search"
-            autoFocus
-            value={ed.query()}
-            onChange={({ value }) => ed.query.set(value)}
-            placeholder="搜索命令或按键"
-            accessibilityLabel="搜索命令或按键"
-            autoCapitalize="none"
-            autoCorrect={false}
-            class="ml-auto h-7 w-[180px] min-w-0 shrink rounded-(--radius-sm) border border-input bg-background px-2 text-[13px] text-foreground placeholder:text-faint focus:border-primary"
-          />
-          </If>
-        </View>
-        <If when={page() === "sync"}>
-          <SyncPanel />
-        </If>
-        <If when={page() === "storage"}>
-          <StoragePanel inBrowser={IN_BROWSER} />
-        </If>
-        <If when={page() !== "shortcuts"}>
-          <View class="flex-row items-center justify-end border-t border-border px-4 py-3">
-            <Button testID="settings-done" label="完成" variant="primary" autoFocus onPress={close} />
-          </View>
-        </If>
-        <If when={page() === "shortcuts"}>
-        <Scroll class="max-h-[440px] px-2 pb-2">
-          <Each of={rowsFor(ed.query(), ed.draft())} key={(r) => (r.kind === "group" ? `group:${r.name}` : r.command.id)}>
-            {(r) => {
-              const row = r();
-              return row.kind === "group" ? <Text class="px-2 pb-1 pt-3 text-[11px] text-faint">{row.name}</Text> : <CommandRow command={row.command} editor={ed} />;
-            }}
-          </Each>
-          <If when={ed.query().trim() === ""}>
-            <SystemKeys />
-          </If>
-        </Scroll>
-        <Footer editor={ed} onDone={close} />
+    <View testID="shortcuts" class="gap-2">
+      <View class="flex-row flex-wrap items-center gap-2">
+        <Input
+          testID="shortcut-search"
+          autoFocus={props.autoFocus}
+          value={ed.query()}
+          onChange={({ value }) => ed.query.set(value)}
+          placeholder="搜索命令或按键"
+          accessibilityLabel="搜索命令或按键"
+          autoCapitalize="none"
+          autoCorrect={false}
+          class="h-8 w-[240px] min-w-0 max-w-full shrink grow rounded-(--radius-sm) border border-input bg-background px-2 text-[13px] text-foreground placeholder:text-faint focus:border-primary"
+        />
+        <Button
+          testID="shortcut-reset-all"
+          label={ed.confirmReset() ? "再点一次确认" : "全部恢复默认"}
+          labelClass={ed.confirmReset() ? "text-destructive" : ""}
+          disabled={Object.keys(ed.draft()).length === 0}
+          onPress={ed.resetAll}
+        />
+      </View>
+      <View>
+        <Each of={rowsFor(ed.query(), ed.draft())} key={(r) => (r.kind === "group" ? `group:${r.name}` : r.command.id)}>
+          {(r) => {
+            const row = r();
+            return row.kind === "group" ? <Text class="px-2 pb-1 pt-3 text-[11px] text-faint">{row.name}</Text> : <CommandRow command={row.command} editor={ed} />;
+          }}
+        </Each>
+        <If when={ed.query().trim() === ""}>
+          <SystemKeys />
         </If>
       </View>
-    </Dialog>
+    </View>
   );
 }
