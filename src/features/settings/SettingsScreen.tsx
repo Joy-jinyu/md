@@ -1,9 +1,10 @@
-/** 设置页：整页盖住应用（编辑页在下面留着）。宽屏左栏分类、右边内容；窄屏先列分类，点进去看一类。布局见 DESIGN.md「屏幕：设置」。 */
-import { type JSX, keymap, Scroll, signal, Text, untracked, View, type ViewRef, windowSize } from "nsh";
-import { Button as BaseButton, Dialog } from "nsh/base";
+/** 设置页：整页盖住应用（编辑页在下面留着）。左栏分类、右边内容；窄屏同一套排版，左栏收成抽屉、盖在内容上。布局见 DESIGN.md「屏幕：设置」。 */
+import { type JSX, keymap, Scroll, type Signal, signal, Text, untracked, View, type ViewRef, windowSize } from "nsh";
+import { Button as BaseButton, Dialog, Sheet } from "nsh/base";
 import { IN_BROWSER } from "../../platform";
 import type { ShortcutOverrides } from "../../store/settings";
 import { Icon } from "../../ui/icon";
+import { IconButton } from "../../ui/icon-button";
 import { currentOverrides, sanitize } from "../editor/keybindings";
 import { returnFocusToEditor } from "../editor/ui-state";
 import { GatewayPanel } from "./GatewayPanel";
@@ -14,13 +15,13 @@ import { createShortcutEditor, type ShortcutEditor, ShortcutsPanel } from "./Sho
 import { StoragePanel } from "./StoragePanel";
 import { SyncPanel } from "./SyncPanel";
 
-/** 窄于这个宽度不并排，改成两层（DESIGN.md「屏幕：设置」）。 */
+/** 窄于这个宽度左栏不并排，收成抽屉盖在内容上（DESIGN.md「屏幕：设置」）。 */
 const NARROW = 640;
 
 const FOCUS_RING = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 /**
- * 没在录键时 Esc 回到编辑页。走应用级 keymap（最新的绑定先跑），不靠 Dialog 自己的 closeOnEscape：
+ * 没在录键时 Esc 回到编辑页（窄屏抽屉开着时先收抽屉，见调用处）。走应用级 keymap（最新的绑定先跑），不靠 Dialog 自己的 closeOnEscape：
  * macOS 窗口里从 Cmd+, 或菜单打开时焦点还在编辑器里，第一下 Esc 被编辑器接走，要按两下才关（2026-11-25 用户实测）。
  * 录键时由 KeyRecorder 的 Esc 绑定取消录键。
  */
@@ -45,7 +46,7 @@ function BackButton(props: { testID: string; label: string; accessibilityLabel: 
   );
 }
 
-/** 宽屏左栏的一项。当前项不只靠颜色：`selected` 让读屏报「已选中」，读屏名再加「（当前）」。 */
+/** 左栏的一项。当前项不只靠颜色：`selected` 让读屏报「已选中」，读屏名再加「（当前）」。 */
 function NavItem(props: { section: Section; on: boolean; autoFocus: boolean; onPress: () => void }) {
   return (
     <BaseButton
@@ -64,28 +65,6 @@ function NavItem(props: { section: Section; on: boolean; autoFocus: boolean; onP
   );
 }
 
-/** 窄屏第一层的一行：点了进这一类。 */
-function ListRow(props: { section: Section; autoFocus: boolean; onPress: () => void }) {
-  return (
-    <BaseButton
-      testID={`settings-tab-${props.section.id}`}
-      ref={(node: ViewRef) => props.autoFocus && node.focus()}
-      accessibilityLabel={props.section.title}
-      onPress={props.onPress}
-      class="min-h-12 flex-row items-center gap-3 border-b border-border px-4 hover:bg-hover active:bg-pressed focus-visible:bg-pressed"
-    >
-      <Icon name={props.section.icon} color="muted-foreground" />
-      <Text class="min-w-0 flex-1 text-[13px] text-foreground">{props.section.title}</Text>
-      <Icon name="chevronRight" color="muted-foreground" />
-    </BaseButton>
-  );
-}
-
-/** 窄屏两层共用的顶栏：48 高，一行。 */
-function NarrowHeader(props: { children: JSX.Element }) {
-  return <View class="h-12 shrink-0 flex-row items-center gap-2 border-b border-border px-2">{props.children}</View>;
-}
-
 const Description = (props: { id: SectionId }) => <Text class="select-text text-[13px] leading-5 text-muted-foreground">{sectionOf(props.id).description}</Text>;
 
 interface Layout {
@@ -93,71 +72,80 @@ interface Layout {
   show: (id: SectionId) => void;
   close: () => void;
   body: (id: SectionId) => JSX.Element;
-  /** 打开时就在某一类（不是默认的快捷键）：焦点给左栏的当前项。 */
+  /** 打开时就在某一类（不是默认的快捷键）：焦点给左栏的当前项（窄屏给顶栏的「返回」）。 */
   focusCurrent: boolean;
+  /** 窄屏的分类抽屉开着没有。 */
+  drawer: Signal<boolean>;
 }
 
-function Wide(props: Layout) {
+/** 分类栏。宽屏是左栏，最上面「返回」；窄屏是抽屉里的同一列，「返回」在顶栏，这里不重复。 */
+function Nav(props: Layout & { withBack: boolean; onPick: (id: SectionId) => void }) {
   return (
-    <View class="flex-1 flex-row">
-      <View role="navigation" accessibilityLabel="设置分类" class="w-56 shrink-0 gap-1 border-r border-border bg-card px-3 py-4">
+    <View role="navigation" accessibilityLabel="设置分类" class="w-56 shrink-0 gap-1 border-r border-border bg-card px-3 py-4">
+      <If when={props.withBack}>
         <View class="mb-2 flex-row">
           <BackButton testID="settings-done" label="返回" accessibilityLabel="返回编辑页" onPress={props.close} />
         </View>
-        <Each of={SECTIONS} key={(s) => s.id}>
-          {(s) => <NavItem section={s()} on={props.page() === s().id} autoFocus={props.focusCurrent && props.page() === s().id} onPress={() => props.show(s().id)} />}
-        </Each>
-      </View>
-      <Scroll class="flex-1" contentClass="px-10 py-8">
-        <View class="w-full max-w-[640px] gap-5">
-          <View class="gap-1">
-            <Text role="header" class="text-xl font-semibold text-strong">
-              {sectionOf(props.page()).title}
-            </Text>
-            <Description id={props.page()} />
-          </View>
-          {props.body(props.page())}
-        </View>
-      </Scroll>
+      </If>
+      <Each of={SECTIONS} key={(s) => s.id}>
+        {(s) => <NavItem section={s()} on={props.page() === s().id} autoFocus={props.focusCurrent && props.page() === s().id} onPress={() => props.onPick(s().id)} />}
+      </Each>
     </View>
   );
 }
 
-function Narrow(props: Layout & { listing: () => boolean; toList: () => void }) {
+/** 一类的说明和内容。宽屏标题在这里；窄屏标题在顶栏里，这里不写。 */
+function Content(props: Layout & { narrow: boolean }) {
   return (
-    <If
-      when={props.listing()}
-      else={
-        <View class="flex-1">
-          <NarrowHeader>
-            <BackButton testID="settings-to-list" label="设置" accessibilityLabel="返回设置列表" autoFocus onPress={props.toList} />
-            <Text role="header" style={{ numberOfLines: 1 }} class="min-w-0 flex-1 text-[15px] font-semibold text-strong">
+    <Scroll class="flex-1" contentClass={props.narrow ? "px-4 py-4" : "px-10 py-8"}>
+      <View class="w-full gap-5">
+        <View class="gap-1">
+          <If when={!props.narrow}>
+            <Text role="header" class="text-xl font-semibold text-strong">
               {sectionOf(props.page()).title}
             </Text>
-          </NarrowHeader>
-          <Scroll class="flex-1" contentClass="px-4 py-4">
-            <View class="gap-5">
-              <Description id={props.page()} />
-              {props.body(props.page())}
-            </View>
-          </Scroll>
+          </If>
+          <Description id={props.page()} />
         </View>
-      }
-    >
-      <View class="flex-1">
-        <NarrowHeader>
-          <BackButton testID="settings-done" label="返回" accessibilityLabel="返回编辑页" onPress={props.close} />
-          <Text role="header" class="text-[15px] font-semibold text-strong">
-            设置
-          </Text>
-        </NarrowHeader>
-        <Scroll class="flex-1">
-          <Each of={SECTIONS} key={(s) => s.id}>
-            {(s) => <ListRow section={s()} autoFocus={props.page() === s().id} onPress={() => props.show(s().id)} />}
-          </Each>
-        </Scroll>
+        {props.body(props.page())}
       </View>
-    </If>
+    </Scroll>
+  );
+}
+
+function Wide(props: Layout) {
+  // 窄屏开着抽屉时窗口拉宽：抽屉不留着，再变窄时不会自己弹出来
+  props.drawer.set(false);
+  return (
+    <View class="flex-1 flex-row">
+      <Nav {...props} withBack onPick={props.show} />
+      <Content {...props} narrow={false} />
+    </View>
+  );
+}
+
+/** 窄屏：顶栏（开抽屉、分类名、返回）+ 和宽屏同样的内容；分类栏收成从左边滑进来的抽屉（Sheet），同编辑页窄窗口的侧栏。 */
+function Narrow(props: Layout) {
+  const open = () => props.drawer();
+  const shut = () => props.drawer.set(false);
+  const pick = (id: SectionId) => {
+    props.show(id);
+    shut();
+  };
+  return (
+    <View class="flex-1">
+      <View class="h-12 shrink-0 flex-row items-center gap-2 border-b border-border px-2">
+        <IconButton testID="settings-nav-toggle" icon="sidebar" label={open() ? "收起设置分类" : "展开设置分类"} active={open()} onPress={() => props.drawer.set(!open())} />
+        <Text role="header" style={{ numberOfLines: 1 }} class="min-w-0 flex-1 text-[15px] font-semibold text-strong">
+          {sectionOf(props.page()).title}
+        </Text>
+        <BackButton testID="settings-done" label="返回" accessibilityLabel="返回编辑页" autoFocus={props.focusCurrent} onPress={props.close} />
+      </View>
+      <Content {...props} narrow />
+      <Sheet open={open()} side="left" accessibilityLabel="设置分类" onOpenChange={({ open }) => !open && shut()} backdropClass="bg-scrim" popupClass="flex-row shadow-lg">
+        <Nav {...props} focusCurrent withBack={false} onPick={pick} />
+      </Sheet>
+    </View>
   );
 }
 
@@ -191,12 +179,8 @@ function SettingsPage(props: { onApply: (next: ShortcutOverrides) => void }) {
   const wanted = untracked(settingsPage);
   settingsPage.set(null);
   const page = signal<SectionId>(wanted ?? "shortcuts");
-  const listing = signal(wanted === null);
+  const drawer = signal(false);
   const narrow = () => windowSize().width < NARROW;
-  const show = (id: SectionId) => {
-    page.set(id);
-    listing.set(false);
-  };
   const close = () => {
     if (!settingsOpen()) return;
     const next = sanitize(ed.draft());
@@ -205,23 +189,24 @@ function SettingsPage(props: { onApply: (next: ShortcutOverrides) => void }) {
     returnFocusToEditor();
     if (changed) props.onApply(next);
   };
-  const body = sectionBodies(ed, show, wanted === null && !untracked(narrow));
-  const layout: Layout = { page, show, close, body, focusCurrent: wanted !== null };
+  const body = sectionBodies(ed, page.set, wanted === null);
+  const layout: Layout = { page, show: page.set, close, body, focusCurrent: wanted !== null, drawer };
   return (
     <Dialog
       testID="settings"
       open
       animation="none"
       accessibilityLabel="设置"
-      closeOnEscape={ed.recording() === null}
+      closeOnEscape={ed.recording() === null && !(narrow() && drawer())}
       onOpenChange={({ open }) => !open && close()}
       class="h-full w-full bg-background"
     >
       <If when={ed.recording() === null}>
-        <EscapeCloses onEscape={close} />
+        {/* 只有这一个 Esc 绑定：抽屉开着先收抽屉。分成两个的话录完键这个重新挂上、成了最新的，会越过抽屉直接回编辑页 */}
+        <EscapeCloses onEscape={() => (narrow() && drawer() ? drawer.set(false) : close())} />
       </If>
       <If when={narrow()} else={<Wide {...layout} />}>
-        <Narrow {...layout} listing={listing} toList={() => listing.set(true)} />
+        <Narrow {...layout} />
       </If>
     </Dialog>
   );

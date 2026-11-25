@@ -1,10 +1,12 @@
 /**
  * 侧栏的「文档」页：上面一个跨文档的搜索框、排序和新建；下面是文档列表，或者（有搜索词时）搜索结果。
- * 每行右边的「⋯」展开这一行的操作（重命名、版本历史、删除），不靠悬停，键盘和触屏都按得到。
+ * 每行右边的「⋯」展开这一行的操作（重命名、版本历史、删除）。有鼠标时悬停这一行才出现（键盘移到它上面、展开着时也在）；
+ * 触屏没有悬停，一直显示。
  */
 import { Scroll, Text, View } from "nsh";
 import { Button as BaseButton, Input } from "nsh/base";
 import type { DocMeta } from "../../store/document-store";
+import { CAN_HOVER } from "../../platform";
 import { allDocs, currentDocId, displayName } from "../../store/library";
 import { Button } from "../../ui/button";
 import { Icon } from "../../ui/icon";
@@ -18,6 +20,9 @@ import type { SearchResult } from "./search";
 
 /** 左右内边距 7 不是 8：边框占 1，这样框里的字落在侧栏的内容线（x=16）上，和下面行里的标题对齐。 */
 const FIELD = "h-7 rounded-(--radius-sm) border border-input bg-background px-[7px] text-[13px] text-foreground placeholder:text-faint focus:border-primary";
+
+/** 「+」和每行的「⋯」离底色边线 8（和行里上下的留白一样），两者中心在同一条竖线上。 */
+const RIGHT_INSET = "mr-2";
 
 /** 排序按钮：图标 + 现在的排法，和工具行右边的「+」一样 28 高；图标落在内容线上（左内边距 8）。 */
 function SortButton() {
@@ -55,7 +60,7 @@ export function DocumentsPanel(props: { onPicked: () => void }) {
         />
         <View class="flex-row items-center justify-between">
           <SortButton />
-          <IconButton testID="doc-new" icon="plus" label="新建文档" compact onPress={() => requestLibrary({ kind: "create" })} />
+          <IconButton testID="doc-new" icon="plus" label="新建文档" compact class={RIGHT_INSET} onPress={() => requestLibrary({ kind: "create" })} />
         </View>
       </View>
       <If when={searching()} else={<DocList onPicked={props.onPicked} />}>
@@ -90,7 +95,7 @@ function DocRow(props: { doc: DocMeta; onPicked: () => void }) {
     props.onPicked();
   };
   return (
-    <View class="rounded-(--radius-sm)" classList={{ "bg-pressed": current(), "bg-hover": expanded() && !current(), "hover:bg-hover": !current() }}>
+    <View class="group rounded-(--radius-sm)" classList={{ "bg-pressed": current(), "bg-hover": expanded() && !current(), "hover:bg-hover": !current() }}>
       <View class="flex-row items-center">
         <View
           testID={`doc-${props.doc.id}`}
@@ -107,7 +112,16 @@ function DocRow(props: { doc: DocMeta; onPicked: () => void }) {
             {sub()}
           </Text>
         </View>
-        <IconButton testID={`doc-more-${props.doc.id}`} icon="ellipsis" label={`「${name()}」的更多操作`} active={expanded()} compact onPress={() => panel.expanded.set(expanded() ? null : props.doc.id)} />
+        <IconButton
+          testID={`doc-more-${props.doc.id}`}
+          icon="ellipsis"
+          label={`「${name()}」的更多操作`}
+          tooltip="更多操作"
+          active={expanded()}
+          compact
+          class={CAN_HOVER && !expanded() ? `${RIGHT_INSET} opacity-0 group-hover:opacity-100 focus-visible:opacity-100` : RIGHT_INSET}
+          onPress={() => panel.expanded.set(expanded() ? null : props.doc.id)}
+        />
       </View>
       <If when={expanded()}>
         <View class="flex-row flex-wrap gap-1 pb-1 pl-2">

@@ -1,12 +1,10 @@
 /**
- * 左侧栏：顶上两页切换「文档」「大纲」。窗口宽度不到 720 时盖在正文上面（下面一层遮罩，点遮罩或选了一项就收起），720 及以上并排。
+ * 左侧栏：顶上两页切换「文档」「大纲」。窗口宽度不到 720 时是从左边滑进来的抽屉（Sheet：遮罩淡入、面板滑入，关时反向；点遮罩、Esc 或选了一项就收起），720 及以上并排。
  * 开没开、在哪一页存在 `ui-state.ts` 的 `sidebar` 里，切文档时编辑页重建，侧栏照旧。
  */
-import { type JSX, keymap, Text, View, type ViewRef, windowSize } from "nsh";
+import { type JSX, Text, View, type ViewRef, windowSize } from "nsh";
+import { Sheet } from "nsh/base";
 import { DocumentsPanel } from "../library/DocumentsPanel";
-import { panel } from "../library/panel-state";
-import { historyOpen, quickOpenOpen } from "../library/requests";
-import { settingsOpen } from "../settings/open";
 import { SIDE_PAD, SIDE_TEXT } from "./sidebar-style";
 import { sidebar, type SidebarTab } from "./ui-state";
 
@@ -51,18 +49,6 @@ function Panel(props: { outline: () => JSX.Element; onPicked: () => void; overla
   );
 }
 
-/** 侧栏上面又开了对话框：这时的 Esc 是关对话框的。 */
-const dialogOpen = () => panel.renaming() !== null || panel.deleting() !== null || historyOpen() || quickOpenOpen() || settingsOpen();
-
-/**
- * 侧栏盖在正文上时 Esc 收起它。单独成一个组件：绑定跟着遮罩出现和消失。
- * 对话框的 Esc 不走 keymap，这条绑定会先接到（2026-11-25 web host 实测重命名框里按 Esc 只收起了侧栏），所以放行按键、对话框开着时不收。
- */
-function EscapeCollapses() {
-  keymap.bind("escape", () => !dialogOpen() && sidebar.open.set(false), { when: "always", passThrough: true });
-  return null;
-}
-
 /** 源码方式下没有大纲时，大纲页显示的一行字。 */
 export function NoOutline() {
   return <Text class={`pt-1 ${SIDE_TEXT}`}>源码方式下没有大纲</Text>;
@@ -78,13 +64,18 @@ export function WithSidebar(props: { outline: () => JSX.Element; children: JSX.E
         <Panel outline={props.outline} onPicked={collapse} overlay={false} />
       </If>
       {props.children}
-      {/* 窄窗口：侧栏盖在正文上。写在正文后面，画的时候才在上层 */}
-      <If when={sidebar.open() && overlays()}>
-        <EscapeCollapses />
-        <View testID="sidebar-scrim" role="button" accessibilityLabel="收起侧栏" onPress={() => sidebar.open.set(false)} class="absolute inset-0 bg-scrim" />
-        <View class="absolute bottom-0 left-0 top-0 flex-row shadow-lg">
+      {/* 窄窗口：抽屉一直挂着、只切 open，收起时才有滑出的过渡 */}
+      <If when={overlays()}>
+        <Sheet
+          open={sidebar.open()}
+          side="left"
+          accessibilityLabel="侧栏"
+          onOpenChange={({ open }) => !open && sidebar.open.set(false)}
+          backdropClass="bg-scrim"
+          popupClass="flex-row shadow-lg"
+        >
           <Panel outline={props.outline} onPicked={collapse} overlay />
-        </View>
+        </Sheet>
       </If>
     </View>
   );
