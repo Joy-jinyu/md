@@ -14,6 +14,9 @@ export const APPLE_KEYS = appleKeys;
 /** 跑在浏览器里：有些组合键浏览器自己先处理，应用拦不住。 */
 export const IN_BROWSER = platform.name === "web";
 
+/** 有鼠标、能悬停（macOS、桌面浏览器）。手机和平板的浏览器没有悬停，靠悬停才出现的按钮在那里要常驻。 */
+export const CAN_HOVER = platform.desktop;
+
 /** 由系统和编辑器内核管、应用不改的键，设置页里列出来给人查。键用 keymap 的写法，多个写法用数组。 */
 export const SYSTEM_KEYS: { label: string; keys: string[] }[] = appleKeys
   ? [

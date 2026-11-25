@@ -224,11 +224,16 @@ test("on a narrow window the sidebar covers the text and closes after picking a 
   const app = await openLibrary({}, { width: 375, height: 760 });
   await app.waitFor("text:first doc");
   await showDocuments(app);
-  expect(app.shows("id:sidebar-scrim")).toBe(true);
+  // 盖在正文上的是一个模态的抽屉：读屏听到「侧栏」对话框，从窗口顶上盖下来
+  expect(findNode(app.accessibility(), (n) => n.role === "dialog" && n.label === "侧栏")).toBe(true);
+  expect(app.layout("id:sidebar")?.y).toBe(0);
   await app.press("id:doc-db");
   await app.waitFor("text:second doc");
   await app.waitUntil(() => !app.shows("id:documents"), { timeout: 3000 });
 });
+
+type A11yNode = { role?: string | null; label?: string | null; children?: A11yNode[] | null };
+const findNode = (node: A11yNode | null, hit: (n: A11yNode) => boolean): boolean => !!node && (hit(node) || (node.children ?? []).some((c) => findNode(c, hit)));
 
 /** 应用读写 `shared.data`：测试改它就像另一个标签页改了存储。 */
 async function openShared(extra: Record<string, string> = {}) {
@@ -391,6 +396,18 @@ test("on a narrow window Escape closes the sidebar that covers the text", async 
   await app.waitUntil(() => !app.shows("id:documents"), { timeout: 3000 });
 });
 
+test("on a narrow window Escape in a dialog opened from the sidebar closes only that dialog", async () => {
+  const app = await openLibrary({}, { width: 375, height: 760 });
+  await app.waitFor("text:first doc");
+  await showDocuments(app);
+  await app.press("id:doc-more-db");
+  await app.press("id:doc-rename");
+  await app.waitFor("id:rename");
+  await app.keyboard.press("escape");
+  await app.waitUntil(() => !app.shows("id:rename"), { timeout: 3000 });
+  expect(app.shows("id:documents")).toBe(true);
+});
+
 test("text typed just before the page closed is saved on the next start", async () => {
   const stash = JSON.stringify({ id: "da", base: 1, text: "# Alpha\n\nfirst doc typed late\n" });
   const app = await openLibrary({ "md.unsaved.da": stash });
@@ -433,4 +450,24 @@ test("the list says when each document changed, and the sort button says how it 
   await app.press("label:现在按改动时间排，改成按名字排");
   await app.waitFor("id:doc-sort >> text:按名字");
   expect(app.shows("label:现在按名字排，改成按改动时间排")).toBe(true);
+});
+
+test("a row's ⋯ shows only while the pointer is on that row or its actions are open, in line with +", async () => {
+  const app = await openLibrary();
+  await app.waitFor("text:first doc");
+  await showDocuments(app);
+  const shown = (id: string) => app.viewStyle(`id:doc-more-${id}`)?.effectiveOpacity;
+  expect(shown("da")).toBe(0);
+  expect(shown("db")).toBe(0);
+  await app.hover("id:doc-db");
+  await app.wait(300);
+  expect(shown("db")).toBe(1);
+  expect(shown("da")).toBe(0);
+  await app.press("id:doc-more-db");
+  await app.hover("id:doc-dc");
+  await app.wait(300);
+  expect(shown("db")).toBe(1);
+  expect(app.accessibility("id:doc-more-db")?.label).toBe("「Beta」的更多操作");
+  // 「+」和「⋯」在同一条竖线上
+  expect(app.layout("id:doc-more-db")?.x).toBe(app.layout("id:doc-new")?.x);
 });

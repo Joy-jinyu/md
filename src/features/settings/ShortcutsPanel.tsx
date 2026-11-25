@@ -145,6 +145,9 @@ function KeyRecorder(props: { onKey: (key: string) => void; onCancel: () => void
   return null;
 }
 
+/** 按钮列定宽、靠左排：「修改」「清除」每行都在同一个位置，键贴在按钮列左边、靠右对齐。宽度放得下三个按钮。 */
+const ACTIONS = "w-40 shrink-0";
+
 /** 一行平时的样子：现在的键、「已改」，和修改 / 清除 / 恢复三个按钮。 */
 function RowActions(props: { command: AppCommand; editor: Editor }) {
   const ed = props.editor;
@@ -153,19 +156,23 @@ function RowActions(props: { command: AppCommand; editor: Editor }) {
   const changed = () => c.id in ed.draft();
   return (
     <>
-      <If when={key()} else={<Text class="text-[11px] text-muted-foreground">未设置</Text>}>
-        {(k) => <KeyCap text={label(k())} />}
-      </If>
-      <If when={changed()}>
-        <Text class="text-[11px] text-primary">已改</Text>
-      </If>
-      <Button testID={`shortcut-edit-${c.id}`} label="修改" accessibilityLabel={`修改「${c.label}」的快捷键`} onPress={() => ed.begin(c)} />
-      <If when={key()}>
-        <Button testID={`shortcut-clear-${c.id}`} label="清除" accessibilityLabel={`清除「${c.label}」的快捷键`} onPress={() => ed.clear(c)} />
-      </If>
-      <If when={changed()}>
-        <Button testID={`shortcut-restore-${c.id}`} label="恢复" accessibilityLabel={`「${c.label}」恢复默认键`} onPress={() => ed.restore(c)} />
-      </If>
+      <View class="flex-row items-center gap-2">
+        <If when={changed()}>
+          <Text class="text-[11px] text-primary">已改</Text>
+        </If>
+        <If when={key()} else={<Text class="text-[11px] text-muted-foreground">未设置</Text>}>
+          {(k) => <KeyCap text={label(k())} />}
+        </If>
+      </View>
+      <View class={`${ACTIONS} flex-row items-center gap-1`}>
+        <Button testID={`shortcut-edit-${c.id}`} label="修改" accessibilityLabel={`修改「${c.label}」的快捷键`} onPress={() => ed.begin(c)} />
+        <If when={key()}>
+          <Button testID={`shortcut-clear-${c.id}`} label="清除" accessibilityLabel={`清除「${c.label}」的快捷键`} onPress={() => ed.clear(c)} />
+        </If>
+        <If when={changed()}>
+          <Button testID={`shortcut-restore-${c.id}`} label="恢复" accessibilityLabel={`「${c.label}」恢复默认键`} onPress={() => ed.restore(c)} />
+        </If>
+      </View>
     </>
   );
 }
@@ -177,7 +184,7 @@ function CommandRow(props: { command: AppCommand; editor: Editor }) {
   const mine = () => (ed.note()?.id === c.id ? ed.note() : null);
   return (
     <View testID={`shortcut-${c.id}`}>
-      <View class="min-h-9 flex-row items-center gap-2 rounded-(--radius-sm) px-2" classList={{ "bg-hover": isRecording() }}>
+      <View class="min-h-9 flex-row items-center gap-2 rounded-(--radius-sm) px-2" classList={{ "bg-hover": isRecording(), "hover:bg-hover": !isRecording() }}>
         <Text style={{ numberOfLines: 1 }} class="min-w-0 flex-1 select-text text-[13px] text-foreground">
           {c.label}
         </Text>
@@ -215,11 +222,12 @@ function SystemKeys() {
       <Text class="px-2 pb-1 pt-3 text-[11px] text-faint">系统键（不能改）</Text>
       <Each of={SYSTEM_KEYS} key={(k) => k.label}>
         {(k) => (
-          <View class="min-h-9 flex-row items-center gap-2 px-2">
+          <View class="min-h-9 flex-row items-center gap-2 rounded-(--radius-sm) px-2 hover:bg-hover">
             <Text class="min-w-0 flex-1 select-text text-[13px] text-muted-foreground">{k().label}</Text>
             <Each of={k().keys} key={(name) => name}>
               {(name) => <KeyCap text={keymap.label(name())} />}
             </Each>
+            <View class={ACTIONS} />
           </View>
         )}
       </Each>
@@ -232,7 +240,7 @@ export function ShortcutsPanel(props: { editor: ShortcutEditor; autoFocus: boole
   const ed = props.editor;
   return (
     <View testID="shortcuts" class="gap-2">
-      <View class="flex-row flex-wrap items-center gap-2">
+      <View class="flex-row flex-wrap items-center justify-between gap-2">
         <Input
           testID="shortcut-search"
           autoFocus={props.autoFocus}
@@ -242,7 +250,7 @@ export function ShortcutsPanel(props: { editor: ShortcutEditor; autoFocus: boole
           accessibilityLabel="搜索命令或按键"
           autoCapitalize="none"
           autoCorrect={false}
-          class="h-8 w-[240px] min-w-0 max-w-full shrink grow rounded-(--radius-sm) border border-input bg-background px-2 text-[13px] text-foreground placeholder:text-faint focus:border-primary"
+          class="h-8 w-[240px] min-w-0 max-w-[480px] shrink grow rounded-(--radius-sm) border border-input bg-background px-2 text-[13px] text-foreground placeholder:text-faint focus:border-primary"
         />
         <Button
           testID="shortcut-reset-all"

@@ -222,17 +222,36 @@ test("settings is a page of categories: the current one is named for screen read
   expect(text.replace("z", "")).toBe("hello\n");
 });
 
-test("on a narrow window the categories come first, and one opens on its own page", async () => {
+test("on a narrow window the categories slide over the content as a drawer, like the sidebar", async () => {
   const app = await open("../App.tsx", { platform: "web", width: 375, height: 760, storage: { [DOC_KEY]: "hello\n" } });
   await app.waitFor("text:hello");
   await app.keyboard.press("mod+,");
-  await app.waitFor("id:settings-tab-sync");
-  expect(app.shows("id:shortcut-search")).toBe(false);
+  await app.waitFor("id:shortcut-search");
+  expect(app.shows("id:settings-tab-sync")).toBe(false);
+  await app.press("id:settings-nav-toggle");
   await app.press("id:settings-tab-sync");
   await app.waitFor("id:sync-settings");
   expect(app.shows("id:settings-tab-storage")).toBe(false);
-  await app.press("id:settings-to-list");
+  // 抽屉开着时 Esc 只收起抽屉，设置页还开着
+  await app.press("id:settings-nav-toggle");
   await app.waitFor("id:settings-tab-storage");
+  await app.keyboard.press("escape");
+  await app.waitUntil(() => !app.shows("id:settings-tab-storage"), { timeout: 3000 });
+  expect(app.shows("id:sync-settings")).toBe(true);
+  await app.press("id:settings-nav-toggle");
+  // 点抽屉外面的遮罩：遮罩没有自己的 testID，从抽屉里一项往右越过抽屉边缘点下去
+  await app.press("id:settings-tab-storage", { position: { x: 300, y: 18 } });
+  await app.waitUntil(() => !app.shows("id:settings-tab-storage"), { timeout: 3000 });
+  // 录完一个键以后也一样：Esc 只收抽屉
+  await app.press("id:settings-nav-toggle");
+  await app.press("id:settings-tab-shortcuts");
+  await app.press("id:shortcut-edit-block.task");
+  await app.waitFor("id:shortcut-capture");
+  await app.press("id:settings-nav-toggle");
+  await app.keyboard.press("mod+alt+7");
+  await app.waitUntil(() => !app.shows("id:shortcut-capture"), { timeout: 3000 });
+  await app.keyboard.press("escape");
+  await app.waitUntil(() => !app.shows("id:settings-tab-storage"), { timeout: 3000 });
   await app.press("id:settings-done");
   await app.waitUntil(() => !app.shows("id:settings"), { timeout: 3000 });
   expect(app.shows("text:hello")).toBe(true);
@@ -260,4 +279,14 @@ test("connected to the gateway, its category shows the connection and the image 
   await app.press("id:settings-tab-image-host");
   await app.waitFor("id:image-host");
   expect(app.shows("id:image-host-needs-gateway")).toBe(false);
+});
+
+test("the shortcut buttons line up in one column whether or not a command has a key", async () => {
+  const app = await openApp("# Doc\n");
+  await app.press("id:open-settings");
+  await app.waitFor("id:settings");
+  const x = (sel: string) => app.layout(sel)?.x;
+  expect(x("id:shortcut-edit-block.task")).toBe(x("id:shortcut-edit-block.bullet"));
+  expect(app.shows("id:shortcut-clear-block.task")).toBe(false);
+  expect(x("id:shortcut-clear-block.bullet")).toBe(x("id:shortcut-clear-block.quote"));
 });
