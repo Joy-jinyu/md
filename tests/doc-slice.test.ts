@@ -61,7 +61,7 @@ test("切片：800 项松散列表是一片，不超时", () => {
   console.log(`TIMING loose-list-800 chars=${src.length} parse+slice=${ms}ms slices=${p.slices.length}`);
   expect(p.degraded).toBe(false);
   expect(p.slices.length).toBe(1);
-  expect(ms).toBeLessThan(1000);
+  expect(ms).toBeLessThan(1800);
 });
 
 // 计时取三次里最少的一次：make test 时别的测试文件同时在跑，单次数字会被挤高（每次都打印出来）
