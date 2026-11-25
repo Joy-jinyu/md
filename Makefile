@@ -36,6 +36,7 @@ build-web: ## 打包静态站到 dist/web/Pairdown/
 	$(NSH) package $(ENTRY) --target web -o dist/web
 	node scripts/web-headers.mjs dist/web/Pairdown
 	cp gateway/install.sh dist/web/Pairdown/gateway.sh
+	git rev-parse HEAD:gateway > dist/web/Pairdown/gateway.version
 
 build-mac: ## 打包到 dist/macos/Pairdown.app
 	$(NSH) package $(ENTRY) --target macos -o dist/macos

@@ -3,6 +3,7 @@ import { parseCli, USAGE } from "./cli.mts";
 import { Library } from "./library.mts";
 import { LISTEN_HOST } from "./protocol.ts";
 import { startGateway } from "./server.mts";
+import { autoUpdater } from "./update.mts";
 
 const parsed = parseCli(process.argv.slice(2));
 if (parsed.kind === "help") {
@@ -20,7 +21,10 @@ const library = await Library.open(options.library).catch((e: Error) => {
   process.exit(1);
 });
 const origins = allowedOrigins(options.origins);
-const gateway = await startGateway({ library, port: options.port, origins }).catch((e: Error) => {
+// 只有装成后台服务（install.sh）才带这个环境变量；从源码直接跑不自动更新
+const managedRoot = process.env.PAIRDOWN_HOME;
+const onClients = managedRoot ? autoUpdater(managedRoot, (s) => console.log(s)) : undefined;
+const gateway = await startGateway({ library, port: options.port, origins, onClients }).catch((e: Error) => {
   console.error(`启动失败：${e.message}`);
   process.exit(1);
 });

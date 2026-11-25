@@ -1,30 +1,74 @@
 #!/bin/sh
-# Pairdown 本机网关：下载（或更新）到 ~/.pairdown/gateway 并启动。
+# Pairdown 本机网关：装到 ~/.pairdown，在后台运行（macOS：登录后自动启动），并装上 pairdown 命令。
 #   curl -fsSL https://markdown.pairwise.site/gateway.sh | sh
-# 换文库文件夹、加别的参数：… | sh -s -- --library ~/notes（参数原样交给网关，见 gateway/README.md）
+# 第一次装时换文库文件夹：… | sh -s -- --library ~/notes；装好以后用 pairdown config library <文件夹>
 set -eu
 
-# 包成函数、最后一行才调：下载到一半断了不会执行半截脚本
-main() {
-  home="${PAIRDOWN_HOME:-$HOME/.pairdown}/gateway"
-  source_url="https://codeload.github.com/Joy-jinyu/md/tar.gz/refs/heads/main"
+# PAIRDOWN_SITE、PAIRDOWN_SOURCE：测试时换成本地的版本号地址和本地打的包
+SITE="${PAIRDOWN_SITE:-https://markdown.pairwise.site}"
+SOURCE="${PAIRDOWN_SOURCE:-https://codeload.github.com/Joy-jinyu/md/tar.gz/refs/heads/main}"
 
+need_node() {
   command -v node >/dev/null 2>&1 || { echo "没找到 node：先装 Node 23.6 以上（https://nodejs.org）" >&2; exit 1; }
   node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>23||(a===23&&b>=6)?0:1)' ||
     { echo "Node 版本太低（现在是 $(node -v)），要 23.6 以上" >&2; exit 1; }
-
-  echo "下载网关到 $home …"
-  mkdir -p "$home"
-  curl -fsSL "$source_url" | tar -xz -C "$home" --strip-components=2 "md-main/gateway"
-  (cd "$home" && npm install --omit=dev --no-audit --no-fund --loglevel=error)
-
-  if [ "$#" -eq 0 ]; then
-    library="$HOME/Documents/Pairdown"
-    mkdir -p "$library"
-    set -- --library "$library"
-  fi
-  echo "启动网关（Ctrl+C 停止；下次再跑同一条命令即可）"
-  exec node "$home/src/main.mts" "$@"
 }
 
-main "$@"
+# 下载（或更新）网关源码、装依赖、记下版本号。pairdown update 和网关自动更新也调它（install.sh fetch）
+fetch() {
+  mkdir -p "$root/gateway"
+  curl -fsSL "$SOURCE" | tar -xz -C "$root/gateway" --strip-components=2 "md-main/gateway"
+  (cd "$root/gateway" && npm install --omit=dev --no-audit --no-fund --loglevel=error >/dev/null)
+  # 版本号是一串十六进制；站点上还没有这个文件时拿到的是网页，不记
+  if curl -fsSL "$SITE/gateway.version" 2>/dev/null | grep -Ex '[0-9a-f]{7,64}' >"$root/version.new"; then mv "$root/version.new" "$root/version"; else rm -f "$root/version.new"; fi
+}
+
+# pairdown 命令：包装脚本记住装的时候用的 node，再链到 PATH 里一个能写的目录
+install_cli() {
+  mkdir -p "$root/bin"
+  node_path="$(node -e 'console.log(process.execPath)')"
+  {
+    echo '#!/bin/sh'
+    echo "export PAIRDOWN_HOME='$root'"
+    [ -z "${PAIRDOWN_LABEL:-}" ] || echo "export PAIRDOWN_LABEL='$PAIRDOWN_LABEL'"
+    echo "exec '$node_path' '$root/gateway/src/ctl.mts' \"\$@\""
+  } >"$root/bin/pairdown"
+  chmod +x "$root/bin/pairdown"
+  for dir in /usr/local/bin /opt/homebrew/bin "$HOME/.local/bin"; do
+    [ "$dir" = "$HOME/.local/bin" ] && mkdir -p "$dir"
+    if [ -d "$dir" ] && [ -w "$dir" ]; then
+      ln -sf "$root/bin/pairdown" "$dir/pairdown"
+      echo "$dir/pairdown" >"$root/link"
+      case ":$PATH:" in *":$dir:"*) ;; *) echo "提示：$dir 不在 PATH 里，pairdown 命令要写全：$dir/pairdown" ;; esac
+      return
+    fi
+  done
+  echo "提示：没找到能放 pairdown 命令的目录，用全路径：$root/bin/pairdown"
+}
+
+# 包成函数、最后一行才调：下载到一半断了不会执行半截脚本
+main() {
+  root="${PAIRDOWN_HOME:-$HOME/.pairdown}"
+  if [ "${1:-}" = fetch ]; then
+    fetch
+    return
+  fi
+  if [ -f "$root/config.json" ] && [ -x "$root/bin/pairdown" ]; then
+    echo "Pairdown 网关已经装过了，不用再装。"
+    "$root/bin/pairdown" status
+    return
+  fi
+  need_node
+  echo "下载网关到 $root …"
+  fetch
+  if [ "$(uname)" != Darwin ]; then
+    echo "后台运行现在只支持 macOS，这里在前台启动（Ctrl+C 停止；下次再跑同一条命令）"
+    [ "$#" -gt 0 ] || { mkdir -p "$HOME/Documents/Pairdown"; set -- --library "$HOME/Documents/Pairdown"; }
+    exec node "$root/gateway/src/main.mts" "$@"
+  fi
+  install_cli
+  "$root/bin/pairdown" setup "$@"
+}
+
+# exit 写在同一行：更新会改写这个文件，sh 不能再往下读
+main "$@"; exit $?
