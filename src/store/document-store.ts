@@ -2,7 +2,11 @@
  * 文档库的存储接口（实施计划 10.2）：功能代码只认它，不知道后面是浏览器本地、本机网关还是 macOS 的文件。
  * 三种实现：浏览器本地（local-store.ts）、本机网关（gateway-store.ts）、macOS 文库文件夹（platform/macos/file-store.ts）；用哪一种只在 backend.ts 定。
  */
+import type { ImageHostInput, ImageHostView } from "../../gateway/src/protocol";
 import type { AssetData } from "./image-file";
+
+/** 图床配置的两种样子（定义在网关协议里）：features 经这里拿，不直接引 gateway/。 */
+export type { ImageHostInput, ImageHostView };
 
 /** 版本：只拿来比相等。浏览器本地是每写一次加一的数，网关和文件是内容的 SHA-256。 */
 export type Version = number | string;
@@ -49,6 +53,19 @@ export class NameTaken extends Error {
   }
 }
 
+/** 网关太旧，不认图床的请求：调用方当没有图床，图片照旧存本地。 */
+export class ImageHostUnsupported extends Error {}
+
+/** 图床：经本机网关转发的自定义上传接口。失败都抛给人看的错。 */
+export interface ImageHostApi {
+  /** 现在的配置，没设置是 null；网关太旧抛 `ImageHostUnsupported`。 */
+  get(): Promise<ImageHostView | null>;
+  /** 存配置；null 是清掉。 */
+  set(host: ImageHostInput | null): Promise<void>;
+  /** 传一张图，返回图床给的 http(s) 地址。 */
+  upload(bytes: Uint8Array): Promise<string>;
+}
+
 export interface DocumentStore {
   list(): Promise<DocMeta[]>;
   /** 没有这一篇是 null。打不开（不是 UTF-8、太大、读不了）抛带说明的错。 */
@@ -71,6 +88,8 @@ export interface DocumentStore {
   sweepAssets?(docId: string, text: string): Promise<void>;
   /** 把外链图片下载进文档旁边的 assets/，返回写进正文的相对路径；做不到的后端没有这一项。失败抛给人看的错。 */
   transfer?(docId: string, url: string): Promise<string>;
+  /** 图床；只有本机网关后端有。 */
+  imageHost?: ImageHostApi;
   /** 外面改了文档时通知；做不到的后端没有这一项（靠窗口重新获得焦点时比对版本）。返回停止监听的函数。 */
   watch?(onChange: (change: StoreChange) => void): () => void;
 }

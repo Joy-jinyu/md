@@ -19,7 +19,7 @@ import {
   type ServerMessage,
 } from "../../gateway/src/protocol";
 import { cleanFileStem, dirOf, stemOf as stemWith } from "../doc/file-name";
-import { type DocMeta, type DocumentStore, NameTaken, type StoreChange, type WriteResult } from "./document-store";
+import { type DocMeta, type DocumentStore, type ImageHostApi, ImageHostUnsupported, NameTaken, type StoreChange, type WriteResult } from "./document-store";
 import { assetPathFromSrc, base64ToBytes, bytesToBase64, checkImage } from "./image-file";
 
 export const GATEWAY_URL = `ws://127.0.0.1:${DEFAULT_PORT}`;
@@ -99,6 +99,8 @@ type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const isVersion = (r: Obj) => typeof r.version === "string";
+const isHostView = (h: unknown) =>
+  isObj(h) && typeof h.url === "string" && typeof h.field === "string" && typeof h.urlPath === "string" && Array.isArray(h.headerNames) && h.headerNames.every((n) => typeof n === "string");
 
 /** 每种请求的成功结果要长什么样；不合的当成看不懂的回复。没列的只要求是个对象。 */
 const RESULT_SHAPE: Partial<Record<Op, (r: Obj) => boolean>> = {
@@ -110,6 +112,9 @@ const RESULT_SHAPE: Partial<Record<Op, (r: Obj) => boolean>> = {
   putAsset: (r) => typeof r.src === "string",
   getAsset: (r) => typeof r.mime === "string" && /^image\//.test(r.mime) && typeof r.data === "string",
   transfer: (r) => typeof r.src === "string",
+  imageHost: (r) => r.host === null || isHostView(r.host),
+  setImageHost: isObj,
+  uploadImage: (r) => typeof r.url === "string" && /^https?:\/\/\S+$/i.test(r.url),
 };
 
 /** 网关来的一条消息：形状对得上才收。回复只看外壳（结果的形状在对上请求以后按 op 查）。 */
@@ -626,7 +631,56 @@ function gatewayStore(call: Call, known: Known, whenConnected: WhenConnected): D
         throw transferError(e, docId);
       }
     },
+    imageHost: imageHostApi(call),
   };
+}
+
+/** 图床的三个请求都经网关；旧网关不认（回 bad-request），读配置时当成「不支持」。 */
+function imageHostApi(call: Call): ImageHostApi {
+  return {
+    async get() {
+      try {
+        return (await call("imageHost", {})).host;
+      } catch (e) {
+        if (failure(e)?.code === "bad-request") throw new ImageHostUnsupported("本机网关版本太旧，不支持图床。更新网关后再试");
+        throw hostError(e);
+      }
+    },
+    async set(host) {
+      try {
+        await call("setImageHost", { host });
+      } catch (e) {
+        throw hostError(e);
+      }
+    },
+    async upload(bytes) {
+      // 同 putAsset：太大的图先在页面挡掉
+      checkImage(bytes, MAX_ASSET_BYTES);
+      try {
+        return (await call("uploadImage", { data: bytesToBase64(bytes) }, TRANSFER_MS)).url;
+      } catch (e) {
+        throw hostError(e);
+      }
+    },
+  };
+}
+
+/** 图床请求失败的原因 → 给人看的一句话。 */
+function hostError(e: unknown): unknown {
+  switch (failure(e)?.code) {
+    case "bad-url":
+      return new Error("上传地址不对（只能是 http / https 的地址）");
+    case "no-image-host":
+      return new Error("还没有设置图床");
+    case "upload-failed":
+      return new Error("图床没传成（接口不回、超时、返回的不是成功，或者返回里找不到图片地址）");
+    case "bad-type":
+      return new Error("不是认得的图片（只收 png、jpg、gif、webp、avif；SVG 不收）");
+    case "too-large":
+      return new Error("图片超过 10 MB，网关不传");
+    default:
+      return rethrow(e, "", "other");
+  }
 }
 
 /** 正文里的地址可能 URL 编码过（`%20`），网关要的是解开的（gateway/README.md「页面侧接入要注意」）。 */

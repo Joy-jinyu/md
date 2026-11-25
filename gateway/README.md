@@ -24,6 +24,19 @@ pairdown start | stop | restart | logs | update | uninstall
 
 **自动更新**（`src/update.mts`，只有装成后台服务才有）：有页面连上来时（最多 10 分钟一次）取 `https://markdown.pairwise.site/gateway.version`（`make build-web` 写的，是 `gateway/` 目录的 git 树哈希），和装的时候记下的不一样就在后台重新下载 `main` 分支的 `gateway/`，等没有页面连着了退出，由 launchd 拉起新版。也就是说：这个仓库 `main` 分支上的网关代码会在装了的机器上自动运行，和第一次 `curl | sh` 是同一份信任。
 
+## 图床
+
+粘贴、拖进来的图片可以不存本地、直接传到你自己的图床：一个收 `multipart/form-data` 上传的接口（PicGo 的「自定义图床」那种，兰空、sm.ms、本机的 PicGo server 都是）。上传由网关发，页面只把图片字节交给网关。在页面的设置里填，或者：
+
+```bash
+pairdown config imageHost https://img.example.com/api/upload   # none 不再用图床
+pairdown config imageHostField file                              # 放图片的表单字段名，默认 file
+pairdown config imageHostHeader "Authorization: Bearer xxx"      # 上传时带的请求头，none 清空
+pairdown config imageHostUrlPath data.url                        # 返回的 JSON 里图片地址在哪；auto 自动找
+```
+
+自动找依次试 `url`、`data.url`、`data.links.url`、`result.0`、`data.0`；返回不是 JSON 时把整段当地址。拿到的必须是 http(s) 地址。配置存在 `~/.pairdown/config.json` 的 `imageHost` 里（文件权限 600）；请求头的值不回给页面（页面只看得到名字）、不进日志。从源码直接跑的网关也读写这个文件。上传地址是用户自己填的，可以是本机地址（PicGo server 就在 127.0.0.1），不做内网检查。
+
 ## 从源码安装
 
 要 Node 23.6 以上（直接跑 TypeScript，不用编译；本机开发用的是 v25）。
