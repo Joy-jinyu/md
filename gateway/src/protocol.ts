@@ -90,17 +90,25 @@ export type DocProblem = "not-utf8" | "too-large";
 export type DocMeta = { path: string; size: number; mtimeMs: number; problem?: DocProblem };
 
 /**
- * 图床：一个收 multipart/form-data 的上传接口（PicGo 的自定义图床那种）。配置存在网关的 config.json 里，上传由网关发。
+ * 图床有两种，配置都存在网关的 config.json 里，上传由网关发。
+ *
+ * 上传接口（kind 不写或 "upload"）：一个收 multipart/form-data 的接口（PicGo 的自定义图床那种）。
  * url：上传地址（http / https）。field：放图片的表单字段名。urlPath：返回的 JSON 里图片地址在哪（`data.url` 这样的点路径）；
  * 空串是自动找（url、data.url、data.links.url、result.0、data.0 里第一个是 http(s) 地址的）。
  */
-export type ImageHostSettings = { url: string; field: string; urlPath: string };
+export type ImageHostSettings = { kind?: "upload"; url: string; field: string; urlPath: string };
 
-/** 页面看到的图床配置：请求头里可能有密钥，只给名字、不给值。 */
-export type ImageHostView = ImageHostSettings & { headerNames: string[] };
+/**
+ * GitHub 仓库当图床：图片提交到 `repo`（`用户/仓库`）的 `branch` 分支、`dir` 目录下（文件名是内容哈希），
+ * 正文写 `https://raw.githubusercontent.com/<repo>/<branch>/<dir>/<文件>`，所以仓库要是公开的。
+ */
+export type GithubHostSettings = { kind: "github"; repo: string; branch: string; dir: string };
 
-/** 页面要存的图床配置：headers 不给就保留网关里原来的（页面拿不到原值，改别的项时不用重填）。 */
-export type ImageHostInput = ImageHostSettings & { headers?: Record<string, string> };
+/** 页面看到的图床配置：请求头、令牌是密钥，只说有没有、不给值。 */
+export type ImageHostView = (ImageHostSettings & { headerNames: string[] }) | (GithubHostSettings & { hasToken: boolean });
+
+/** 页面要存的图床配置：headers / token 不给就保留网关里原来的（页面拿不到原值，改别的项时不用重填）；换了种类不保留。 */
+export type ImageHostInput = (ImageHostSettings & { headers?: Record<string, string> }) | (GithubHostSettings & { token?: string });
 
 /**
  * 每种请求的参数和成功结果。

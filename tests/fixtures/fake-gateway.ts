@@ -2,7 +2,7 @@
  * 进程内的假网关：按 gateway/src/protocol.ts 回请求、推 changed，给 gateway-store 的测试用（无头测试连不了真 WebSocket）。
  * 版本是「内容 + 序号」，只要内容变了就变，和真网关一样只拿来比相等。
  */
-import { PROTOCOL_VERSION } from "../../gateway/src/protocol";
+import { type ImageHostInput, type ImageHostView, PROTOCOL_VERSION } from "../../gateway/src/protocol";
 import type { Connect, SocketEvents } from "../../src/store/gateway-store";
 
 export function fakeGateway(seed: Record<string, string>) {
@@ -29,7 +29,10 @@ export function fakeGateway(seed: Record<string, string>) {
     /** transfer 的结果，按地址：给 base64 就当下载成功，给错误码就失败；没列的回 fetch-failed。 */
     downloads: {} as Record<string, { data: string } | { code: string }>,
     /** 图床配置（页面看到的样子）；null 是没设置。 */
-    imageHost: null as { url: string; field: string; urlPath: string; headerNames: string[] } | null,
+    imageHost: null as ImageHostView | null,
+    /** GitHub 图床存着的令牌；上传时不等于 `goodToken` 就回 upload-failed（假装 GitHub 不认）。 */
+    githubToken: null as string | null,
+    goodToken: "github_pat_good",
     /** 旧网关：不认图床的三个 op，回 bad-request。 */
     noImageHostOps: false,
     /** uploadImage 一律回这个错误码（图床挂了）；null 是传得上。 */
@@ -98,24 +101,42 @@ export function fakeGateway(seed: Record<string, string>) {
     }
   }
 
+  /** 存配置：和真网关一样，密钥（请求头、令牌）不给就留着原来的，换了种类不留。 */
+  function setHost(host: ImageHostInput | null): object {
+    const was = state.imageHost;
+    if (host === null) {
+      state.imageHost = null;
+      state.githubToken = null;
+      return { ok: true, result: {} };
+    }
+    if (host.kind === "github") {
+      if (!/^[\w.-]+\/[\w.-]+$/.test(host.repo)) return fail("bad-request", "bad repo");
+      const token = host.token ?? (was?.kind === "github" ? state.githubToken : null);
+      if (!token) return fail("bad-request", "no token");
+      state.githubToken = token;
+      state.imageHost = { kind: "github", repo: host.repo, branch: host.branch, dir: host.dir, hasToken: true };
+      return { ok: true, result: {} };
+    }
+    if (!/^https?:\/\//.test(host.url)) return fail("bad-url", "bad url");
+    const headerNames = host.headers ? Object.keys(host.headers) : was && was.kind !== "github" ? was.headerNames : [];
+    state.imageHost = { url: host.url, field: host.field, urlPath: host.urlPath, headerNames };
+    return { ok: true, result: {} };
+  }
+
+  function upload(): object {
+    const h = state.imageHost;
+    if (!h) return fail("no-image-host", "no image host");
+    if (state.uploadFails) return fail(state.uploadFails, "图床回了 HTTP 500");
+    if (h.kind === "github" && state.githubToken !== state.goodToken) return fail("upload-failed", "GitHub 不认这个令牌（401）：令牌不对或者过期了");
+    state.uploads += 1;
+    const url = h.kind === "github" ? `https://raw.githubusercontent.com/${h.repo}/${h.branch}/${h.dir}/up${state.uploads}.png` : `https://img.example.com/up${state.uploads}.png`;
+    return { ok: true, result: { url } };
+  }
+
   function imageHostAnswer(m: Record<string, unknown>): object {
     if (state.noImageHostOps) return fail("bad-request", "unknown op");
     if (m.op === "imageHost") return { ok: true, result: { host: state.imageHost } };
-    if (m.op === "setImageHost") {
-      const host = m.host as { url: string; field: string; urlPath: string; headers?: Record<string, string> } | null;
-      if (host === null) {
-        state.imageHost = null;
-        return { ok: true, result: {} };
-      }
-      if (!/^https?:\/\//.test(host.url)) return fail("bad-url", "bad url");
-      const headerNames = host.headers ? Object.keys(host.headers) : (state.imageHost?.headerNames ?? []);
-      state.imageHost = { url: host.url, field: host.field, urlPath: host.urlPath, headerNames };
-      return { ok: true, result: {} };
-    }
-    if (!state.imageHost) return fail("no-image-host", "no image host");
-    if (state.uploadFails) return fail(state.uploadFails, "upload failed");
-    state.uploads += 1;
-    return { ok: true, result: { url: `https://img.example.com/up${state.uploads}.png` } };
+    return m.op === "setImageHost" ? setHost(m.host as ImageHostInput | null) : upload();
   }
 
   /** 和真 WebSocket 一样：哪一边关的，过一会儿都会报一次 close。 */

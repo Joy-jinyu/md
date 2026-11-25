@@ -2,11 +2,11 @@
  * 文档库的存储接口（实施计划 10.2）：功能代码只认它，不知道后面是浏览器本地、本机网关还是 macOS 的文件。
  * 三种实现：浏览器本地（local-store.ts）、本机网关（gateway-store.ts）、macOS 文库文件夹（platform/macos/file-store.ts）；用哪一种只在 backend.ts 定。
  */
-import type { ImageHostInput, ImageHostView } from "../../gateway/src/protocol";
+import type { GithubHostSettings, ImageHostInput, ImageHostView } from "../../gateway/src/protocol";
 import type { AssetData } from "./image-file";
 
-/** 图床配置的两种样子（定义在网关协议里）：features 经这里拿，不直接引 gateway/。 */
-export type { ImageHostInput, ImageHostView };
+/** 图床配置（上传接口、GitHub 仓库两种，定义在网关协议里）：features 经这里拿，不直接引 gateway/。 */
+export type { GithubHostSettings, ImageHostInput, ImageHostView };
 
 /** 版本：只拿来比相等。浏览器本地是每写一次加一的数，网关和文件是内容的 SHA-256。 */
 export type Version = number | string;

@@ -99,8 +99,13 @@ type Obj = Record<string, unknown>;
 
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
 const isVersion = (r: Obj) => typeof r.version === "string";
+const isStrings = (v: unknown) => Array.isArray(v) && v.every((n) => typeof n === "string");
+/** 图床配置的两种视图：GitHub 仓库（kind 是 github），上传接口（kind 不写或 upload）。 */
 const isHostView = (h: unknown) =>
-  isObj(h) && typeof h.url === "string" && typeof h.field === "string" && typeof h.urlPath === "string" && Array.isArray(h.headerNames) && h.headerNames.every((n) => typeof n === "string");
+  isObj(h) &&
+  (h.kind === "github"
+    ? typeof h.repo === "string" && typeof h.branch === "string" && typeof h.dir === "string" && typeof h.hasToken === "boolean"
+    : (h.kind === undefined || h.kind === "upload") && typeof h.url === "string" && typeof h.field === "string" && typeof h.urlPath === "string" && isStrings(h.headerNames));
 
 /** 每种请求的成功结果要长什么样；不合的当成看不懂的回复。没列的只要求是个对象。 */
 const RESULT_SHAPE: Partial<Record<Op, (r: Obj) => boolean>> = {
@@ -650,7 +655,9 @@ function imageHostApi(call: Call): ImageHostApi {
       try {
         await call("setImageHost", { host });
       } catch (e) {
-        throw hostError(e);
+        // 网关不收这份配置（分支、目录不合规等）：原因是网关写的中文句子，照着显示
+        const f = failure(e);
+        throw f?.code === "bad-request" && f.message.trim() ? new Error(f.message.trim()) : hostError(e);
       }
     },
     async upload(bytes) {
@@ -665,15 +672,16 @@ function imageHostApi(call: Call): ImageHostApi {
   };
 }
 
-/** 图床请求失败的原因 → 给人看的一句话。 */
+/** 图床请求失败的原因 → 给人看的一句话。upload-failed 用网关的 message：那是网关写的中文原因（令牌不对、找不到仓库），不带密钥。 */
 function hostError(e: unknown): unknown {
-  switch (failure(e)?.code) {
+  const f = failure(e);
+  switch (f?.code) {
     case "bad-url":
       return new Error("上传地址不对（只能是 http / https 的地址）");
     case "no-image-host":
       return new Error("还没有设置图床");
     case "upload-failed":
-      return new Error("图床没传成（接口不回、超时、返回的不是成功，或者返回里找不到图片地址）");
+      return new Error(f.message.trim() || "图床没传成（接口不回、超时、返回的不是成功，或者返回里找不到图片地址）");
     case "bad-type":
       return new Error("不是认得的图片（只收 png、jpg、gif、webp、avif；SVG 不收）");
     case "too-large":
