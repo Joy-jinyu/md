@@ -51,7 +51,7 @@ make verify        # 上面四样一起跑（CI 跑的就是它）
 make build-web     # 打包静态站到 dist/web/Pairdown/
 make build-mac     # 打包到 dist/macos/Pairdown.app
 
-# 本机网关（网页版把文档存成文件时用；页面固定连 127.0.0.1:7341）
+# 本机网关（网页版把文档存成文件时用；页面固定连 127.0.0.1:7341）。用户装：curl -fsSL https://markdown.pairwise.site/gateway.sh | sh（后台服务 + pairdown 命令 + 自动更新，见 gateway/README.md）；开发时从源码跑：
 cd gateway && npm install && node src/main.mts --library ~/Documents/Pairdown
 # 本地开发页面（make dev-web）也要连时加 --origin http://127.0.0.1:8811，见 gateway/README.md
 ```

@@ -54,7 +54,7 @@ function GatewayHowTo() {
       </Text>
       <Code testID="copy-start-command" text={START_COMMAND} copyLabel="复制启动命令" />
       <Text class="select-text text-xs leading-5 text-muted-foreground">
-        文档放在 ~/Documents/Pairdown；想换文件夹，在命令末尾加 -s -- --library 和那个文件夹。起来以后刷新这个页面；浏览器问要不要允许访问本地网络时选允许。下次用再跑一遍这条命令。连不上时页面照常用浏览器本地存储，不会报错。
+        装好后网关在后台运行，登录电脑后自动启动，有新版会自己更新（后台运行现在只支持 macOS）。文档放在 ~/Documents/Pairdown。同时装上 pairdown 命令：pairdown 看状态和配置，pairdown config library 加文件夹换文库，pairdown uninstall 卸载。装好以后刷新这个页面；浏览器问要不要允许访问本地网络时选允许。连不上时页面照常用浏览器本地存储，不会报错。
       </Text>
     </View>
   );
