@@ -4,3 +4,6 @@ dist/
 worker/.dev.vars
 .DS_Store
 .wrangler/
+gateway/node_modules/
+worker/node_modules/
+worker/.wrangler/

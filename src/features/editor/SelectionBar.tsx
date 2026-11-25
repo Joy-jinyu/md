@@ -1,4 +1,4 @@
-/** 光标旁的三种小条：选中文字时的格式条、光标在链接里时的链接卡片、选中公式 / 图时的操作条。 */
+/** 光标旁的三种小条：选中文字时的格式条、光标在链接里时的链接卡片、选中能改源码的原子块（公式、图、front matter、HTML 块）时的操作条。 */
 import { signal, Text, View } from "nsh";
 import { chain, command, extendMarkRange, type RichEditorSession, unsetLink } from "nsh/base";
 import { Button } from "../../ui/button";
@@ -8,13 +8,14 @@ import { openLink } from "./links";
 import type { LinkPromptState } from "./LinkPrompt";
 import { selectionRange } from "./selection";
 
-export type BarMode = "selection" | "link" | "atom" | null;
+export type BarMode = "selection" | "link" | "atom" | "image" | null;
 
 /** `typing`：这次修订是打字带来的。打字经过链接（比如刚打完一个网址）时不出链接卡片，它会盖住下一行。 */
 function readMode(session: RichEditorSession, typing: boolean): BarMode {
   const { from, to, type } = selectionRange(session);
   if (type === "node") {
     const node = session.nodeAt(from);
+    if (node?.type === "image") return "image";
     return node && isAtomKind(node.type) ? "atom" : null;
   }
   if (from !== to) return session.isActive("codeBlock") ? null : "selection";
@@ -108,7 +109,7 @@ export function LinkCard(props: { session: RichEditorSession; link: LinkPromptSt
   );
 }
 
-/** 选中公式或 Mermaid 图时的操作条。 */
+/** 选中公式、Mermaid 图、front matter、HTML 块或定义行时的操作条。 */
 export function AtomBar(props: { session: RichEditorSession; atom: AtomPromptState }) {
   const s = props.session;
   const edit = () => {
@@ -121,7 +122,7 @@ export function AtomBar(props: { session: RichEditorSession; atom: AtomPromptSta
     s.focus();
   };
   return (
-    <View testID="atom-bar" accessibilityLabel="公式或图" class={BAR}>
+    <View testID="atom-bar" accessibilityLabel="块操作" class={BAR}>
       <Button label="编辑" accessibilityLabel="编辑源码" onPress={edit} />
       <Button label="删除" onPress={remove} />
     </View>

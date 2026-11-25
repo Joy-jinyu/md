@@ -1,6 +1,8 @@
 import { expect, open, test } from "nsh/test";
-import { DOC_KEY } from "../src/store/document";
+// 旧版（单篇）的正文键：存进去的那篇启动时原地成为文档库的第一篇，测试照旧在这里读写
+import { LEGACY_DOC_KEY as DOC_KEY } from "../src/store/kv";
 import { SETTINGS_KEY } from "../src/store/settings";
+import { memoryFs } from "./fixtures/memory-fs";
 
 const WEB = { platform: "web" as const, width: 1280, height: 860 };
 
@@ -174,6 +176,19 @@ test("clearing a shortcut leaves the command without a key", async () => {
   await done(app);
   expect(await typeAfter(app, "mod+b")).toBe("xhello\n");
   expect(JSON.parse(app.storage()[SETTINGS_KEY] ?? "{}")).toEqual({ shortcuts: { "format.bold": null } });
+});
+
+test("one Escape closes settings opened with Mod+, while the document has the focus, on macOS too", async () => {
+  const disk = memoryFs({ "Alpha.md": "hello\n" });
+  for (const app of [await openApp("hello\n"), await open("../App.tsx", { platform: "macos", width: 1280, height: 860, modules: disk.modules })]) {
+    await app.waitFor("text:hello");
+    await app.press("text:hello");
+    await app.keyboard.press("mod+,");
+    await app.waitFor("id:settings");
+    await app.keyboard.press("escape");
+    await app.waitUntil(() => !app.shows("id:settings"), { timeout: 3000 });
+    expect(app.shows("text:hello")).toBe(true);
+  }
 });
 
 test("Escape with settings open over the find bar does not close the find bar", async () => {

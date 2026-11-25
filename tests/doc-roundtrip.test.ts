@@ -194,7 +194,34 @@ const KEPT: Record<string, { src: string; rewritten: string }> = {
   "转义的感叹号后面跟空文字链接": { src: "a \\![](http://u) b\n", rewritten: "a \\![](http://u) b\n" },
   "链接文字只有一个空格的行内代码": { src: "[` `](http://u)\n", rewritten: "[` `](http://u)\n" },
   "正文里的两个等号不是高亮": { src: "if a == b or c == d\n", rewritten: "if a == b or c == d\n" },
+  "Typora 的下标、上标、高亮和删除线": { src: "H~2~O x^2^ ==h== ~~d~~\n", rewritten: "H~2~O x^2^ ==h== ~~d~~\n" },
+  "转义的波浪线和尖角号不是上下标": { src: "\\~x\\~ \\^y\\^\n", rewritten: "\\~x\\~ \\^y\\^\n" },
+  "HTML 写的上下标重写成 Typora 写法": { src: "<sub>2</sub> <sup>3</sup>\n", rewritten: "~2~ ^3^\n" },
+  "表格的列对齐写回分隔行": { src: "| a | b | c |\n|:--|:-:|--:|\n| 1 | 2 | 3 |\n", rewritten: "| a | b | c |\n| :-- | :-: | --: |\n| 1 | 2 | 3 |\n" },
 };
+
+/** 一段里各处文字挂着哪些 mark */
+function marksIn(src: string): [string, string[]][] {
+  const para = openDoc(src).json.content?.[0];
+  return (para?.content ?? []).map((n) => [n.text ?? n.type, (n.marks ?? []).map((m) => m.type)]);
+}
+
+test("~x~ 读成下标、^x^ 读成上标，~~x~~ 和带空格的 ~x y~ 是删除线，转义的和代码里的不变", () => {
+  expect(marksIn("H~2~O x^2^ ~~d~~ ~a b~\n")).toEqual([
+    ["H", []],
+    ["2", ["subscript"]],
+    ["O x", []],
+    ["2", ["superscript"]],
+    [" ", []],
+    ["d", ["strike"]],
+    [" ", []],
+    ["a b", ["strike"]],
+  ]);
+  expect(marksIn("\\~x\\~ `^y^`\n")).toEqual([
+    ["~x~ ", []],
+    ["^y^", ["code"]],
+  ]);
+});
 
 for (const [name, { src, rewritten }] of Object.entries(KEPT)) {
   test(`${name}：文末加一段后原文都在；整篇重写后不丢`, () => {
@@ -206,3 +233,19 @@ for (const [name, { src, rewritten }] of Object.entries(KEPT)) {
     expect(forceRewrite(openDoc(once))).toBe(once);
   });
 }
+
+/**
+ * 段尾空白：Markdown 表达不了段尾的空白和只有空白的段落，写成 `&#32;` 会让用户在文件里看到怪字（只按了一下空格就存成 `&#32;`）。
+ * 约定：只有空白的段落不写，段落最后一行行尾的空白去掉；段首的空白仍写成实体，读回来还在。
+ */
+test("段尾空白：只有空白的段落不写，段尾空白去掉，段首空白仍用实体保住", () => {
+  const o = openDoc("");
+  const dump = (...paragraphs: string[]) => dumpMarkdown({ ...o.json, content: paragraphs.map(P) }, o.origin);
+  expect(dump(" ")).toBe("");
+  expect(dump("a", " \t ", "b")).toBe("a\n\nb\n");
+  expect(dump("hello  ")).toBe("hello\n");
+  expect(dump(" hello")).toBe("&#32;hello\n");
+  expect(firstBlockDiff(normalize({ ...o.json, content: [P(" hello")] }), reread(dump(" hello")))).toBe(null);
+  const list = { type: "bulletList", content: [{ type: "listItem", content: [P(" "), P("b")] }] } as Node;
+  expect(dumpMarkdown({ ...o.json, content: [list] }, o.origin)).toBe("- b\n");
+});

@@ -1,3 +1,4 @@
+import { parseImgTag, type SizedImage } from "./img-tag";
 import { linkDest, linkTitle } from "./to-markdown";
 import type { MdBlock, MdInline, MdListItem, PMMark, PMNode } from "./types";
 
@@ -25,6 +26,9 @@ const STYLE_MARK: Record<string, string> = {
   subscript: "subscript",
   highlight: "highlight",
 };
+
+/** 转换层的扩展（`~x~`、`^x^`，见 parse.ts）→ mark */
+const SCRIPT_MARK: Record<string, string> = { sub: "subscript", sup: "superscript" };
 
 /** 互相排斥、不能同时挂在一段文字上的 mark */
 const CONFLICT: Record<string, string> = { subscript: "superscript", superscript: "subscript" };
@@ -95,7 +99,8 @@ function hasVisible(nodes: PMNode[]): boolean {
   return nodes.some((n) => n.type !== "text" || (n.text ?? "").trim() !== "" || (n.marks ?? []).some((m) => m.type === "code"));
 }
 
-function escapeHtml(text: string): string {
+/** 只转 `& < >`：结果作为 `<kbd>` 的原文写回 Markdown，引号转成实体会改掉原文。导出 HTML 用的是 to-html.ts 的 `escapeHtml`（连引号一起转，属性值里也能用）。 */
+function escapeKbdText(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
@@ -120,9 +125,22 @@ function convertLink(item: Extract<MdInline, { type: "link" }>, marks: PMMark[])
   return convertItems(pairTags(item.content), withMark(marks, { type: "link", attrs: { href: item.url, title: item.title ?? null } }));
 }
 
+function sizedImage(image: SizedImage, marks: PMMark[]): PMNode {
+  return atom("image", { src: image.src, alt: image.alt, title: image.title, width: image.width, align: image.align }, marks);
+}
+
 function convertCustom(item: Extract<MdInline, { type: "custom" }>, marks: PMMark[]): PMNode[] {
-  if (item.name === "html") return [atom("htmlInline", { html: item.text ?? "" }, marks)];
+  if (item.name === "html") {
+    const image = parseImgTag(item.text ?? "");
+    return [image ? sizedImage(image, marks) : atom("htmlInline", { html: item.text ?? "" }, marks)];
+  }
   if (item.name === "hl") return textNode(item.attributes?.["1"] ?? "", withMark(marks, { type: "highlight" }));
+  const script = SCRIPT_MARK[item.name];
+  if (script) {
+    // 已经在上标里的下标（反过来也一样）挂不上：原样留成文字
+    if (marks.some((m) => m.type === CONFLICT[script])) return textNode(item.text ?? "", marks);
+    return textNode(item.attributes?.["1"] ?? "", withMark(marks, { type: script }));
+  }
   return textNode(item.text ?? "", marks);
 }
 
@@ -135,7 +153,7 @@ function convertItem(item: Item, marks: PMMark[]): PMNode[] {
     case "code":
       return textNode(item.code, withMark(marks, { type: "code" }));
     case "keyboard":
-      return [atom("htmlInline", { html: `<kbd>${escapeHtml(item.text)}</kbd>` }, marks)];
+      return [atom("htmlInline", { html: `<kbd>${escapeKbdText(item.text)}</kbd>` }, marks)];
     case "small":
       return [atom("htmlInline", { html: "<small>" }, marks), ...convertItems(pairTags(item.content), marks), atom("htmlInline", { html: "</small>" }, marks)];
     case "link":
@@ -171,9 +189,19 @@ function paragraph(content: MdInline[]): PMNode {
 
 const EMPTY_PARAGRAPH: PMNode = { type: "paragraph" };
 
+/**
+ * 列表项、引用里单独一行的 `<img …>` 是 HTML 块，解析器（html 关着）给的是只有一段文字的段落：
+ * 是 img-tag.ts 认的那种就读回图片，同顶层的 `rawNode`。不然调过大小的图写出去再读回来就成了字。
+ */
+function nestedBlockToNode(block: MdBlock): PMNode {
+  const only = block.type === "paragraph" && block.content.length === 1 ? block.content[0] : null;
+  const image = only?.type === "text" ? parseImgTag(only.text) : null;
+  return image ? { type: "paragraph", content: [sizedImage(image, [])] } : blockToNode(block);
+}
+
 /** 编辑器要求容器至少有一个块、列表项第一个块是段落 */
 function containerContent(children: MdBlock[], paragraphFirst: boolean): PMNode[] {
-  const nodes = children.map(blockToNode);
+  const nodes = children.map(nestedBlockToNode);
   if (nodes.length === 0 || (paragraphFirst && nodes[0].type !== "paragraph")) return [EMPTY_PARAGRAPH, ...nodes];
   return nodes;
 }
@@ -251,7 +279,9 @@ export function blockToNode(block: MdBlock): PMNode {
   }
 }
 
-/** 原样保留的一段原文 → rawBlock */
+/** 原样保留的一段原文 → rawBlock。整段只有一个带宽度 / 对齐的 `<img>`（单独一张调过大小的图写出来就是这样）时读回成图片。 */
 export function rawNode(src: string): PMNode {
+  const image = parseImgTag(src);
+  if (image) return { type: "paragraph", content: [sizedImage(image, [])] };
   return { type: "rawBlock", attrs: { src } };
 }

@@ -17,6 +17,7 @@
       "popover-foreground": "var(--foreground)",
       "primary": "#0b7f7f",
       "primary-foreground": "#ffffff",
+      "primary-text": "#0a7676",
       "secondary": "rgba(10,14,25,0.04)",
       "secondary-foreground": "var(--strong)",
       "muted": "rgba(10,14,25,0.04)",
@@ -33,7 +34,18 @@
       "warn-tint": "color-mix(in srgb, var(--warn) 12%, transparent)",
       "find": "color-mix(in srgb, var(--warn) 30%, transparent)",
       "find-current": "color-mix(in srgb, var(--warn) 65%, transparent)",
-      "scrim": "rgba(10,14,25,0.32)"
+      "scrim": "rgba(10,14,25,0.32)",
+      "syntax-keyword": "#cf222e",
+      "syntax-string": "#0a3069",
+      "syntax-comment": "#636c76",
+      "syntax-number": "#0550ae",
+      "syntax-type": "#8250df",
+      "syntax-attr": "#953800",
+      "alert-note": "#0969da",
+      "alert-tip": "#1a7f37",
+      "alert-important": "#8250df",
+      "alert-warning": "#9a6700",
+      "alert-caution": "#cf222e"
     },
     "dark": {
       "background": "#07090f",
@@ -47,6 +59,7 @@
       "popover-foreground": "var(--foreground)",
       "primary": "#00b8b8",
       "primary-foreground": "#001414",
+      "primary-text": "var(--primary)",
       "secondary": "rgba(255,255,255,0.06)",
       "secondary-foreground": "var(--strong)",
       "muted": "rgba(255,255,255,0.05)",
@@ -63,7 +76,18 @@
       "warn-tint": "color-mix(in srgb, var(--warn) 14%, transparent)",
       "find": "color-mix(in srgb, var(--warn) 32%, transparent)",
       "find-current": "color-mix(in srgb, var(--warn) 70%, transparent)",
-      "scrim": "rgba(0,0,0,0.55)"
+      "scrim": "rgba(0,0,0,0.55)",
+      "syntax-keyword": "#ff7b72",
+      "syntax-string": "#a5d6ff",
+      "syntax-comment": "#8b949e",
+      "syntax-number": "#79c0ff",
+      "syntax-type": "#d2a8ff",
+      "syntax-attr": "#ffa657",
+      "alert-note": "#4493f8",
+      "alert-tip": "#3fb950",
+      "alert-important": "#ab7df8",
+      "alert-warning": "#d29922",
+      "alert-caution": "#f85149"
     }
   }
 }

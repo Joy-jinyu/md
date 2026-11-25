@@ -1,4 +1,4 @@
-/** 大纲侧栏：顶层标题按级别缩进，光标所在的那一节标出来，点一下跳过去。 */
+/** 侧栏的「大纲」页：顶层标题按级别缩进，光标所在的那一节标出来，点一下跳过去。 */
 import { Scroll, Text, View } from "nsh";
 import type { HeadingEntry } from "./outline";
 
@@ -7,9 +7,9 @@ const INDENT = 12;
 
 export function OutlinePanel(props: { headings: HeadingEntry[]; current: number; onJump: (index: number) => void }) {
   return (
-    <View testID="outline" accessibilityLabel="大纲" class="w-[240px] border-r border-border bg-card">
+    <View testID="outline" accessibilityLabel="大纲" class="flex-1">
       <If when={props.headings.length > 0} else={<Text class="px-4 py-3 text-xs text-faint">还没有标题</Text>}>
-        <Scroll class="flex-1 py-2">
+        <Scroll class="flex-1 pb-2">
           <Each of={props.headings} key={(h) => `${h.pos}:${h.text}`}>
             {(h, index) => (
               <View

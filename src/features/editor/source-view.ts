@@ -1,6 +1,7 @@
 /** 所见即所得文档的源码视图（Cmd+Alt+/）：同一个会话，切过去是把它写成 Markdown，切回来是把改过的 Markdown 读回去。 */
 import { signal } from "nsh";
 import { chain, type EditorRef, scrollIntoView, setTextSelection } from "nsh/base";
+import { messageOf } from "../../doc/message";
 import { joinEndings, splitEndings } from "../../doc/line-endings";
 import { isEmptyParagraph } from "../../doc/to-markdown";
 import { markChanged } from "../../store/document";
@@ -10,8 +11,6 @@ import type { RichOpened } from "./rich-session";
 import { selectionRange } from "./selection";
 import { blockAtLine, lineOfBlock } from "./source-align";
 import type { SourceFind } from "./SourcePane";
-
-const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** 不算空段落的顶层块：原文切片里的块序号是按这个数的（见 doc/save.ts 的 bindOrigin）。 */
 const realBlocks = (doc: RichOpened) => topBlocks(doc.session.getJSON() as Node).filter((b) => !isEmptyParagraph(b.node));

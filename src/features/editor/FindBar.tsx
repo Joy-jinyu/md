@@ -2,6 +2,8 @@
 import { effect, keymap, signal, Text, untracked, View } from "nsh";
 import { Input } from "nsh/base";
 import { Button } from "../../ui/button";
+import { currentDocId } from "../../store/library";
+import { pendingFind } from "../library/requests";
 import { settingsOpen } from "../settings/open";
 import type { FindEngine, FindResult } from "./find";
 import type { Ui } from "./ui-state";
@@ -34,6 +36,45 @@ const FIELD =
 function EscapeCloses(props: { onEscape: () => void }) {
   keymap.bind("escape", props.onEscape, { when: "always" });
   return null;
+}
+
+/** 等查找条把词交给引擎、引擎找完再跳（毫秒）：查找条的 effect 在渲染之后才跑。 */
+const PENDING_FIND_SETTLE = 50;
+
+/** 切到源码视图后，等源码编辑框挂上、找完再跳：每隔多久看一次、最多看几次（毫秒 / 次），合计约 1.5 秒。 */
+const SOURCE_FIND_POLL = 50;
+const SOURCE_FIND_TRIES = 30;
+
+/** 切到源码视图以后，等源码那边找到了再跳到第一处；一直找不到就停。 */
+function nextOnceFound(engine: () => FindEngine, tries = SOURCE_FIND_TRIES) {
+  if (engine().result().count > 0) return engine().next();
+  if (tries > 0) setTimeout(() => nextOnceFound(engine, tries - 1), SOURCE_FIND_POLL);
+}
+
+/**
+ * 全文搜索点了结果、打开这篇以后：打开查找条、填上那个词（普通方式，不分大小写），跳到第一处。在编辑页渲染时调用。
+ * 全文搜索搜的是 Markdown 原文，`**粗体`、链接地址这类在所见即所得里看不到：给了 `toSource` 且这边一处都找不到时，切到源码视图再找。
+ */
+export function followPendingFind(ui: Ui, state: FindState, engine: () => FindEngine, toSource?: () => void) {
+  const mine = currentDocId();
+  effect(() => {
+    const pending = pendingFind();
+    if (pending === null || pending.id !== mine) return;
+    const { query } = pending;
+    untracked(() => {
+      pendingFind.set(null);
+      state.query.set(query);
+      state.caseSensitive.set(false);
+      state.wholeWord.set(false);
+      state.regex.set(false);
+      ui.findMode.set("find");
+      setTimeout(() => {
+        if (engine().result().count > 0 || !toSource) return engine().next();
+        toSource();
+        nextOnceFound(engine);
+      }, PENDING_FIND_SETTLE);
+    });
+  });
 }
 
 /** `engine` 是取当前引擎的函数：切到源码视图时换一个。 */

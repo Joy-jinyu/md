@@ -1,15 +1,19 @@
 /** 把一篇 Markdown 读进编辑器会话，以及会话上挂的插件。 */
 import { createRichEditor, defineExtension, link, RichEditorPlugin, type RichEditorSession, suggestion } from "nsh/base";
 import { bindOrigin, dumpMarkdown, loadMarkdown } from "./convert";
+import { ImageView } from "./ImageView";
+import { carriesDataImages, storeDataImages } from "./images";
 import { NODE_VIEWS } from "./node-views";
 import { pasteMarkdown } from "./paste";
 import { editorExtensions } from "./schema";
 import { shortcutsExtension } from "./shortcuts";
 
-/** 各插件的键：斜杠菜单的状态、查找高亮、专注模式的明暗都按键存取。 */
+/** 各插件的键：斜杠菜单和 emoji 补全的状态、查找高亮、专注模式的明暗、代码高亮都按键存取。 */
 export const SLASH_KEY = "slash";
 export const FIND_KEY = "mdFind";
 export const FOCUS_KEY = "mdFocus";
+export const CODE_KEY = "mdCode";
+export const EMOJI_KEY = "emoji";
 
 /** 读进编辑器的一篇文档。 */
 export interface RichOpened {
@@ -32,18 +36,24 @@ export function openRich(markdown: string): RichOpened {
     priority: 2000,
     addProseMirrorPlugins: () => [
       suggestion({ key: SLASH_KEY, char: "/", anyPrefix: true, captureKeys: ["ArrowUp", "ArrowDown", "Enter", "Tab"] }),
+      suggestion({ key: EMOJI_KEY, char: ":", anyPrefix: true, captureKeys: ["ArrowUp", "ArrowDown", "Enter", "Tab"] }),
       keys,
       new RichEditorPlugin(FIND_KEY),
       new RichEditorPlugin(FOCUS_KEY),
+      new RichEditorPlugin(CODE_KEY),
     ],
   });
   const session = createRichEditor({
     content: first.json,
     format: "json",
-    extensions: [...editorExtensions(NODE_VIEWS), shortcutsExtension(), plugins],
+    extensions: [...editorExtensions({ ...NODE_VIEWS, image: ImageView }), shortcutsExtension(), plugins],
     plugins: [link()],
   });
-  keys.handlePaste((_slice, clipboard) => pasteMarkdown(session, clipboard));
+  keys.handlePaste((_slice, clipboard) => {
+    // 编辑器按 HTML 贴完以后再把里面的 data: 图片存进文档库（钩子在粘贴途中被问到，文档等它答完才改）
+    if (carriesDataImages(clipboard)) storeDataImages(session);
+    return pasteMarkdown(session, clipboard);
+  });
   let origin = bindOrigin(first.pending, session.getJSON());
   const load = (next: string) => {
     const { json, pending } = loadMarkdown(next);

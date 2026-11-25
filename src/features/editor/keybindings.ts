@@ -113,8 +113,8 @@ export function rejectReason(key: string, forEditor: boolean): string | null {
   return null;
 }
 
-/** 浏览器多半会先处理的键（换标签页、地址栏、刷新、书签…）。按常识列的，没有逐个在真实浏览器里测。 */
-const BROWSER_KEYS = new Set(["Mod-l", "Mod-r", "Mod-d", "Mod-p", "Mod-s", "Mod-o", "Mod-j", "Mod-,", ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `Mod-${n}`)].map(canonical));
+/** 浏览器多半会先处理的键（换标签页、地址栏、刷新、书签、搜索栏、开发者工具的选取元素…）。按常识列的，没有逐个在真实浏览器里测。 */
+const BROWSER_KEYS = new Set(["Mod-l", "Mod-r", "Mod-d", "Mod-e", "Mod-p", "Mod-s", "Mod-o", "Mod-j", "Mod-,", "Mod-Shift-c", ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `Mod-${n}`)].map(canonical));
 
 export const browserMayTake = (key: string) => BROWSER_KEYS.has(canonical(key));
 

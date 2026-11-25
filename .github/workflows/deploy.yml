@@ -1,4 +1,4 @@
-# main 有新提交就检查、测试、打包网页版并发布到 Cloudflare（Workers 静态资源，项目名 pairdown，域名 markdown.pairwise.site，都写在 wrangler.jsonc 里）。
+# main 有新提交就检查、测试（页面、本机网关、登录 Worker）、打包网页版并发布到 Cloudflare（Workers 静态资源，项目名 pairdown，域名 markdown.pairwise.site，都写在 wrangler.jsonc 里）。
 # 站点按「独立域名的根路径」打包（nsh.json 的 web.base 是 "/"）。
 # 要两个仓库 secret：CLOUDFLARE_API_TOKEN（给 Workers 脚本和这个域的路由的编辑权限）和 CLOUDFLARE_ACCOUNT_ID；没配时只检查、测试、打包，不发布。
 name: deploy
@@ -30,8 +30,11 @@ jobs:
           curl -fsSL "https://raw.githubusercontent.com/longbridge/nsh/$NSH_VERSION/website/public/install.sh" | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/nsh" component add web
-      - run: make check
-      - run: make test
+      # 网关、Worker 的测试直接跑 .mts，要 Node ≥ 23.6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: make verify
       - run: make build-web
       - name: 发布到 Cloudflare
         env:

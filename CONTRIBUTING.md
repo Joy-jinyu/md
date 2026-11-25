@@ -38,12 +38,11 @@
 - 跨屏幕共享的状态放在 `store/` 或 `sync/` 模块顶层，导出读取函数和修改函数，不导出可写 signal 本身。
 
 ```ts
-// store/docs.ts
+// store/library.ts（节选）
 const docs = signal<DocMeta[]>([]);
 export const allDocs = () => docs();
-export async function renameDoc(id: string, title: string) {
-  docs.update((list) => list.map((d) => (d.id === id ? { ...d, title } : d)));
-  await persistIndex(docs());
+export function noteMeta(meta: DocMeta) {
+  docs.update((list) => (list.some((d) => d.id === meta.id) ? list.map((d) => (d.id === meta.id ? meta : d)) : [...list, meta]));
 }
 ```
 
@@ -65,18 +64,22 @@ export async function renameDoc(id: string, title: string) {
 ### 2.4 平台差异
 
 ```ts
-// platform/index.ts：features 只引这里，按功能导出，不导出叫 platform 的对象（避免和 nsh 的 platform 混淆）
+// platform/index.ts（节选）：features 只引这里，按功能导出，不导出叫 platform 的对象（避免和 nsh 的 platform 混淆）
 import { platform } from "nsh";
-import * as web from "./web";
-import * as macos from "./macos";
+import { saveToDownloads } from "./macos/save";
+import { downloadText } from "./web/download";
 
-const impl = platform.os === "web" ? web : macos;
-export const importMarkdown = impl.importMarkdown;
-export const exportMarkdown = impl.exportMarkdown;
-export const signIn = impl.signIn;
+export const IN_BROWSER = platform.name === "web";
+export async function saveTextFile(name: string, text: string, type?: string): Promise<SavedFile> {
+  if (IN_BROWSER) {
+    downloadText(name, text, type);
+    return { message: `已交给浏览器下载：${name}`, confirmed: false };
+  }
+  return { message: `已存到 ${await saveToDownloads(name, text)}`, confirmed: true };
+}
 ```
 
-`platform/web/` 和 `platform/macos/` 各实现同一组函数；读 nsh 的 `platform.os` 只出现在 `platform/index.ts`。
+`platform/web/`、`platform/macos/` 放各自的实现（macOS 的文库文件夹、存进「下载」，网页的下载），由 `platform/index.ts` 按平台挑；读 nsh 的 `platform.name` 只出现在 `platform/index.ts`。和 `nsh/desktop` 打交道的（菜单栏 `setMenuBar`、退出前保存、系统交来的文件）也只在 `platform/`，features 只给内容。
 
 ### 2.5 错误处理
 

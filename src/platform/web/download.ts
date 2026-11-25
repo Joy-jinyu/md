@@ -16,10 +16,10 @@ interface Page {
 const REVOKE_AFTER = 10_000;
 
 /** 触发下载；不在浏览器页面里（没有 document）时抛错。 */
-export function downloadText(name: string, text: string) {
+export function downloadText(name: string, text: string, type = "text/markdown;charset=utf-8") {
   const page = (globalThis as { document?: Page }).document;
   if (!page) throw new Error("这里不是浏览器页面，没法下载");
-  const url = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" }));
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const link = page.createElement("a");
   link.href = url;
   link.download = name;

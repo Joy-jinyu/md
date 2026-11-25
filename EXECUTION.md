@@ -77,9 +77,13 @@
 features/ ──▶ ui/
     │
     ├──▶ store/ ──▶ doc/
+    │      └──────▶ gateway/src/protocol.ts
     ├──▶ sync/  ──▶ doc/
-    └──▶ platform/
+    │      └──────▶ store/（登录、同步记录只经 store/sync-store.ts 存取）
+    └──▶ platform/ ──▶ store/（接口和类型）、doc/、gateway/src/protocol.ts（macOS 文库的 assets/ 目录名）
 ```
+
+`gateway/src/protocol.ts` 是页面和本机网关共用的协议（类型和常量，不 import 任何东西）：只有 `store/` 和 `platform/macos/` 直接引它，`features/` 要用里面的常量经 `store/`（`image-file.ts`、`gateway-store.ts`）转出。**改它时 `gateway/` 和 `src/` 必须在同一个提交里**，不然页面和网关的协议版本对不上。
 
 `doc/` 只放不引 nsh 的纯函数（标题、摘要提取，冲突比较，解析结果 → 编辑器 JSON，编辑器 JSON → Markdown 写出，新旧块对齐）。Markdown 的解析和原文切片要调 nsh 自带的 `TextView.parse`（用户 2026-11-24 定：不引 `markdown-it` 等 npm 依赖），所以这一个文件放 `features/` 的编辑页目录下，不放 `doc/`；细节见实施计划 4.1 节。
 
@@ -88,6 +92,7 @@ features/ ──▶ ui/
 | `doc/` 引用 nsh | `rg -n "from ['\"]nsh" src/doc` | 移出 `doc/` |
 | 平台分支出现在 `platform/index.ts` 以外 | `rg -n '\bplatform\.\w+' src -g '!src/platform/index.ts'` | 改成调 `platform/` 导出的接口 |
 | `store/` 以外用 `Storage` | `rg -n '\bStorage\b' src -g '!src/store/**'` | 改成调 `store/` |
+| `store/`、`platform/` 以外直接引网关协议 | `rg -n 'gateway/src' src -g '!src/store/**' -g '!src/platform/**'` | 经 `store/` 转出 |
 | `sync/`、`store/` 以外碰 token | `rg -n -i -e 'access_?token' -e authorization -e bearer src -g '!src/sync/**' -g '!src/store/**'` | 收回到 `sync/` |
 
 > 检测命令里不用 `|`（在 Markdown 表格里要转义，照抄会变成字面竖线），多个模式用 `-e`。

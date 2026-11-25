@@ -5,12 +5,13 @@ import { markChanged } from "../../store/document";
 import { Notice } from "../../ui/notice";
 import { CommandPalette } from "./CommandPalette";
 import { type CommandContext, runCommand } from "./commands";
-import { createFindState, FindBar } from "./FindBar";
+import { createFindState, FindBar, followPendingFind } from "./FindBar";
 import { bindViewKeys, once } from "./keys";
 import { markdownTitle } from "./outline";
+import { NoOutline, WithSidebar } from "./Sidebar";
 import { createSourceFind, SourcePane } from "./SourcePane";
 import { TopBar } from "./TopBar";
-import { createUi } from "./ui-state";
+import { createUi, provideEditorFocus } from "./ui-state";
 
 /** 顶栏的标题和字符数在停手多久后重算（毫秒）。 */
 const STATS_DELAY = 300;
@@ -35,13 +36,17 @@ export function SourceDocument(props: { markdown: string; notice: string }) {
   const ctx: CommandContext = { ui, session: null, askLink: nothing, askAtom: nothing, toggleSource: null };
   const run = once((c) => runCommand(c, ctx));
   bindViewKeys(run);
+  followPendingFind(ui, findState, () => find.engine);
   const refocus = () => find.ref()?.focus();
+  provideEditorFocus(refocus);
   return (
     <View class="flex-1">
       <TopBar title={stats().title} counts={stats().counts} />
       <FindBar ui={ui} state={findState} engine={() => find.engine} onClose={refocus} />
       <Notice testID="source-notice" message={props.notice} />
-      <SourcePane text={endings.text} find={find} onChange={changed} />
+      <WithSidebar outline={() => <NoOutline />}>
+        <SourcePane text={endings.text} find={find} onChange={changed} />
+      </WithSidebar>
       <CommandPalette ctx={ctx} headings={() => []} run={run} onJump={nothing} onClose={refocus} />
     </View>
   );

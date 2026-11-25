@@ -1,5 +1,6 @@
 import { expect, open, test } from "nsh/test";
-import { DOC_KEY } from "../src/store/document";
+// 旧版（单篇）的正文键：存进去的那篇启动时原地成为文档库的第一篇，测试照旧在这里读写
+import { LEGACY_DOC_KEY as DOC_KEY } from "../src/store/kv";
 
 const WEB = { platform: "web" as const, width: 1280, height: 860 };
 

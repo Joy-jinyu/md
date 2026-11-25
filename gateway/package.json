@@ -1,0 +1,21 @@
+{
+  "name": "pairdown-gateway",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "scripts": {
+    "start": "node src/main.mts",
+    "test": "node --test test/*.test.mts",
+    "check": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "ws": "^8.18.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "~5.9.0"
+  }
+}
