@@ -12,6 +12,7 @@ import { currentAccount } from "../../sync/account";
 import { syncConfigured } from "../../sync/config";
 import { gistTitle } from "../../sync/github";
 import { Button } from "../../ui/button";
+import { CopyButton } from "../../ui/copy-button";
 import { returnFocusToEditor } from "../editor/ui-state";
 import { timeLabel } from "../library/panel-state";
 import { ConflictView } from "./ConflictView";
@@ -38,8 +39,8 @@ function IssueRow(props: { issue: Choice }) {
   }[i.kind];
   return (
     <View testID={`sync-issue-${issueKey(i)}`} class="gap-1 rounded-(--radius-sm) bg-card px-3 py-2">
-      <Text style={{ numberOfLines: 1 }} class="text-[13px] font-medium text-strong">{`「${title}」`}</Text>
-      <Text class="text-xs leading-5 text-muted-foreground">{text}</Text>
+      <Text style={{ numberOfLines: 1 }} class="select-text text-[13px] font-medium text-strong">{`「${title}」`}</Text>
+      <Text class="select-text text-xs leading-5 text-muted-foreground">{text}</Text>
       <View class="flex-row flex-wrap gap-1">
         {i.kind === "conflict" && <Button testID="sync-compare" label="对比并选择" variant="primary" onPress={() => comparing.set(i.id)} />}
         {i.kind === "name-match" && (
@@ -118,12 +119,12 @@ function ThisDocument() {
   };
   return (
     <View class="flex-row flex-wrap items-center gap-2">
-      <Text testID="sync-this-doc" class="text-xs text-muted-foreground">
+      <Text testID="sync-this-doc" class="select-text text-xs text-muted-foreground">
         {excluded() ? "这篇不同步" : "这篇会同步"}
       </Text>
       <Button testID="sync-toggle-doc" label={excluded() ? "恢复同步" : "不同步这篇"} disabled={excluded() === null} onPress={() => void flip()} />
       <If when={problem()}>
-        <Text class="text-xs text-destructive">{problem()}</Text>
+        <Text class="select-text text-xs text-destructive">{problem()}</Text>
       </If>
     </View>
   );
@@ -135,16 +136,19 @@ function RunResult() {
     <>
       <If when={resultText()}>
         {(summary) => (
-          <Text testID="sync-result" class="text-xs leading-5 text-foreground">
+          <Text testID="sync-result" class="select-text text-xs leading-5 text-foreground">
             {summary()}
           </Text>
         )}
       </If>
       <If when={run().kind === "error" ? (run() as { message: string }).message : null}>
         {(message) => (
-          <Text testID="sync-error" role="alert" class="text-xs leading-5 text-destructive">
-            {`没能同步：${message()}`}
-          </Text>
+          <View class="flex-row items-start gap-2">
+            <Text testID="sync-error" role="alert" class="min-w-0 flex-1 select-text text-xs leading-5 text-destructive">
+              {`没能同步：${message()}`}
+            </Text>
+            <CopyButton testID="copy-sync-error" text={message()} label="复制出错原因" />
+          </View>
         )}
       </If>
     </>
@@ -162,7 +166,7 @@ function Overview() {
           <RunResult />
         </If>
         <If when={signedIn()}>
-          <Text class="text-xs text-muted-foreground">{last() ? `上次同步：${timeLabel(last() as number)}` : "这台设备还没同步过。"}</Text>
+          <Text class="select-text text-xs text-muted-foreground">{last() ? `上次同步：${timeLabel(last() as number)}` : "这台设备还没同步过。"}</Text>
           <If when={currentDocId()}>
             <ThisDocument />
           </If>

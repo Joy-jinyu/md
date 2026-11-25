@@ -25,7 +25,7 @@ function MissedGateway(props: { library: string }) {
   const pending = () => (stashesElsewhere().length > 0 ? ` ${elsewhereText(stashesElsewhere())}` : "");
   return (
     <View testID="gateway-missed" role="alert" class="flex-row flex-wrap items-center gap-2 bg-warn-tint px-5 py-2">
-      <Text class="min-w-[240px] flex-1 text-xs leading-5 text-warn">{`上次用的是本机网关的文库「${props.library}」，现在没连上，显示的是浏览器里的文档。${pending()}`}</Text>
+      <Text class="min-w-[240px] flex-1 select-text text-xs leading-5 text-warn">{`上次用的是本机网关的文库「${props.library}」，现在没连上，显示的是浏览器里的文档。${pending()}`}</Text>
       <Button testID="gateway-retry" label={trying() ? "正在连接…" : "重新连接"} disabled={trying()} onPress={() => void retry()} />
       <Button
         testID="gateway-settings"

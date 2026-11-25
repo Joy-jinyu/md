@@ -27,7 +27,8 @@
     },
     "webview": { "hosts": [] },
     "network": {
-      "hosts": ["api.github.com", "github.com", "gist.githubusercontent.com", "pairdown-auth.1825326327.workers.dev"]
+      "hosts": ["api.github.com", "github.com", "gist.githubusercontent.com", "pairdown-auth.1825326327.workers.dev"],
+      "http": [{ "host": "*", "methods": ["GET"] }]
     }
   },
   "fileTypes": [{ "name": "Markdown", "extensions": ["md", "markdown"], "role": "editor" }],

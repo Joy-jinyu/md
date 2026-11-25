@@ -61,7 +61,7 @@ function RenameDialog() {
       <EscapeCloses onEscape={close} />
       <View class="gap-3 rounded-(--radius) border border-border bg-popover p-4">
         <Text class="text-sm font-medium text-strong">重命名文档</Text>
-        <Text class="text-xs leading-5 text-muted-foreground">名字是文件名（另存为、以后存成文件时用）。列表里优先显示正文的第一个标题。</Text>
+        <Text class="select-text text-xs leading-5 text-muted-foreground">名字是文件名（另存为、以后存成文件时用）。列表里优先显示正文的第一个标题。</Text>
         <Input
           testID="rename-input"
           autoFocus
@@ -74,7 +74,7 @@ function RenameDialog() {
           autoCorrect={false}
           class={FIELD}
         />
-        <If when={problem()}>{(text) => <Text class="text-xs text-destructive">{text()}</Text>}</If>
+        <If when={problem()}>{(text) => <Text class="select-text text-xs text-destructive">{text()}</Text>}</If>
         <View class="flex-row justify-end gap-1">
           <Button testID="rename-cancel" label="取消" onPress={close} />
           <Button testID="rename-confirm" label="改名" variant="primary" onPress={() => void submit()} />
@@ -105,7 +105,7 @@ function DeleteDialog() {
         {(doc) => (
           <View class="gap-3 rounded-(--radius) border border-border bg-popover p-4">
             <Text class="text-sm font-medium text-strong">删除「{displayName(doc()) || "未命名"}」？</Text>
-            <Text class="text-xs leading-5 text-muted-foreground">这篇文档和它的版本历史都会从这台设备上删掉，找不回来。要留一份的话，先打开它再另存为。</Text>
+            <Text class="select-text text-xs leading-5 text-muted-foreground">这篇文档和它的版本历史都会从这台设备上删掉，找不回来。要留一份的话，先打开它再另存为。</Text>
             <View class="flex-row justify-end gap-1">
               {/* 焦点给「取消」不给「删除这篇」：删了找不回来，回车、空格不该直接删 */}
               <Button testID="delete-cancel" label="取消" autoFocus onPress={close} />

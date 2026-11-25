@@ -38,13 +38,13 @@ export function ConflictBar(props: { onTheirs: () => void }) {
             when={c().deleted}
             else={
               <>
-                <Text class="min-w-0 flex-1 text-xs leading-5 text-warn">{`${elsewhereWords().changed}，和这里没存的修改冲突。选一边保留，另一边会存进版本历史。`}</Text>
+                <Text class="min-w-0 flex-1 select-text text-xs leading-5 text-warn">{`${elsewhereWords().changed}，和这里没存的修改冲突。选一边保留，另一边会存进版本历史。`}</Text>
                 <Button testID="keep-mine" label="保留我的" onPress={() => choose(keepMine)} />
                 <Button testID="take-theirs" label="载入外面的" onPress={() => choose(takeTheirs, props.onTheirs)} />
               </>
             }
           >
-            <Text class="min-w-0 flex-1 text-xs leading-5 text-warn">{`${elsewhereWords().deleted}。这里的内容还在：存成一篇新文档留下它，或者放弃。`}</Text>
+            <Text class="min-w-0 flex-1 select-text text-xs leading-5 text-warn">{`${elsewhereWords().deleted}。这里的内容还在：存成一篇新文档留下它，或者放弃。`}</Text>
             <Button
               testID="save-as-new"
               label="存成新文档"

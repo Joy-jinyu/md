@@ -42,7 +42,7 @@ const cleanUrl = (url: string) => url.replace(/[\t\n\r]/g, "").replace(/^[\x00-\
 /**
  * 图片地址：http(s)、data:image 和相对路径留着；javascript: 这类别的协议去掉。
  * blob: 只在编辑器这一次打开时有效，导出的文件里必然是坏图，也去掉。
- * 外链图片在导出页里照常加载（导出文件是给人看、打印的；编辑器里不自动加载外链，见 DESIGN.md「导出」）。
+ * 外链图片在导出页里照常加载（导出文件是给人看、打印的，见 DESIGN.md「导出」）。
  */
 function imageSrc(raw: string): string | null {
   const src = cleanUrl(raw);

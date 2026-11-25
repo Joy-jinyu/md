@@ -6,6 +6,7 @@ import { DEFAULT_PORT, OFFICIAL_ORIGIN } from "../../store/gateway-store";
 import { docsInIndexedDb } from "../../store/kv";
 import { refreshLibrary } from "../../store/library";
 import { Button } from "../../ui/button";
+import { CopyButton } from "../../ui/copy-button";
 
 const START_COMMAND = "node src/main.mts --library ~/Documents/Pairdown";
 
@@ -32,10 +33,12 @@ function reportText(r: CopyReport): string {
   return parts.join("");
 }
 
-function Code(props: { text: string }) {
+/** 一行命令，右边一个「复制」按钮。 */
+function Code(props: { text: string; copyLabel: string; testID: string }) {
   return (
-    <View class="rounded-(--radius-sm) bg-muted px-3 py-2">
-      <Text class="font-mono text-[12px] leading-5 text-foreground">{props.text}</Text>
+    <View class="flex-row items-center gap-2 rounded-(--radius-sm) bg-muted py-1 pl-3 pr-1">
+      <Text class="min-w-0 flex-1 select-text py-1 font-mono text-[12px] leading-5 text-foreground">{props.text}</Text>
+      <CopyButton testID={props.testID} text={props.text} label={props.copyLabel} />
     </View>
   );
 }
@@ -45,11 +48,12 @@ function GatewayHowTo() {
   return (
     <View testID="gateway-howto" class="gap-2">
       <Text class="text-[11px] text-faint">本机网关</Text>
-      <Text class="text-xs leading-5 text-muted-foreground">
+      <Text class="select-text text-xs leading-5 text-muted-foreground">
         装上本机网关后，网页里的文档就存成你电脑上一个文件夹里的 .md 文件：没有浏览器的容量限制，清浏览器数据也不会丢，别的编辑器和 git 能直接用。网关只听本机（127.0.0.1），只接受这个网站的页面。要 Node 23.6 以上。在 Pairdown 源码的 gateway 文件夹里运行：
       </Text>
-      <Code text={`npm install\n${START_COMMAND}`} />
-      <Text class="text-xs leading-5 text-muted-foreground">
+      <Code testID="copy-install-command" text="npm install" copyLabel="复制安装命令" />
+      <Code testID="copy-start-command" text={START_COMMAND} copyLabel="复制启动命令" />
+      <Text class="select-text text-xs leading-5 text-muted-foreground">
         {`--library 后面换成你想放文档的文件夹（要先建好）。网关默认只接受 ${OFFICIAL_ORIGIN} 的页面，在别的地址（比如本机开发页面）上用时再加 --origin 和那个页面的地址。起来以后刷新这个页面；浏览器问要不要允许访问本地网络时选允许。连不上时页面照常用浏览器本地存储，不会报错。`}
       </Text>
     </View>
@@ -73,13 +77,13 @@ function CopyToLibrary() {
   };
   return (
     <View class="gap-2">
-      <Text class="text-xs leading-5 text-muted-foreground">连上网关之前写在这个浏览器里的文档不会自动搬过去。需要的话复制一份到文库（文件名取标题；文库里已有同名的不覆盖，内容一样的不再复制，不一样的名字后面加序号；浏览器里的那份留着，版本历史复制一份；连着 GitHub 的那篇以后由文库里的这份同步，浏览器里的记成「不同步」）：</Text>
+      <Text class="select-text text-xs leading-5 text-muted-foreground">连上网关之前写在这个浏览器里的文档不会自动搬过去。需要的话复制一份到文库（文件名取标题；文库里已有同名的不覆盖，内容一样的不再复制，不一样的名字后面加序号；浏览器里的那份留着，版本历史复制一份；连着 GitHub 的那篇以后由文库里的这份同步，浏览器里的记成「不同步」）：</Text>
       <View class="flex-row">
         <Button testID="copy-to-library" label={running() ? "正在复制…" : "把浏览器里的文档复制到文库"} disabled={running()} onPress={() => void copy()} />
       </View>
       <If when={result()}>
         {(text) => (
-          <Text testID="copy-result" role="alert" class="text-xs leading-5 text-foreground">
+          <Text testID="copy-result" role="alert" class="select-text text-xs leading-5 text-foreground">
             {text()}
           </Text>
         )}
@@ -90,9 +94,9 @@ function CopyToLibrary() {
 
 /** 图片存在哪、外链图片能不能转存（DESIGN.md「M3：图片」）。 */
 const IMAGES_WHERE: Record<string, string> = {
-  local: "粘贴、插入的图片存在这个浏览器里（IndexedDB），按文档存，删文档时一起删；另存的 .md 里不包含它们。外链图片不自动加载，也不能转存到本地（要连着本机网关）。",
-  gateway: "粘贴、插入的图片存在文档旁边的 assets/ 文件夹里，正文写相对路径。外链图片不自动加载，可以「转存到本地」（由网关下载）。",
-  files: "粘贴、插入的图片存在文档旁边的 assets/ 文件夹里，正文写相对路径。外链图片不自动加载；转存到本地要给应用放行任意网站，没有做。",
+  local: "粘贴、插入的图片存在这个浏览器里（IndexedDB），按文档存，删文档时一起删；另存的 .md 里不包含它们。外链图片直接显示，但不能转存到本地（要连着本机网关）。",
+  gateway: "粘贴、插入的图片存在文档旁边的 assets/ 文件夹里，正文写相对路径。外链图片直接显示，也可以「转存到本地」（由网关下载）。",
+  files: "粘贴、插入的图片存在文档旁边的 assets/ 文件夹里，正文写相对路径。外链图片直接显示；「转存到本地」没有做。",
 };
 
 export function StoragePanel(props: { inBrowser: boolean }) {
@@ -102,14 +106,14 @@ export function StoragePanel(props: { inBrowser: boolean }) {
       <View testID="storage" class="gap-4 px-4 py-3">
         <View class="gap-1">
           <Text class="text-[11px] text-faint">现在文档存在</Text>
-          <Text testID="storage-kind" class="text-[13px] font-medium text-strong">
+          <Text testID="storage-kind" class="select-text text-[13px] font-medium text-strong">
             {now().title}
           </Text>
-          <Text class="text-xs leading-5 text-muted-foreground">{now().detail}</Text>
+          <Text class="select-text text-xs leading-5 text-muted-foreground">{now().detail}</Text>
         </View>
         <View class="gap-1">
           <Text class="text-[11px] text-faint">图片</Text>
-          <Text testID="images-where" class="text-xs leading-5 text-muted-foreground">
+          <Text testID="images-where" class="select-text text-xs leading-5 text-muted-foreground">
             {`${IMAGES_WHERE[storageKind().kind]}把本地图片上传到图床还没有做。`}
           </Text>
         </View>
@@ -118,7 +122,7 @@ export function StoragePanel(props: { inBrowser: boolean }) {
         </If>
         <If when={props.inBrowser && storageKind().kind === "local" && gatewayRefusal()}>
           {(reason) => (
-            <Text testID="gateway-refused" role="alert" class="text-xs leading-5 text-warn">
+            <Text testID="gateway-refused" role="alert" class="select-text text-xs leading-5 text-warn">
               {`连上了 127.0.0.1:${DEFAULT_PORT}，但没有用它：${reason()}。`}
             </Text>
           )}

@@ -18,7 +18,7 @@ import {
   requestDeviceCode,
   STATE_TTL,
 } from "./auth";
-import { OAUTH_CALLBACK_ORIGIN, syncConfig } from "./config";
+import { OAUTH_CALLBACK_ORIGIN, OAUTH_CALLBACK_URL, syncConfig } from "./config";
 import { createGitHub, type GitHub, SyncError } from "./github";
 
 export type Account = { kind: "loading" } | { kind: "signed-out" } | { kind: "signed-in"; login: string };
@@ -109,12 +109,12 @@ export function cancelDeviceLogin() {
   device.set({ kind: "idle" });
 }
 
-/** 网页：记下 state 和 PKCE 的 code_verifier，返回要打开的 GitHub 授权页地址。`redirectUri` 是授权后回到的本站地址。 */
-export async function beginWebLogin(redirectUri: string): Promise<string> {
+/** 网页：记下 state 和 PKCE 的 code_verifier，返回要打开的 GitHub 授权页地址。回调地址固定是 `OAUTH_CALLBACK_URL`。 */
+export async function beginWebLogin(): Promise<string> {
   const state = randomState();
   const verifier = randomVerifier();
-  await saveOAuthState({ state, at: Date.now(), verifier, redirectUri });
-  return authorizeUrl(syncConfig().clientId, state, redirectUri, await codeChallenge(verifier));
+  await saveOAuthState({ state, at: Date.now(), verifier, redirectUri: OAUTH_CALLBACK_URL });
+  return authorizeUrl(syncConfig().clientId, state, OAUTH_CALLBACK_URL, await codeChallenge(verifier));
 }
 
 /** GitHub 授权页带回来的固定错误码（OAuth App 文档「Troubleshooting authorization request errors」）各自的说明。 */

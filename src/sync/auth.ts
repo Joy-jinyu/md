@@ -138,7 +138,7 @@ export async function codeChallenge(verifier: string): Promise<string> {
   return base64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
 }
 
-/** GitHub 授权页的地址；`redirectUri` 是授权后回到的本站地址（要在 OAuth App 的回调地址之下），`challenge` 是 PKCE 的 code_challenge。 */
+/** GitHub 授权页的地址；`redirectUri` 是授权后回到的本站地址（网页用 config 的 `OAUTH_CALLBACK_URL`），`challenge` 是 PKCE 的 code_challenge。 */
 export function authorizeUrl(clientId: string, state: string, redirectUri: string, challenge: string): string {
   const q = new URLSearchParams({
     client_id: clientId,
@@ -174,7 +174,7 @@ export function parseCallback(pageUrl: string | null): Callback | null {
 /** GitHub 授权后回跳时加在地址上的参数：成功带 code、state、iss（发令牌方，RFC 9207），失败带 error 三件。 */
 const CALLBACK_PARAMS = ["code", "state", "iss", "error", "error_description", "error_uri"];
 
-/** 页面地址去掉登录回来带的参数（`CALLBACK_PARAMS`），别的参数留着；授权页的回调地址也用它。 */
+/** 页面地址去掉登录回来带的参数（`CALLBACK_PARAMS`），别的参数留着。 */
 export function withoutCallback(pageUrl: string): string {
   const url = new URL(pageUrl);
   for (const key of CALLBACK_PARAMS) url.searchParams.delete(key);

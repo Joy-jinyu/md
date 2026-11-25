@@ -7,6 +7,7 @@ import { DocumentsPanel } from "../library/DocumentsPanel";
 import { panel } from "../library/panel-state";
 import { historyOpen, quickOpenOpen } from "../library/requests";
 import { settingsOpen } from "../settings/open";
+import { SIDE_PAD, SIDE_TEXT } from "./sidebar-style";
 import { sidebar, type SidebarTab } from "./ui-state";
 
 /**
@@ -26,8 +27,8 @@ function TabButton(props: { tab: SidebarTab; label: string; grab: boolean }) {
       accessibilityLabel={props.label}
       accessibilityState={{ selected: on() }}
       onPress={() => sidebar.tab.set(props.tab)}
-      class="h-7 flex-1 items-center justify-center rounded-(--radius-sm) hover:bg-hover active:bg-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      classList={{ "bg-pressed": on() }}
+      class="h-7 flex-1 items-center justify-center rounded-(--radius-sm) active:bg-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      classList={{ "bg-pressed": on(), "hover:bg-hover": !on() }}
     >
       <Text class="text-xs" classList={{ "font-semibold text-strong": on(), "text-muted-foreground": !on() }}>
         {props.label}
@@ -39,7 +40,7 @@ function TabButton(props: { tab: SidebarTab; label: string; grab: boolean }) {
 function Panel(props: { outline: () => JSX.Element; onPicked: () => void; overlay: boolean }) {
   return (
     <View testID="sidebar" accessibilityLabel="侧栏" class="w-[240px] border-r border-border bg-card">
-      <View role="tablist" class="flex-row gap-1 px-3 pb-2 pt-3">
+      <View role="tablist" class={`flex-row gap-1 pb-2 pt-2 ${SIDE_PAD}`}>
         <TabButton tab="docs" label="文档" grab={props.overlay} />
         <TabButton tab="outline" label="大纲" grab={props.overlay} />
       </View>
@@ -64,7 +65,7 @@ function EscapeCollapses() {
 
 /** 源码方式下没有大纲时，大纲页显示的一行字。 */
 export function NoOutline() {
-  return <Text class="px-4 py-3 text-xs text-faint">源码方式下没有大纲</Text>;
+  return <Text class={`pt-1 ${SIDE_TEXT}`}>源码方式下没有大纲</Text>;
 }
 
 /** 正文区连同左侧栏。`outline` 给大纲页的内容（选了一项以后调 `collapseIfOverlay`）。 */

@@ -71,12 +71,35 @@ test("a selected image is resized and aligned from its bar, written as <img>, an
   expect(await savedOnDisk(app, disk, "Alpha.md", /!\[\]/)).toBe(`# Alpha\n\n![](assets/${RED_NAME})\n\nafter\n`);
 });
 
-test("a linked image is not loaded: it shows its address and opens in the browser; with browser storage there is no transfer button", async () => {
+/** 无头运行不载入任何图片（getSize 一律失败），外链「载入成功」只能在浏览器里验，这里只验载不出来时的样子。 */
+test("a linked image that does not load shows its address, why, and opens in the browser; with browser storage there is no transfer button", async () => {
   const app = await open("../App.tsx", { ...WEB, storage: { [DOC_KEY]: "# T\n\n![](https://example.com/cat.png)\n" } });
+  await app.failImages("https://example.com/*");
   await app.waitFor("text:https://example.com/cat.png");
+  expect(app.texts().some((t) => t.includes("外链图片没载入：地址不对"))).toBe(true);
+  expect(app.texts().some((t) => t.includes("不自动加载"))).toBe(false);
   expect(app.shows("label:在浏览器里打开这张图片")).toBe(true);
   expect(app.shows("id:image-transfer")).toBe(false);
-  expect(app.texts().some((t) => t.includes("不自动加载"))).toBe(true);
+  expect(app.shows("id:image")).toBe(false);
+});
+
+test("an http image that does not load on an https page says the browser blocks http images there", async () => {
+  const app = await open("../App.tsx", {
+    ...WEB,
+    storage: { [DOC_KEY]: "# T\n\n![](http://example.com/cat.png)\n" },
+    modules: { nsh: { "UrlScheme.url": "https://markdown.pairwise.site/", "UrlScheme.setUrl": () => undefined } },
+  });
+  await app.failImages("http://example.com/*");
+  await app.waitFor("text:http://example.com/cat.png");
+  expect(app.texts().some((t) => t.includes("https 的网页里浏览器不让载入"))).toBe(true);
+});
+
+test("images with file: or SVG data: addresses in the text are not loaded and say the address is not supported", async () => {
+  const svg = btoa("<svg xmlns='http://www.w3.org/2000/svg'/>");
+  const app = await open("../App.tsx", { ...WEB, storage: { [DOC_KEY]: `# T\n\n![a](file:///etc/x.png)\n\n![b](data:image/svg+xml;base64,${svg})\n` } });
+  await app.waitFor("text:T");
+  expect(app.shows("id:image")).toBe(false);
+  expect(app.texts().filter((t) => t.includes("不支持的图片地址")).length).toBe(2);
 });
 
 test("an image that is not there shows a placeholder with its address, not a blank", async () => {

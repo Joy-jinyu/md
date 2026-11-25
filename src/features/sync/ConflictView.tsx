@@ -27,9 +27,9 @@ function Column(props: { testID: string; title: string; onlyLabel: string; block
             {(block) => (
               <View class="rounded-(--radius-sm) px-2 py-1" classList={{ "bg-warn-tint": block().only }}>
                 <If when={block().only}>
-                  <Text class="text-[11px] text-warn">{props.onlyLabel}</Text>
+                  <Text class="select-text text-[11px] text-warn">{props.onlyLabel}</Text>
                 </If>
-                <Text class="font-mono text-[12px] leading-5 text-foreground">
+                <Text class="select-text font-mono text-[12px] leading-5 text-foreground">
                   {block().text}
                 </Text>
               </View>
@@ -53,14 +53,14 @@ export function ConflictView(props: { issue: Conflict; onBack: () => void }) {
   const pick = (choose: (issue: Conflict) => Promise<void>) => void choose(props.issue).then(props.onBack);
   return (
     <View testID="conflict-view" class="gap-3 px-4 py-3">
-      <Text class="text-sm font-medium text-strong">{`「${props.issue.name}」两边都改过`}</Text>
+      <Text class="select-text text-sm font-medium text-strong">{`「${props.issue.name}」两边都改过`}</Text>
       <If when={diff.rough}>
-        <Text testID="conflict-rough" class="text-xs leading-5 text-muted-foreground">
+        <Text testID="conflict-rough" class="select-text text-xs leading-5 text-muted-foreground">
           这篇太长，有一段没有逐块比较：那一段整段标成了不一样，实际可能有相同的块。
         </Text>
       </If>
       <If when={!diff.local.some((b) => b.only) && !diff.remote.some((b) => b.only)}>
-        <Text testID="conflict-blank-only" class="text-xs leading-5 text-muted-foreground">
+        <Text testID="conflict-blank-only" class="select-text text-xs leading-5 text-muted-foreground">
           两边的段落都一样，只差空行或换行符。
         </Text>
       </If>

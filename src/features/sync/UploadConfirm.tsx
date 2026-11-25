@@ -26,8 +26,8 @@ export function UploadConfirm(props: { issue: Upload }) {
   const count = () => chosen().size;
   return (
     <View testID="sync-upload" class="gap-2 rounded-(--radius-sm) bg-card px-3 py-2">
-      <Text class="text-[13px] font-medium text-strong">{`这 ${props.issue.docs.length} 篇还没上传过`}</Text>
-      <Text class="text-xs leading-5 text-muted-foreground">
+      <Text class="select-text text-[13px] font-medium text-strong">{`这 ${props.issue.docs.length} 篇还没上传过`}</Text>
+      <Text class="select-text text-xs leading-5 text-muted-foreground">
         勾上的每篇建成一个私密 Gist（不公开列出，拿到链接的人能看）。没勾的标成「不同步这篇」，以后打开那篇、在同步面板里点「恢复同步」就会同步。
       </Text>
       <View class="gap-1">

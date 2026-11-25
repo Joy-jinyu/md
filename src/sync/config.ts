@@ -9,6 +9,8 @@
 export const GITHUB_CLIENT_ID = "Ov23liULOP1R8U49R9od";
 /** OAuth App 登记的回调地址所在的源：GitHub 只肯把网页登录送回这里，别的页面（本机开发页）发起也登不上。换域名时和 App 设置一起改。 */
 export const OAUTH_CALLBACK_ORIGIN = "https://markdown.pairwise.site";
+/** 网页登录的 redirect_uri：授权请求、记下的 state、交给 Worker 换 token 都用它，不取当前页面地址。必须和 OAuth App 登记的 Authorization callback URL 逐字符一致（含结尾的 /），不然 GitHub 报「The redirect_uri is not associated with this application」。 */
+export const OAUTH_CALLBACK_URL = `${OAUTH_CALLBACK_ORIGIN}/`;
 /** 中转 Worker 的地址（`https://…`，不带结尾的 /）：网页版拿 code 换 token 时调它的 `/token`。 */
 export const AUTH_WORKER_URL = "https://pairdown-auth.1825326327.workers.dev";
 

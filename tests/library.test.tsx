@@ -388,3 +388,27 @@ test("text typed just before closing, on a version that changed since, goes into
   expect(storage[bodyKey("da")]).toBe(ALPHA);
   expect((JSON.parse(storage[historyKey("da")] ?? "[]") as { text: string }[]).map((s) => s.text)).toContain("# Alpha\n\nold edit\n");
 });
+
+test("the list says when each document changed, and the sort button says how it sorts and switches", async () => {
+  const today = new Date();
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1, 9, 12).getTime();
+  const lastYear = new Date(today.getFullYear() - 1, 2, 2, 10, 0).getTime();
+  const storage = {
+    ...seedLibrary([
+      { id: "da", name: "Alpha", text: ALPHA, updatedAt: yesterday },
+      { id: "db", name: "Beta", text: BETA, updatedAt: lastYear },
+      { id: "dc", name: "Gamma", text: GAMMA, updatedAt: 0 },
+    ]),
+    [LAST_OPENED_KEY]: "da",
+  };
+  const app = await open("../App.tsx", { ...WEB, storage });
+  await app.waitFor("text:first doc");
+  await showDocuments(app);
+  await app.waitFor("id:doc-da >> text:昨天 09:12");
+  await app.waitFor(`id:doc-db >> text:${today.getFullYear() - 1}年3月2日`);
+  await app.waitFor("id:doc-dc >> text:改动时间未知");
+  await app.waitFor("id:doc-sort >> text:按改动时间");
+  await app.press("label:现在按改动时间排，改成按名字排");
+  await app.waitFor("id:doc-sort >> text:按名字");
+  expect(app.shows("label:现在按名字排，改成按改动时间排")).toBe(true);
+});
