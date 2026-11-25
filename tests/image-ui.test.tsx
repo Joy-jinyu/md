@@ -71,6 +71,24 @@ test("a selected image is resized and aligned from its bar, written as <img>, an
   expect(await savedOnDisk(app, disk, "Alpha.md", /!\[\]/)).toBe(`# Alpha\n\n![](assets/${RED_NAME})\n\nafter\n`);
 });
 
+/** 点图片时它不能先变回「正在载入」再变回图片：那一下就是网页上看到的闪烁，下面的内容也跟着跳（2026-11-25 线上反馈）。边点边看每一刻显示的是什么。 */
+test("selecting and deselecting an image keeps showing it: it never falls back to the loading placeholder", async () => {
+  const disk = memoryFs({ "Alpha.md": `# Alpha\n\n![](assets/${RED_NAME})\n\nafter\n`, [`assets/${RED_NAME}`]: RED_PNG });
+  const app = await openMac(disk);
+  await app.waitFor("id:image");
+  let fellBack = 0;
+  const watching = app
+    .waitUntil(() => {
+      if (app.count("id:image-placeholder") > 0 || !app.shows("id:image")) fellBack++;
+      return false;
+    }, { timeout: 1500 })
+    .catch(() => undefined);
+  for (const target of ["id:image", "text:after", "id:image", "text:after", "id:image"]) await app.press(target);
+  await watching;
+  expect(fellBack).toBe(0);
+  expect(app.shows("id:image-bar")).toBe(true);
+});
+
 /** 无头运行不载入任何图片（getSize 一律失败），外链「载入成功」只能在浏览器里验，这里只验载不出来时的样子。 */
 test("a linked image that does not load shows its address, why, and opens in the browser; with browser storage there is no transfer button", async () => {
   const app = await open("../App.tsx", { ...WEB, storage: { [DOC_KEY]: "# T\n\n![](https://example.com/cat.png)\n" } });
