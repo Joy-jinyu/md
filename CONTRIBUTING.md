@@ -98,6 +98,8 @@ export async function saveTextFile(name: string, text: string, type?: string): P
 
 - 提交格式和 scope 清单见 `.claude/rules/git-workflow.md`（唯一来源）。
 - 只暂存本次改动的文件；不提交 `.nsh/`、`dist/`。
+- PR 标题和描述、review 评论及其回复只用英文。代码注释、日志和界面文案仍按项目规范用中文；
+  引用其中的中文时保留原文。
 
 ## 5. 安全
 
