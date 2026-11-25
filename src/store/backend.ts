@@ -318,10 +318,8 @@ export async function chooseBackend(files: FileLibrary | null, probe: boolean, c
     return;
   }
   const gateway = probe ? await probeGateway(connect) : null;
+  // 浏览器本地也要经 use：挂上它的 watch（别的标签页改了文档时立刻知道）
   if (gateway) use(gateway.store, { kind: "gateway", gateway });
-  else {
-    setHistoryScope(backendTag());
-    setSyncScope(backendTag());
-  }
+  else use(local, { kind: "local" });
   await noteBackend();
 }

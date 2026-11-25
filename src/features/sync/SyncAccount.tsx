@@ -2,12 +2,13 @@
  * 登录 GitHub 的那一块：设置的「同步」页签和同步面板里共用。没配置时说明要什么；macOS 走 Device Flow（显示用户码），网页跳 GitHub 授权页。
  * 布局见 DESIGN.md「M5：同步」的登录一节。
  */
-import { cleanup, Clipboard, Text, View } from "nsh";
+import { cleanup, Text, View } from "nsh";
 import { messageOf } from "../../doc/message";
 import { SIGN_IN_FLOW } from "../../platform";
 import { beginDeviceLogin, beginWebLogin, cancelDeviceLogin, currentAccount, deviceLogin, signOut } from "../../sync/account";
 import { OAUTH_CALLBACK_ORIGIN, syncConfigured } from "../../sync/config";
 import { Button } from "../../ui/button";
+import { writeClipboard } from "../../ui/clipboard";
 import { CopyButton } from "../../ui/copy-button";
 import { openLink } from "../editor/links";
 import { say } from "../library/receipt";
@@ -80,8 +81,16 @@ async function startDeviceLogin() {
 
 /** 「复制并打开」：用户码放进剪贴板，打开 GitHub 的验证页。 */
 async function copyAndOpen(userCode: string, uri: string) {
-  await Clipboard.writeText(userCode).catch((e: unknown) => console.warn("user code not copied", e));
-  if (!(await openLink(uri, () => false))) say(`没能打开浏览器，手动打开 ${uri} 输入验证码。`, "warn");
+  const copied = await writeClipboard(userCode).then(
+    () => true,
+    (e: unknown) => {
+      console.warn("user code not copied", e);
+      return false;
+    },
+  );
+  const opened = await openLink(uri, () => false);
+  if (!opened) say(copied ? `没能打开浏览器，手动打开 ${uri} 输入验证码。` : `没能打开浏览器，验证码也没复制上：手动打开 ${uri}，输入上面的验证码。`, "warn");
+  else if (!copied) say("验证码没复制上，请在 GitHub 的页面里手动输入上面的验证码。", "warn");
 }
 
 function DeviceSteps() {

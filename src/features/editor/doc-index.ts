@@ -1,6 +1,7 @@
 /** 节点视图要看全文的东西（目录要的标题、脚注引用要的定义）：停手后由编辑页刷新；以及跳到某一处。 */
 import { signal } from "nsh";
 import { chain, type RichEditorSession, scrollIntoView, setNodeSelection, setTextSelection } from "nsh/base";
+import { reachSelection } from "./caret-follow";
 import { eachNode, type HeadingEntry, headingStarts, type Node } from "./outline";
 
 /** 脚注定义行：`[^标签]: 内容`（前面最多三个空格）。 */
@@ -74,11 +75,13 @@ export const noteNodeViewLayout = () => laidOut.update((n) => n + 1);
 /** 光标放到 `pos` 处并滚过去。 */
 export function revealText(session: RichEditorSession, pos: number) {
   session.run(chain([setTextSelection(pos), scrollIntoView()]));
+  reachSelection();
   session.focus();
 }
 
 /** 选中从 `pos` 开始的那个节点（原子块）并滚过去。 */
 export function revealNode(session: RichEditorSession, pos: number) {
   session.run(chain([setNodeSelection(pos), scrollIntoView()]));
+  reachSelection();
   session.focus();
 }

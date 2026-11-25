@@ -83,6 +83,86 @@ test("coming back to the window after another app changed the file loads it, or 
   await app.waitFor("text:changed again");
 });
 
+test("closing the window saves at once and keeps the app; the Dock icon brings the window back with the caret where it was", async () => {
+  const disk = memoryFs({ "Alpha.md": ALPHA });
+  const app = await openMac(disk);
+  await app.press("text:first doc");
+  await app.keyboard.press("end");
+  await app.type("label:正文", " more");
+  await app.window("main").pressClose();
+  // 不等停手后的自动保存（800ms）：关窗当时就存
+  await app.waitUntil(() => disk.library()["Alpha.md"] === "# Alpha\n\nfirst doc more\n", { timeout: 300 });
+  expect(app.quit()).toBe(false);
+  expect(app.window("main").state()?.visible).toBe(false);
+  await app.reopen();
+  expect(app.window("main").state()?.visible).toBe(true);
+  await app.type("label:正文", "!");
+  await app.waitUntil(() => disk.library()["Alpha.md"] === "# Alpha\n\nfirst doc more!\n", { timeout: 3000 });
+});
+
+test("a file another app changed while the window was closed is loaded when the Dock icon brings the window back", async () => {
+  const disk = memoryFs({ "Alpha.md": ALPHA });
+  const app = await openMac(disk);
+  await app.waitFor("text:first doc");
+  await app.window("main").pressClose();
+  disk.put("Alpha.md", "# Alpha\n\nfrom another app\n");
+  await app.reopen();
+  await app.waitFor("text:from another app");
+});
+
+/** 这里打了字、还没存，文件又被别的程序改了：关窗、退出时存盘会冲突。 */
+async function editThenChangeElsewhere(disk: Disk) {
+  const app = await openMac(disk);
+  await app.press("text:first doc");
+  await app.keyboard.press("end");
+  await app.type("label:正文", " mine");
+  disk.put("Alpha.md", "# Alpha\n\nfrom another app\n");
+  return app;
+}
+
+test("closing the window while the file changed elsewhere keeps the window open with the conflict bar, and nothing is overwritten", async () => {
+  const disk = memoryFs({ "Alpha.md": ALPHA });
+  const app = await editThenChangeElsewhere(disk);
+  await app.window("main").pressClose();
+  await app.waitFor("id:conflict");
+  expect(app.window("main").state()?.visible).toBe(true);
+  expect(disk.library()["Alpha.md"]).toBe("# Alpha\n\nfrom another app\n");
+  await app.press("id:keep-mine");
+  await app.waitUntil(() => disk.library()["Alpha.md"] === "# Alpha\n\nfirst doc mine\n", { timeout: 3000 });
+  await app.window("main").pressClose();
+  await app.waitUntil(() => app.window("main").state()?.visible === false, { timeout: 3000 });
+});
+
+test("quitting while the file changed elsewhere does not quit and shows the conflict bar; quitting again keeps the edit for the next start", async () => {
+  const disk = memoryFs({ "Alpha.md": ALPHA });
+  const app = await editThenChangeElsewhere(disk);
+  await app.quitRequest();
+  expect(app.quit()).toBe(false);
+  expect(app.window("main").state()?.visible).toBe(true);
+  expect(app.shows("id:conflict")).toBe(true);
+  await app.quitRequest();
+  expect(app.quit()).toBe(true);
+  expect(disk.library()["Alpha.md"]).toBe("# Alpha\n\nfrom another app\n");
+  const next = await openMac(disk, app.storage());
+  await next.waitFor("text:from another app");
+  await next.waitFor("text:上次关闭前有一段修改没存上，而这篇后来在别处改过：那段修改存进了这篇的版本历史（「⋯」→「版本历史」）。");
+  await showDocuments(next);
+  await next.press("id:doc-more-Alpha.md");
+  await next.press("id:doc-history");
+  await next.waitFor("id:history-preview >> text:# Alpha\n\nfirst doc mine\n");
+});
+
+test("while the window is closed, a command's shortcut brings it back", async () => {
+  const disk = memoryFs({ "Alpha.md": ALPHA, "Beta.md": BETA });
+  const app = await openMac(disk);
+  await app.waitFor("text:first doc");
+  await app.window("main").pressClose();
+  expect(app.window("main").state()?.visible).toBe(false);
+  await app.keyboard.press("mod+shift+o");
+  await app.waitFor("id:quick-open");
+  expect(app.window("main").state()?.visible).toBe(true);
+});
+
 test("a file deleted by another app while open offers to keep the text as a new document under its old name", async () => {
   const disk = memoryFs({ "Alpha.md": ALPHA });
   const app = await openMac(disk);

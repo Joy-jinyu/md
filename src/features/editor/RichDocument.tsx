@@ -7,7 +7,7 @@ import { Notice } from "../../ui/notice";
 import { AtomPrompt, createAtomPrompt } from "./AtomPrompt";
 import { BlockHandle, createBlockHandle } from "./BlockHandle";
 import { BlockOverlays, createBlockOverlays } from "./BlockOverlays";
-import { CaretMarker, createCaretFollow } from "./caret-follow";
+import { CaretMarker, createCaretFollow, reachSelection } from "./caret-follow";
 import { createCodeHighlight } from "./code-highlight";
 import { CommandPalette } from "./CommandPalette";
 import { type CommandContext, runCommand } from "./commands";
@@ -58,6 +58,7 @@ function readSelected(session: RichEditorSession): string {
 
 function jumpTo(session: RichEditorSession, heading: HeadingEntry) {
   session.run(chain([setTextSelection(heading.pos + 1), scrollIntoView()]));
+  reachSelection();
   session.focus();
 }
 
@@ -110,7 +111,7 @@ export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string
   refreshDocIndex(session);
   highlight.schedule();
   const focusMode = createFocusMode(session);
-  const follow = createCaretFollow(session);
+  const follow = createCaretFollow(session, overlays.scrolled);
   const richFind = createRichFind(session);
   const sourceFind = createSourceFind();
   const findState = createFindState();
@@ -343,7 +344,7 @@ export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string
       <FindBar ui={ui} state={findState} engine={() => (source.isOn() ? sourceFind.engine : richFind.engine)} onClose={refocus} />
       <If when={source.notice()}>{(message) => <Notice testID="source-notice" message={message()} />}</If>
       <WithSidebar outline={outline}>
-        <View class="flex-1" classList={{ hidden: source.isOn() }}>
+        <View class="flex-1" classList={{ hidden: source.isOn() }} onWheel={overlays.scrolled}>
           <RichEditor
             testID="editor"
             editor={session}
@@ -354,6 +355,7 @@ export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string
             class="flex-1"
             classes={EDITOR_CLASSES}
             onChange={changed}
+            onContentSizeChange={overlays.scrolled}
             onFocus={() => focused.set(true)}
             onBlur={() => focused.set(false)}
             onMouseMove={(e) => {

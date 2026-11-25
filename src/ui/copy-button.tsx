@@ -1,5 +1,6 @@
 /** 「复制」图标按钮：放在一眼就是拿去用的字旁边（命令、设备码、报错原因），点了写进剪贴板，右边短暂写「已复制」。规则见 DESIGN.md「文字可选、可复制」。 */
-import { cleanup, Clipboard, signal, Text, View } from "nsh";
+import { cleanup, signal, Text, View } from "nsh";
+import { writeClipboard } from "./clipboard";
 import { IconButton } from "./icon-button";
 
 /** 「已复制」留多久（毫秒），和代码块的复制按钮一样。 */
@@ -12,7 +13,7 @@ export function CopyButton(props: { text: string; label: string; testID?: string
   cleanup(() => clearTimeout(timer));
   const copy = () => {
     clearTimeout(timer);
-    Clipboard.writeText(props.text).then(
+    writeClipboard(props.text).then(
       () => {
         state.set("copied");
         timer = setTimeout(() => state.set("idle"), COPIED_MS);

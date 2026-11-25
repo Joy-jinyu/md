@@ -16,6 +16,7 @@ check: ## 类型检查
 	$(NSH) check
 
 # nsh test 递归查找 *.test.ts(x)；给目录时该目录要有 App.tsx，所以从根目录跑
+# nsh 0.7.0 起默认按核数并行跑（全量约 30 秒）。机器很忙时量耗时的用例偶尔超时，单独重跑那个文件即可
 test: ## 跑全部测试（tests/ 下）
 	$(NSH) test .
 

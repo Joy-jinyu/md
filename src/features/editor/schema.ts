@@ -60,7 +60,8 @@ export function editorExtensions(nodeViews: Partial<Record<AtomNodeName | "image
     // 内置的 code mark 排斥其他所有 mark（实测 nsh 0.6.0），[`x`](url) 会丢链接；放开排斥，Markdown 里行内代码可以带链接、加粗
     // inclusive: false：光标在行内代码右边紧挨着时打的字不算代码。不关的话代码在段尾时光标出不去，后面再也打不了普通字（2026-11-24 web host 实测）
     Code.extend({ mark: { excludes: "", inclusive: false, code: true, exitable: true, parseDOM: [{ tag: "code" }], toDOM: ["code", 0] } }),
-    // 列宽拖拽关掉：开着时 web host 表格一多就卡死甚至崩（nsh 0.6.0 实测：60 张表 wasm 崩溃，关掉后 300 张 1.7 秒）；Markdown 也存不下列宽
+    // 列宽拖拽关掉：开着时 web host 表格一多就卡死甚至崩（nsh 0.6.0 实测：60 张表 wasm 崩溃，关掉后 300 张 1.7 秒）；Markdown 也存不下列宽。
+    // 0.7.0 复测（2026-11-25）：开着时 60、300 张小表能打开了，但一张 500 行的表直接报 RangeError（wasm 内存越界）打不开，所以仍关着
     TableKit.configure({ table: { resizable: false } }),
     markdownAttributes(),
     ...atoms,

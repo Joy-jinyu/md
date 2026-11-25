@@ -3,8 +3,9 @@
  * 提示块左上角的类型标签，和光标所在代码块右上角的「语言 / 复制」。
  * 位置用 nodeRect 现量：选区或文档变了（编辑页每次修订调 `sync` / `docChanged`）、编辑器大小变了（编辑器的 onLayout 调 `sync`）就重量。
  */
-import { cleanup, Clipboard, effect, keymap, signal, Text, untracked, View } from "nsh";
+import { cleanup, effect, keymap, signal, Text, untracked, View } from "nsh";
 import { type RichEditorSession, Select, type SelectItem, setNodeAttribute, setTextSelection } from "nsh/base";
+import { writeClipboard } from "../../ui/clipboard";
 import { tip } from "../../ui/tooltip";
 import { ALERT_KINDS } from "./commands";
 import { nodeViewsLaidOut } from "./doc-index";
@@ -31,6 +32,9 @@ const ALERT_COLOR: Record<string, string> = {
   caution: "text-alert-caution",
 };
 const ALERT_LABEL = new Map<string, string>(ALERT_KINDS.map((k) => [k.alert, k.label]));
+
+/** 滚动停下多久后重量位置（毫秒）：滚到的块要过一两帧才挂上。 */
+const SCROLL_SETTLE = 120;
 
 interface Placed {
   pos: number;
@@ -61,6 +65,7 @@ export function createBlockOverlays(session: RichEditorSession) {
   let known: { pos: number; alert: string }[] = [];
   let dirty = true;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let scrollTimer: ReturnType<typeof setTimeout> | undefined;
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
   const measure = () => {
@@ -86,6 +91,18 @@ export function createBlockOverlays(session: RichEditorSession) {
   const sync = () => {
     if (timer === undefined) timer = setTimeout(measure, 0);
   };
+  /**
+   * 滚过了：nsh 0.7.0 起长文档只挂视口附近的块，没挂上的块量不出位置（提示块标签就没了），滚到了才挂上，编辑器不为此报修订。
+   * 停下来以后再量一次。编辑器不报滚动：滚轮由外层的 onWheel 报；拖滚动条、PageDown 这类没有滚轮的，靠滚到的那一片挂上后内容高跟着变（onContentSizeChange）来报
+   * （2026-11-25 web host 实测：直接改 scrollTop 跳到远处，每次都报，标签都出来了）。挂上后量出的高恰好和估的一样时不报，标签要等下一次修订。
+   */
+  const scrolled = () => {
+    if (scrollTimer !== undefined) clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      scrollTimer = undefined;
+      sync();
+    }, SCROLL_SETTLE);
+  };
   /** 文档改了：提示块的位置也要重找。 */
   const docChanged = () => {
     dirty = true;
@@ -108,7 +125,7 @@ export function createBlockOverlays(session: RichEditorSession) {
   const copy = () => {
     const target = code();
     if (!target) return;
-    Clipboard.writeText(target.text).then(
+    writeClipboard(target.text).then(
       () => flash("copied"),
       (e: unknown) => {
         console.warn("copy code failed, selecting it instead", e);
@@ -129,9 +146,10 @@ export function createBlockOverlays(session: RichEditorSession) {
   });
   cleanup(() => {
     if (timer !== undefined) clearTimeout(timer);
+    if (scrollTimer !== undefined) clearTimeout(scrollTimer);
     if (flashTimer !== undefined) clearTimeout(flashTimer);
   });
-  return { alerts, code, copied, languageOpen, sync, docChanged, setLanguage, copy, chooseLanguage };
+  return { alerts, code, copied, languageOpen, sync, scrolled, docChanged, setLanguage, copy, chooseLanguage };
 }
 
 export type BlockOverlaysState = ReturnType<typeof createBlockOverlays>;

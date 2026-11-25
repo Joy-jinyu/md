@@ -5,6 +5,7 @@ import { messageOf } from "../../doc/message";
 import { joinEndings, splitEndings } from "../../doc/line-endings";
 import { isEmptyParagraph } from "../../doc/to-markdown";
 import { markChanged } from "../../store/document";
+import { reachSelection } from "./caret-follow";
 import { loadMarkdown } from "./convert";
 import { blockIndexAt, caretPosIn, type Node, topBlocks } from "./outline";
 import type { RichOpened } from "./rich-session";
@@ -68,7 +69,10 @@ export function createSourceView(doc: RichOpened, find: SourceFind, tooBig: (mar
       notice.set("");
       const blocks = realBlocks(doc);
       const target = blocks[blockAtLine(loadMarkdown(doc.dump()).pending, line)];
-      if (target) session.run(chain([setTextSelection(caretPosIn(target)), scrollIntoView()]));
+      if (target) {
+        session.run(chain([setTextSelection(caretPosIn(target)), scrollIntoView()]));
+        reachSelection();
+      }
       setTimeout(() => session.focus(), 0);
     } finally {
       closing = false;
