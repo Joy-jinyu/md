@@ -41,6 +41,28 @@ test("macOS sign-in uses the device flow: shows the code, copies it and opens Gi
   expect(JSON.parse(app.storage()["md.sync.auth"]).login).toBe("mac-joy");
 });
 
+test("macOS device flow: when the code cannot be copied, the receipt says to type it in by hand", async () => {
+  const disk = memoryFs({ "Notes.md": MAC_DOC });
+  const app = await open(SYNCED_APP, {
+    platform: "macos",
+    width: 1280,
+    height: 860,
+    modules: { ...disk.modules, nsh: { "Clipboard.writeText": () => "failed" } },
+    network: {
+      "POST https://github.com/login/device/code": { body: { device_code: "dev", user_code: "CCCC-DDDD", verification_uri: "https://github.com/login/device", expires_in: 900, interval: 0 } },
+      "POST https://github.com/login/oauth/access_token": { body: { error: "authorization_pending" }, delay: 50 },
+    },
+  });
+  await app.waitFor("text:mac doc");
+  await app.press("id:open-settings");
+  await app.press("id:settings-tab-sync");
+  await app.press("id:sign-in");
+  await app.waitFor("text:CCCC-DDDD");
+  await app.press("id:device-open");
+  expect(app.openedUrls()).toContain("https://github.com/login/device");
+  await app.waitUntil(() => app.texts().includes("验证码没复制上，请在 GitHub 的页面里手动输入上面的验证码。"));
+});
+
 test("macOS device flow: a cancel on GitHub shows the reason and offers to sign in again", async () => {
   const disk = memoryFs({ "Notes.md": MAC_DOC });
   const app = await open(SYNCED_APP, {

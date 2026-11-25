@@ -4,7 +4,7 @@ import { documentStore } from "../src/store/backend";
 import { checkExternal, closeDocument, flush, keepMine, latestDocument, markChanged, openDocument, saveState, stashUnsaved, takeTheirs } from "../src/store/document";
 import { addSnapshot, historyKey, MAX_SNAPSHOTS, noteSaved, SNAPSHOT_INTERVAL, snapshotsOf } from "../src/store/history";
 import { type Kv, LEGACY_DOC_KEY } from "../src/store/kv";
-import { bodyKey, createLocalStore, FIRST_DOC_ID, metaKey } from "../src/store/local-store";
+import { bodyKey, CHANGED_KEY, changedDocs, createLocalStore, FIRST_DOC_ID, metaKey } from "../src/store/local-store";
 import { recoverUnsaved } from "../src/store/unsaved";
 
 /** 存储上限（实测：键和值的字符数合计 5 MiB）。 */
@@ -20,6 +20,24 @@ test("several documents are kept apart and listed with their titles", async () =
   expect(listed).toEqual(["a:Alpha", "b:"]);
   expect(await textOf(a.id)).toBe("# Alpha\n\none\n");
   expect(await textOf(b.id)).toBe("two\n");
+});
+
+test("saving, creating, renaming and deleting each tell other tabs which document changed; other keys tell them nothing", async () => {
+  await Storage.clear();
+  const told = async () => changedDocs(CHANGED_KEY, await Storage.getItem(CHANGED_KEY));
+  const a = await documentStore.create("a", "one\n");
+  expect(await told()).toEqual({ ids: [a.id], all: false });
+  const b = await documentStore.create("b", "two\n");
+  expect(await told()).toEqual({ ids: [b.id], all: false });
+  await documentStore.write(a.id, "one more\n", a.version);
+  expect(await told()).toEqual({ ids: [a.id], all: false });
+  await documentStore.rename(b.id, "bee");
+  expect(await told()).toEqual({ ids: [b.id], all: false });
+  await documentStore.remove(a.id);
+  expect(await told()).toEqual({ ids: [a.id], all: false });
+  expect(changedDocs(metaKey(b.id), "{}")).toBe(null);
+  expect(changedDocs(bodyKey(b.id), "two\n")).toBe(null);
+  expect(changedDocs(null, null)).toEqual({ ids: [], all: true });
 });
 
 test("the old single document becomes the first one in place, however many times the app starts", async () => {

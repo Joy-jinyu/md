@@ -120,6 +120,8 @@ test("the outline lists the headings and jumps to one", async () => {
   await app.press("id:outline-1");
   await app.type("label:正文", "Z");
   expect(await saved(app)).toContain("## ZTwo");
+  // 隔开真人连按的最短间隔：同一个命令 40ms 内只算一次（keys.ts 的 once），0.7.0 的无头测试两步之间可能不到 40ms
+  await app.wait(100);
   await app.keyboard.press("mod+shift+l");
   await app.waitUntil(() => !app.shows("id:outline"), { timeout: 1000 });
 });

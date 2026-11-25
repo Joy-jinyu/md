@@ -4,7 +4,7 @@
  */
 import { effect, lifecycle, signal, untracked, View } from "nsh";
 import { messageOf } from "../../doc/message";
-import { droppedPaths, fileLibrary, onOpenFiles, PROBE_GATEWAY, saveBeforeLeaving } from "../../platform";
+import { droppedPaths, fileLibrary, keepWindowOnClose, onOpenFiles, PROBE_GATEWAY, saveBeforeLeaving } from "../../platform";
 import { chooseBackend, elsewhereWords } from "../../store/backend";
 import { checkExternal, flush, openDocument, saveState, stashUnsaved } from "../../store/document";
 import { currentDocId, markOpened, refreshLibrary, startLibrary } from "../../store/library";
@@ -24,7 +24,7 @@ import { SettingsDialog } from "../settings/SettingsDialog";
 import { SyncHost } from "../sync/SyncHost";
 import { ConflictBar } from "./ConflictBar";
 import { setOverrides } from "./keybindings";
-import { dropImages, isImagePath } from "./images";
+import { dropImageFiles, dropImages, isImagePath } from "./images";
 import { MermaidRenderer } from "./mermaid";
 import { RichDocument } from "./RichDocument";
 import { openRich, type RichOpened } from "./rich-session";
@@ -39,6 +39,9 @@ import { closeTransients } from "./ui-state";
  * 纯段落 21 万字符 1.0–1.3 秒，64 万字符 3.3 秒。300 张三行小表（900 行）1.7 秒，所以表格行按 4 行算。
  * 单张表格涨得更快：500 行 1.4 秒，750 行 3.4 秒，1000 行 7 秒，2000 行 45 秒以上，所以单张表另设行数上限。
  * macOS host 没量过，先用同一组值。
+ * nsh 0.7.0 复测（2026-11-25，同样 headless Chrome，打包后的网页；打开含运行时启动约 0.2 秒）：编辑器只挂视口附近的块，打开快了很多
+ * （约 3000 / 1 万 / 1.7 万行 0.5 / 1.2 / 1.8 秒，单表 1000 / 2000 行 1.4 / 3.4 秒），但每敲一个字仍随全文变慢（67 / 135 / 212ms，单表 1000 行 133ms），
+ * 上限这次没改；放宽前先定能接受的每键耗时。
  */
 export const RICH_MAX_CHARS = 300_000;
 export const RICH_MAX_LINES = 4_000;
@@ -81,10 +84,16 @@ function choose(markdown: string): Opened {
 }
 
 /**
- * 窗口失焦、应用切到后台、退出时立即写入；写不进去的原因由顶栏的保存状态显示。切到后台和关页面时先同步记一份应急键（见 store/unsaved.ts）。
- * 重新获得焦点时：别处存过这一篇、这里没改过就直接载入（`reload`）；这里也改过就由冲突条让用户选。文档列表也重读一遍（别处可能新建、删了几篇）。
+ * 窗口失焦、应用切到后台、退出、macOS 关窗时立即写入；写不进去的原因由顶栏的保存状态显示。切到后台和关页面时先同步记一份应急键（见 store/unsaved.ts）。
+ * 重新获得焦点、macOS 点程序坞图标重新显示窗口时：别处存过这一篇、这里没改过就直接载入（`reload`）；这里也改过就由冲突条让用户选。文档列表也重读一遍（别处可能新建、删了几篇）。
  */
 function watchLifecycle(reload: () => void) {
+  const recheck = () => {
+    void refreshLibrary().catch((e: unknown) => console.warn("library not refreshed", e));
+    void checkExternal()
+      .then((r) => r === "reload" && reload())
+      .catch((e: unknown) => console.warn("external change not checked", e));
+  };
   let wasActive = true;
   effect(() => {
     const active = lifecycle() === "active";
@@ -93,16 +102,13 @@ function watchLifecycle(reload: () => void) {
         if (lifecycle() === "background") stashUnsaved();
         void flush();
       }
-      else if (!wasActive) {
-        void refreshLibrary().catch((e: unknown) => console.warn("library not refreshed", e));
-        void checkExternal()
-          .then((r) => r === "reload" && reload())
-          .catch((e: unknown) => console.warn("external change not checked", e));
-      }
+      else if (!wasActive) recheck();
       wasActive = active;
     });
   });
-  saveBeforeLeaving(stashUnsaved, flush);
+  const saved = () => flush().then((r) => r.ok);
+  saveBeforeLeaving(stashUnsaved, saved);
+  keepWindowOnClose(stashUnsaved, saved, recheck);
 }
 
 export function EditorScreen() {
@@ -135,7 +141,7 @@ export function EditorScreen() {
     if (id) await showOrFallback(id);
   };
   const openFromSystem = (paths: string[]) => paths[0] && requestLibrary({ kind: "openPath", path: paths[0] });
-  /** 拖进窗口的：图片插进开着的文档，别的当文档打开。 */
+  /** 拖进窗口的本地文件（macOS 给路径）：图片插进开着的文档，别的当文档打开。网页里给的是文件本身，只收图片（images.ts 的 `dropImageFiles`）。 */
   const dropped = (paths: string[]) => {
     const images = paths.filter(isImagePath);
     if (images.length > 0) dropImages(images);
@@ -186,7 +192,13 @@ export function EditorScreen() {
     void reopen().then(() => say(`${elsewhereWords().changed}，已载入最新的内容。`, "info"));
   });
   return (
-    <View class="flex-1 bg-background" onFileDrop={(e) => dropped(droppedPaths(e.uris))}>
+    <View
+      class="flex-1 bg-background"
+      onFileDrop={(e) => {
+        dropped(droppedPaths(e.uris));
+        dropImageFiles(e.files);
+      }}
+    >
       <StorageNotice />
       <If when={settingsProblem()}>{(message) => <Notice testID="settings-problem" message={message()} onDismiss={() => settingsProblem.set("")} />}</If>
       <If when={receipt()}>{(m) => <Notice testID="receipt" message={m().text} tone={m().tone} copyable={m().tone === "warn"} onDismiss={m().tone === "warn" ? dismissReceipt : undefined} />}</If>

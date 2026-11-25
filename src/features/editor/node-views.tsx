@@ -8,6 +8,7 @@ import { Button } from "../../ui/button";
 import { tip } from "../../ui/tooltip";
 import { buildIndex, docIndex, footnoteLabel, noteNodeViewLayout, revealNode, revealText } from "./doc-index";
 import { columnWidth } from "./images";
+import { nodePress } from "./node-press";
 import { diagramShown } from "./mermaid";
 import { type HeadingEntry, headingStarts, type Node } from "./outline";
 import type { AtomNodeName, AtomNodeView } from "./schema";
@@ -173,13 +174,16 @@ function DiagramView(p: RichNodeViewProps) {
 
 function FrontMatterView(p: RichNodeViewProps) {
   const open = signal(false);
+  const toggle = nodePress(() => open.set(!open()));
   return (
     <Frame selected={p.selected}>
       <View class="flex-row items-center gap-2">
         <View class="flex-1">
           <Source text={frontMatterSummary(attr(p, "yaml"))} oneLine />
         </View>
-        <Button testID="frontmatter-toggle" label={open() ? "收起" : "展开"} accessibilityLabel={open() ? "收起 front matter" : "展开 front matter"} onPress={() => open.set(!open())} />
+        <View {...toggle.mouse}>
+          <Button testID="frontmatter-toggle" label={open() ? "收起" : "展开"} accessibilityLabel={open() ? "收起 front matter" : "展开 front matter"} onPress={toggle.onPress} />
+        </View>
       </View>
       <If when={open()}>
         <Source text={attr(p, "yaml")} />
@@ -226,10 +230,10 @@ function HtmlBlockView(props: { p: RichNodeViewProps }) {
 /** 脚注定义：内容（`muted-foreground` 的源码），和跳回正文里第一个引用的按钮。 */
 function FootnoteDefView(props: { p: RichNodeViewProps; label: string }) {
   const p = props.p;
-  const back = () => {
+  const back = nodePress(() => {
     const pos = buildIndex(p.editor.getJSON() as Node).firstRefs.get(props.label);
     if (pos !== undefined) revealText(p.editor, pos + 1);
-  };
+  });
   return (
     <Frame selected={p.selected}>
       <View class="flex-row items-center gap-2">
@@ -237,7 +241,9 @@ function FootnoteDefView(props: { p: RichNodeViewProps; label: string }) {
           <Source text={attr(p, "src")} />
         </View>
         <If when={docIndex().firstRefs.has(props.label)}>
-          <Button testID={`footnote-back-${props.label}`} label="↩" accessibilityLabel={`回到脚注 ${props.label} 的引用处`} onPress={back} />
+          <View {...back.mouse}>
+            <Button testID={`footnote-back-${props.label}`} label="↩" accessibilityLabel={`回到脚注 ${props.label} 的引用处`} onPress={back.onPress} />
+          </View>
         </If>
       </View>
     </Frame>
@@ -275,20 +281,24 @@ function TocView(p: RichNodeViewProps) {
       <Label text="目录" />
       <If when={headings().length > 0} else={<Text class="text-[14px] text-faint">还没有标题</Text>}>
         <Each of={headings()} key={(h) => `${h.pos}:${h.text}`}>
-          {(h) => (
-            <View
-              testID="toc-item"
-              role="button"
-              accessibilityLabel={`跳到「${h().text}」`}
-              onPress={() => jump(h())}
-              style={{ paddingLeft: (h().level - 1) * 16 }}
-              class="min-h-7 justify-center rounded-(--radius-sm) px-1 hover:bg-hover"
-            >
-              <Text style={{ numberOfLines: 1 }} class="text-[15px] text-primary-text">
-                {h().text || "（空标题）"}
-              </Text>
-            </View>
-          )}
+          {(h) => {
+            const press = nodePress(() => jump(h()));
+            return (
+              <View
+                testID="toc-item"
+                role="button"
+                accessibilityLabel={`跳到「${h().text}」`}
+                onPress={press.onPress}
+                {...press.mouse}
+                style={{ paddingLeft: (h().level - 1) * 16 }}
+                class="min-h-7 justify-center rounded-(--radius-sm) px-1 hover:bg-hover"
+              >
+                <Text style={{ numberOfLines: 1 }} class="text-[15px] text-primary-text">
+                  {h().text || "（空标题）"}
+                </Text>
+              </View>
+            );
+          }}
         </Each>
       </If>
     </Frame>
@@ -299,17 +309,18 @@ function TocView(p: RichNodeViewProps) {
 function FootnoteRefView(p: RichNodeViewProps) {
   const label = () => attr(p, "label");
   const text = () => docIndex().footnotes.get(label())?.text ?? "没有找到这个脚注的定义";
-  const jump = () => {
+  const jump = nodePress(() => {
     const def = buildIndex(p.editor.getJSON() as Node).footnotes.get(label());
     if (def) revealNode(p.editor, def.pos);
-  };
+  });
   return (
     <View
       testID={`footnote-ref-${label()}`}
       role="button"
       accessibilityLabel={`脚注 ${label()}：${text()}`}
       tooltip={tip(text())}
-      onPress={jump}
+      onPress={jump.onPress}
+      {...jump.mouse}
       class="rounded-(--radius-sm) border px-0.5"
       classList={{ "border-primary": p.selected, "border-transparent": !p.selected }}
     >

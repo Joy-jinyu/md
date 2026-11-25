@@ -121,6 +121,14 @@ test("a code block in focus offers its language and a copy button that puts the 
   expect(await saved(app)).toBe("```python\nprint(1)\n```\n");
 });
 
+test("when the system refuses the clipboard, the code copy button selects the code instead of saying it copied", async () => {
+  const app = await open("../App.tsx", { ...WEB, storage: { [DOC_KEY]: "```python\nprint(1)\n```\n" }, modules: { nsh: { "Clipboard.writeText": () => "failed" } } });
+  await app.waitFor("id:code-tools");
+  await app.press("label:复制代码");
+  await app.waitUntil(() => app.texts().some((t) => t.startsWith("已选中，按 ")));
+  expect(app.shows("text:已复制")).toBe(false);
+});
+
 test("picking a language keeps the info after it; plain text with info is written as text so the info is not read as the language", async () => {
   const app = await openDoc("```js {1,3}\nconst a = 1;\n```\n");
   await app.waitFor("id:code-tools");
@@ -207,7 +215,11 @@ test("typing in a code block colors the new words after a pause; typing elsewher
 
 test("no emoji menu in code, nor after a colon glued to a word; short queries match name starts only", async () => {
   const app = await openDoc("`code`\n\n```\nfoo\n```\n\nx\n");
-  await app.press("text:code");
+  // 光标放进行内代码中间（0.7.0 的 press("text:code") 落在整行正中，也就是行尾、代码外面）
+  await app.press("text:code", { position: { x: 1, y: 8 } });
+  await app.keyboard.press("home");
+  await app.keyboard.press("arrowright");
+  await app.keyboard.press("arrowright");
   await app.type("label:正文", " :smi");
   await app.wait(150);
   expect(app.shows("id:emoji-menu")).toBe(false);
