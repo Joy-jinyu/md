@@ -27,10 +27,13 @@ const HELP = [
   "  config origins <来源,来源>  额外放行的页面来源（比如 http://127.0.0.1:8811）；写 none 清空",
   "  config port <端口>          换端口（线上页面只连 7341，一般不用改）",
   "  config autoUpdate on|off    有新版时要不要自动更新",
-  "  config imageHost <上传地址>   设置图床（收 multipart 上传的接口）；写 none 不再用图床",
+  "  config imageHost <上传地址>   用上传接口当图床（收 multipart 上传的接口）；写 none 不再用图床",
   "  config imageHostField <名字>  放图片的表单字段名（默认 file）",
   "  config imageHostHeader <头>   上传时带的请求头，如 \"Authorization: Bearer xxx\"；写 none 清空",
   "  config imageHostUrlPath <位置> 返回的 JSON 里图片地址在哪，如 data.url；写 auto 自动找",
+  "  config imageHostGithub <用户/仓库> 用 GitHub 仓库当图床（仓库要公开），接着设令牌",
+  "  config imageHostToken <令牌>   只能写这个仓库的 fine-grained token（Contents 读写）",
+  "  config imageHostBranch <分支>  默认 main        config imageHostDir <目录>  默认 images",
   "  start | stop | restart      启动、停止、重启后台网关",
   "  logs                        看最近的日志",
   "  update                      现在就更新到最新版",
@@ -102,30 +105,44 @@ function showConfig(c: Config) {
   console.log(`额外放行的页面（origins）：${c.origins.length > 0 ? c.origins.join(",") : "无"}`);
   console.log(`自动更新（autoUpdate）：${c.autoUpdate ? "on" : "off"}`);
   const h = c.imageHost;
-  console.log(`图床（imageHost）：${h ? h.url : "没有设置"}`);
-  if (!h) return;
+  if (!h) return console.log("图床（imageHost / imageHostGithub）：没有设置");
+  if (h.kind === "github") {
+    console.log(`图床：GitHub 仓库（imageHostGithub）：${h.repo}`);
+    console.log(`  分支（imageHostBranch）：${h.branch}\n  目录（imageHostDir）：${h.dir}`);
+    return console.log(`  令牌（imageHostToken）：${h.token ? "已设置" : "还没有——pairdown config imageHostToken <令牌>"}`);
+  }
+  console.log(`图床：上传接口（imageHost）：${h.url}`);
   console.log(`  文件字段名（imageHostField）：${h.field}`);
   console.log(`  请求头（imageHostHeader，只显示名字）：${Object.keys(h.headers).join(",") || "无"}`);
   console.log(`  图片地址的位置（imageHostUrlPath）：${h.urlPath || "auto"}`);
 }
 
-/** 改图床的一项。请求头只留一条：再设一次就是换掉。 */
+/** 改图床的一项。请求头只留一条：再设一次就是换掉。imageHost / imageHostGithub 定种类，换种类时别的项从头来。 */
 function hostChanged(c: Config, key: string, value: string): Config {
-  if (key === "imageHost" && value === "none") {
-    const { imageHost: _gone, ...rest } = c;
-    return rest;
-  }
-  if (key !== "imageHost" && !c.imageHost) throw new Refusal("先设置上传地址：pairdown config imageHost <上传地址>");
+  const { imageHost: old, ...rest } = c;
+  if (key === "imageHost" && value === "none") return rest;
+  const github = key === "imageHostGithub" || (old?.kind === "github" && key !== "imageHost");
+  if (!old && key !== "imageHost" && key !== "imageHostGithub") throw new Refusal("先设置图床：pairdown config imageHost <上传地址>，或 pairdown config imageHostGithub <用户/仓库>");
   const at = value.indexOf(":");
   if (key === "imageHostHeader" && value !== "none" && at <= 0) throw new Refusal('请求头要写成 "名字: 值"');
-  const patch =
-    key === "imageHost" ? { url: value }
-    : key === "imageHostField" ? { field: value }
-    : key === "imageHostUrlPath" ? { urlPath: value === "auto" ? "" : value }
-    : { headers: value === "none" ? {} : { [value.slice(0, at).trim()]: value.slice(at + 1).trim() } };
+  const patches: Record<string, object> = {
+    imageHost: { kind: "upload", url: value },
+    imageHostField: { field: value },
+    imageHostUrlPath: { urlPath: value === "auto" ? "" : value },
+    imageHostHeader: { headers: value === "none" ? {} : { [value.slice(0, at).trim()]: value.slice(at + 1).trim() } },
+    imageHostGithub: { kind: "github", repo: value },
+    imageHostBranch: { branch: value },
+    imageHostDir: { dir: value },
+    imageHostToken: { token: value },
+  };
+  if (!Object.hasOwn(patches, key)) throw new Refusal(`不认识的配置：${key}\n\n${HELP}`);
+  if (key === "imageHostGithub" && !/^[\w.-]+\/[\w.-]+$/.test(value)) throw new Refusal("仓库要写成「用户/仓库」");
+  const sameKind = old !== undefined && (old.kind === "github") === github;
   try {
-    return { ...c, imageHost: parseImageHost({ ...c.imageHost, ...patch }, null) };
+    return { ...rest, imageHost: parseImageHost({ ...(sameKind ? old : {}), ...patches[key] }, null) };
   } catch (e) {
+    // 仓库先设、令牌后设：中间这一步还没有令牌，先存着不完整的
+    if (github && key !== "imageHostToken" && !(sameKind && old)) return { ...rest, imageHost: { kind: "github", repo: value, branch: "main", dir: "images", token: "" } };
     throw e instanceof GatewayError ? new Refusal(e.message) : e;
   }
 }
