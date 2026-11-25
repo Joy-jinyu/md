@@ -20,6 +20,7 @@ import { StorageNotice } from "../library/StorageNotice";
 import { QuickOpen } from "../library/QuickOpen";
 import { dismissReceipt, receipt, say } from "../library/receipt";
 import { libraryRequest, pendingFind, requestLibrary } from "../library/requests";
+import { ImageHostDialog } from "../settings/ImageHostDialog";
 import { SettingsDialog } from "../settings/SettingsDialog";
 import { SyncHost } from "../sync/SyncHost";
 import { ConflictBar } from "./ConflictBar";
@@ -209,6 +210,7 @@ export function EditorScreen() {
       <QuickOpen />
       <HistoryDialog />
       <DocDialogs />
+      <ImageHostDialog />
       <SyncHost reload={reopen} />
       <MermaidRenderer />
     </View>

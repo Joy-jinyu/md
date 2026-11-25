@@ -3,7 +3,7 @@
  * 启动时由编辑页调一次 `chooseBackend`；之后只有「重新连网关」（`useGateway`）会换。在那之前（和测试里）是浏览器本地。
  */
 import { signal, Storage } from "nsh";
-import { type DocumentStore, NameTaken, type StoreChange } from "./document-store";
+import { type DocumentStore, type ImageHostApi, NameTaken, type StoreChange } from "./document-store";
 import { type Connect, type GatewayBackend, type GatewayLink, GatewayRefused, openGateway } from "./gateway-store";
 import { dropHistory, moveHistory, setHistoryScope } from "./history";
 import { assetSrc, IMAGE_TYPES } from "./image-file";
@@ -95,6 +95,12 @@ export function elsewhereWords(): { changed: string; deleted: string } {
 export function canTransfer(): boolean {
   void chosen();
   return active.transfer !== undefined;
+}
+
+/** 图床接口（随换后端变）：只有本机网关后端有；浏览器本地、macOS 文库是 null。 */
+export function imageHost(): ImageHostApi | null {
+  void chosen();
+  return active.imageHost ?? null;
 }
 
 /** 网关后端的连接状况；不是网关后端时是 null。 */

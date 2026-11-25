@@ -7,6 +7,7 @@ import { docsInIndexedDb } from "../../store/kv";
 import { refreshLibrary } from "../../store/library";
 import { Button } from "../../ui/button";
 import { CopyButton } from "../../ui/copy-button";
+import { ImageHostSection } from "./ImageHostSection";
 
 /** 脚本是仓库里的 gateway/install.sh，make build-web 时放到站点根目录。 */
 const START_COMMAND = `curl -fsSL ${OFFICIAL_ORIGIN}/gateway.sh | sh`;
@@ -92,11 +93,11 @@ function CopyToLibrary() {
   );
 }
 
-/** 图片存在哪、外链图片能不能转存（DESIGN.md「M3：图片」）。 */
+/** 图片存在哪、外链图片能不能转存、图床（DESIGN.md「M3：图片」）。 */
 const IMAGES_WHERE: Record<string, string> = {
-  local: "粘贴、插入的图片存在这个浏览器里（IndexedDB），按文档存，删文档时一起删；另存的 .md 里不包含它们。外链图片直接显示，但不能转存到本地（要连着本机网关）。",
-  gateway: "粘贴、插入的图片存在文档旁边的 assets/ 文件夹里，正文写相对路径。外链图片直接显示，也可以「转存到本地」（由网关下载）。",
-  files: "粘贴、插入的图片存在文档旁边的 assets/ 文件夹里，正文写相对路径。外链图片直接显示；「转存到本地」没有做。",
+  local: "粘贴、插入的图片存在这个浏览器里（IndexedDB），按文档存，删文档时一起删；另存的 .md 里不包含它们。外链图片直接显示，但不能转存到本地（要连着本机网关）。图床要连着本机网关才能用。",
+  gateway: "粘贴、插入的图片存在文档旁边的 assets/ 文件夹里，正文写相对路径；设置了图床（见下）就传到图床，正文写图床给的地址。外链图片直接显示，也可以「转存到本地」（由网关下载）。",
+  files: "粘贴、插入的图片存在文档旁边的 assets/ 文件夹里，正文写相对路径。外链图片直接显示；「转存到本地」没有做。图床要连着本机网关才能用（只有网页版能连）。",
 };
 
 export function StoragePanel(props: { inBrowser: boolean }) {
@@ -114,10 +115,11 @@ export function StoragePanel(props: { inBrowser: boolean }) {
         <View class="gap-1">
           <Text class="text-[11px] text-faint">图片</Text>
           <Text testID="images-where" class="select-text text-xs leading-5 text-muted-foreground">
-            {`${IMAGES_WHERE[storageKind().kind]}把本地图片上传到图床还没有做。`}
+            {IMAGES_WHERE[storageKind().kind]}
           </Text>
         </View>
         <If when={storageKind().kind === "gateway"}>
+          <ImageHostSection />
           <CopyToLibrary />
         </If>
         <If when={props.inBrowser && storageKind().kind === "local" && gatewayRefusal()}>

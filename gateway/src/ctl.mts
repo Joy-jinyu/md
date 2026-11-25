@@ -4,9 +4,11 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { homedir, userInfo } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { isOrigin } from "./auth.mts";
+import { GatewayError } from "./errors.mts";
+import { parseImageHost, type ImageHost } from "./image-host.mts";
 import { DEFAULT_PORT, LISTEN_HOST } from "./protocol.ts";
 
-type Config = { library: string; port: number; origins: string[]; autoUpdate: boolean };
+type Config = { library: string; port: number; origins: string[]; autoUpdate: boolean; imageHost?: ImageHost };
 
 const ROOT = process.env.PAIRDOWN_HOME ?? join(homedir(), ".pairdown");
 const LABEL = process.env.PAIRDOWN_LABEL ?? "site.pairwise.md.gateway";
@@ -25,6 +27,10 @@ const HELP = [
   "  config origins <来源,来源>  额外放行的页面来源（比如 http://127.0.0.1:8811）；写 none 清空",
   "  config port <端口>          换端口（线上页面只连 7341，一般不用改）",
   "  config autoUpdate on|off    有新版时要不要自动更新",
+  "  config imageHost <上传地址>   设置图床（收 multipart 上传的接口）；写 none 不再用图床",
+  "  config imageHostField <名字>  放图片的表单字段名（默认 file）",
+  "  config imageHostHeader <头>   上传时带的请求头，如 \"Authorization: Bearer xxx\"；写 none 清空",
+  "  config imageHostUrlPath <位置> 返回的 JSON 里图片地址在哪，如 data.url；写 auto 自动找",
   "  start | stop | restart      启动、停止、重启后台网关",
   "  logs                        看最近的日志",
   "  update                      现在就更新到最新版",
@@ -34,7 +40,8 @@ const HELP = [
 class Refusal extends Error {}
 
 const readConfig = (): Config => ({ ...DEFAULTS, ...(existsSync(CONFIG) ? (JSON.parse(readFileSync(CONFIG, "utf8")) as Partial<Config>) : {}) });
-const writeConfig = (c: Config) => writeFileSync(CONFIG, `${JSON.stringify(c, null, 2)}\n`);
+// 只有自己能读：图床的请求头里可能是密钥
+const writeConfig = (c: Config) => writeFileSync(CONFIG, `${JSON.stringify(c, null, 2)}\n`, { mode: 0o600 });
 const launchctl = (...args: string[]) => spawnSync("launchctl", args, { encoding: "utf8" });
 const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -94,9 +101,37 @@ function showConfig(c: Config) {
   console.log(`端口（port）：${c.port}`);
   console.log(`额外放行的页面（origins）：${c.origins.length > 0 ? c.origins.join(",") : "无"}`);
   console.log(`自动更新（autoUpdate）：${c.autoUpdate ? "on" : "off"}`);
+  const h = c.imageHost;
+  console.log(`图床（imageHost）：${h ? h.url : "没有设置"}`);
+  if (!h) return;
+  console.log(`  文件字段名（imageHostField）：${h.field}`);
+  console.log(`  请求头（imageHostHeader，只显示名字）：${Object.keys(h.headers).join(",") || "无"}`);
+  console.log(`  图片地址的位置（imageHostUrlPath）：${h.urlPath || "auto"}`);
+}
+
+/** 改图床的一项。请求头只留一条：再设一次就是换掉。 */
+function hostChanged(c: Config, key: string, value: string): Config {
+  if (key === "imageHost" && value === "none") {
+    const { imageHost: _gone, ...rest } = c;
+    return rest;
+  }
+  if (key !== "imageHost" && !c.imageHost) throw new Refusal("先设置上传地址：pairdown config imageHost <上传地址>");
+  const at = value.indexOf(":");
+  if (key === "imageHostHeader" && value !== "none" && at <= 0) throw new Refusal('请求头要写成 "名字: 值"');
+  const patch =
+    key === "imageHost" ? { url: value }
+    : key === "imageHostField" ? { field: value }
+    : key === "imageHostUrlPath" ? { urlPath: value === "auto" ? "" : value }
+    : { headers: value === "none" ? {} : { [value.slice(0, at).trim()]: value.slice(at + 1).trim() } };
+  try {
+    return { ...c, imageHost: parseImageHost({ ...c.imageHost, ...patch }, null) };
+  } catch (e) {
+    throw e instanceof GatewayError ? new Refusal(e.message) : e;
+  }
 }
 
 function changed(c: Config, key: string, value: string): Config {
+  if (key.startsWith("imageHost")) return hostChanged(c, key, value);
   if (key === "library") return { ...c, library: resolve(value.replace(/^~(?=\/|$)/, homedir())) };
   if (key === "port") {
     const port = Number(value);
@@ -117,8 +152,8 @@ function config(key?: string, value?: string) {
   if (key === undefined) return showConfig(readConfig());
   if (value === undefined) throw new Refusal(`缺少要改成的值\n\n${HELP}`);
   writeConfig(changed(readConfig(), key, value));
-  // autoUpdate 网关每次检查时现读，不用重启
-  if (key !== "autoUpdate") start();
+  // autoUpdate、图床，网关每次用时现读，不用重启
+  if (key !== "autoUpdate" && !key.startsWith("imageHost")) start();
   showConfig(readConfig());
 }
 

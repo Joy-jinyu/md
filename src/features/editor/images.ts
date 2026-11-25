@@ -1,6 +1,6 @@
 /**
  * 正文里的图片：粘贴 / 拖入 / 选择框插图（存进文档库、正文写相对路径）、粘贴网页带来的 data: 图片转存、外链图片转存到本地。
- * 存哪、怎么存都交给 store 的 documentStore（putAsset / transfer）；这里只管拿字节、改正文里的地址、报结果。
+ * 存哪、怎么存都交给 store 的 documentStore（putAsset / transfer），传不传图床见 image-host.ts；这里只管拿字节、改正文里的地址、报结果。
  */
 import { Picker, signal } from "nsh";
 import { chain, command, type RichEditorSession, type RichNodeJSON, setMeta, setNodeAttribute } from "nsh/base";
@@ -10,6 +10,7 @@ import { documentStore } from "../../store/backend";
 import { AssetRejected, base64ToBytes, IMAGE_TYPES, isRelativeSrc } from "../../store/image-file";
 import { currentDocId } from "../../store/library";
 import { say } from "../library/receipt";
+import { notUploadedText, placeImage, uploadTarget } from "./image-host";
 import { eachNode, type Node } from "./outline";
 import { selectionRange } from "./selection";
 
@@ -92,7 +93,10 @@ function docIdOrSay(): string | null {
   return id;
 }
 
-/** 一批图片字节存进文档库，在光标处插成图片。存不进去的逐张报原因，存进去的照样插。`earlier`：之前就没读出来的几张的原因，和这里的一起报（回执只留最后一句）。 */
+/**
+ * 一批图片字节传到图床或存进文档库（image-host.ts 定），在光标处插成图片。存不进去的逐张报原因，存进去的照样插；没传上图床、改存本地的也报。
+ * `earlier`：之前就没读出来的几张的原因，和这里的一起报（回执只留最后一句）。
+ */
 export async function insertImageBytes(session: RichEditorSession, files: { name: string; data: Uint8Array }[], earlier: string[] = []) {
   if (files.length === 0) {
     if (earlier.length > 0) say(`没能插入图片：${earlier.join("；")}`, "warn");
@@ -100,19 +104,23 @@ export async function insertImageBytes(session: RichEditorSession, files: { name
   }
   const docId = docIdOrSay();
   if (!docId) return;
+  const target = await uploadTarget(true);
   const nodes: RichNodeJSON[] = [];
   const failed = [...earlier];
+  const local: string[] = [];
   for (const f of files) {
     try {
-      const src = await documentStore.putAsset(docId, f.data);
-      nodes.push({ type: "image", attrs: { src, alt: "" } });
+      const placed = await placeImage(target, docId, f.data);
+      if (placed.notUploaded) local.push(`「${f.name}」${placed.notUploaded}`);
+      nodes.push({ type: "image", attrs: { src: placed.src, alt: "" } });
     } catch (e) {
       console.warn("image not stored", e);
       failed.push(`「${f.name}」${messageOf(e)}`);
     }
   }
   if (nodes.length > 0 && !session.insertContent(nodes)) failed.push("图片存好了，但插不进光标所在的位置");
-  if (failed.length > 0) say(`没能插入图片：${failed.join("；")}`, "warn");
+  const parts = [failed.length > 0 ? `没能插入图片：${failed.join("；")}` : "", notUploadedText(local)].filter(Boolean);
+  if (parts.length > 0) say(parts.join("。"), "warn");
 }
 
 /** 「插入图片」：弹系统的选择框选图（可以多选），存进文档库后插到光标处。 */
@@ -171,20 +179,28 @@ export function storeDataImages(session: RichEditorSession, tries = DATA_IMAGE_T
   }, wait);
 }
 
+/** 设置了图床就传图床（没设置不问，存本地）。 */
 async function storeSources(session: RichEditorSession, sources: string[]) {
   const docId = docIdOrSay();
   if (!docId) return;
+  const target = await uploadTarget(false);
   const failed: string[] = [];
+  const local: string[] = [];
   for (const src of sources) {
     try {
-      const bytes = base64ToBytes(src.slice(src.indexOf(",") + 1));
-      replaceSrc(session, src, await documentStore.putAsset(docId, bytes), false);
+      const placed = await placeImage(target, docId, base64ToBytes(src.slice(src.indexOf(",") + 1)));
+      if (placed.notUploaded) local.push(placed.notUploaded);
+      replaceSrc(session, src, placed.src, false);
     } catch (e) {
       console.warn("pasted data image not stored", e);
       failed.push(messageOf(e));
     }
   }
-  if (failed.length > 0) say(`粘贴进来的图片有 ${failed.length} 张没能存进文档库，正文里还是原来的内嵌数据：${[...new Set(failed)].join("；")}`, "warn");
+  const parts = [
+    failed.length > 0 ? `粘贴进来的图片有 ${failed.length} 张没能存进文档库，正文里还是原来的内嵌数据：${[...new Set(failed)].join("；")}` : "",
+    notUploadedText(local),
+  ].filter(Boolean);
+  if (parts.length > 0) say(parts.join("。"), "warn");
 }
 
 /** 下好了、正文里却一处都没换成（转存期间那张图被删了、地址改了）。 */
