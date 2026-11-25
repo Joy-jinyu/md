@@ -90,6 +90,8 @@ export function watchLibrary(lib: Library, emit: (e: ServerMessage) => void, log
     else others.add(rel);
     timer ??= setTimeout(() => void flush().catch((e) => log(`推送改动失败：${describeError(e)}`)), DEBOUNCE_MS);
   });
+  // 监听自己出错（文库里有读不了的目录、目录被删）只记日志，网关不退出
+  watcher.on("error", (e) => log(`监听文库出错：${describeError(e)}`));
   watcher.on("error", (e) => log(`监听文库出错：${describeError(e)}`));
   return () => {
     clearTimeout(timer);
