@@ -11,7 +11,7 @@ import { allDocs, createDocument, currentDocId, displayName, mostRecent, openDoc
 import { problemText } from "./external";
 import { clearWarning, say } from "./receipt";
 import type { LibraryRequest } from "./requests";
-import { pendingFind } from "./requests";
+import { historyOpen, pendingFind } from "./requests";
 
 type Show = (id: string, find?: string) => Promise<boolean>;
 
@@ -58,6 +58,11 @@ export function createLibraryActions(show: Show) {
       return;
     }
     if (await leave("切换")) await go(id, from, find);
+  };
+
+  const history = async (id: string) => {
+    await open(id);
+    if (currentDocId() === id) historyOpen.set(true);
   };
 
   /** 新建（`text` 为空）或导入：先关当前这篇，再建；建不成就回到当前这篇。`note` 换掉导入成功后的那句回执。 */
@@ -155,6 +160,8 @@ export function createLibraryActions(show: Show) {
       switch (request.kind) {
         case "open":
           return open(request.id, request.find);
+        case "history":
+          return history(request.id);
         case "create":
           return create("");
         case "import":

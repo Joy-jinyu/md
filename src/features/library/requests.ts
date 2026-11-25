@@ -4,6 +4,8 @@ import { signal } from "nsh";
 export type LibraryRequest =
   /** 打开一篇；`find` 是打开后要查找并跳过去的词（全文搜索的结果）。 */
   | { kind: "open"; id: string; find?: string }
+  /** 先打开这一篇，再显示它的版本历史。 */
+  | { kind: "history"; id: string }
   | { kind: "create" }
   /** 把读进来的文件存成一篇新文档并打开。 */
   | { kind: "import"; name: string; text: string }

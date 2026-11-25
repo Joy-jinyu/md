@@ -216,7 +216,7 @@ test("re-uploading a gist deleted on GitHub does not upload an empty document, a
   expect(sent(app, "POST")).toEqual([]);
   await app.press("id:sync-close");
   expect(app.shows("id:sync-status >> text:1 件事要选")).toBe(true);
-  expect(app.texts().some((t) => t.startsWith("已同步"))).toBe(false);
+  expect(app.texts().some((t) => t.startsWith("上次同步"))).toBe(false);
 });
 
 test("while a choice is being carried out, 「立即同步」cannot be pressed", async () => {
@@ -279,11 +279,11 @@ test("375 wide: the document name and save state stay; the sync entry is an icon
   await app.keyboard.press("end");
   await app.type("label:正文", "。");
   await app.waitFor("text:已保存", { timeout: 3000 });
-  expect(app.shows("label:同步：已同步 " + `${day.getMonth() + 1}月${day.getDate()}日` + "，打开同步面板")).toBe(true);
-  expect(app.texts().some((t) => t.startsWith("已同步"))).toBe(false);
+  expect(app.shows("label:同步：上次同步 " + `${day.getMonth() + 1}月${day.getDate()}日` + "，打开同步面板")).toBe(true);
+  expect(app.texts().some((t) => t.startsWith("上次同步"))).toBe(false);
   expect(app.texts()).toContain("周报");
   await app.setViewport(1280, 860);
-  await app.waitUntil(() => app.texts().some((t) => t.startsWith("已同步")));
+  await app.waitUntil(() => app.texts().some((t) => t.startsWith("上次同步")));
 });
 
 /** 没在侧栏改过名的一篇：文档名还是「未命名」，正文标题「第 47 周」。 */
