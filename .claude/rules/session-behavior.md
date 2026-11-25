@@ -1,11 +1,11 @@
-# Session 行为
+# Session behavior
 
-<!-- [default] team.ai_ratio = 1.0（单人 + AI 开发），未单独确认 -->
+<!-- [default] team.ai_ratio = 1.0 (one person developing with AI), without separate confirmation. -->
 
-| 规则 | 级别 | 检测方式 |
-|------|------|---------|
-| 开始时按 `EXECUTION.md` 第 7 节恢复上下文，第一句说清停在哪、下一步做什么 | L2 | 人工 |
-| 功能开工前有实施计划（`~/Documents/learning/html/md/`），用户确认后再写代码 | L1 | 人工 |
-| 结束时更新实施计划，写下下一步 | L2 | 人工 |
-| 用 nsh API 前先查 `.nsh/types/`，不凭记忆写签名 | L1 | review |
-| 踩到 nsh 的坑（行为和声明不符、平台差异），记进计划的「已知问题」 | L3 | 人工 |
+| Rule | Level | How to check |
+|------|-------|--------------|
+| At the start of the session, restore context as described in section 7 of `EXECUTION.md`. State where work stopped and what comes next in the first sentence. | L2 | Manual |
+| Prepare an implementation plan under `~/Documents/learning/html/md/` before starting a feature. Wait for the user to confirm it before writing code. | L1 | Manual |
+| At the end of the session, update the implementation plan with the next step. | L2 | Manual |
+| Check `.nsh/types/` for signatures before using nsh APIs. | L1 | Review |
+| Record nsh pitfalls, such as differences between behavior and type declarations or between platforms, in the plan's “已知问题” section. | L3 | Manual |

@@ -1,11 +1,11 @@
-# 代码风格
+# Code style
 
-细则见 `CONTRIBUTING.md`；这里只列要检查的项。通用风格的唯一来源是用户全局 `~/.claude/rules/coding-style.md`。检测命令里多个模式用 `-e`，不用 `|`。
+See `CONTRIBUTING.md` for details. This file lists the checks. The user's global `~/.claude/rules/coding-style.md` is the authoritative source for general code style. Supply multiple patterns with `-e` to avoid a `|` in check commands.
 
-| 规则 | 级别 | 检测方式 |
-|------|------|---------|
-| 文件 ≤ 800 行，函数 ≤ 50 行，嵌套 ≤ 4 层 | L2 | review |
-| 颜色只用 `theme.json` 的角色，不写十六进制、调色板类、`dark:` | L1 | `rg -n -e '#[0-9a-fA-F]{3,8}\b' -e 'dark:' -e '\bbg-[a-z]+-[0-9]{2,3}\b' -e '\btext-[a-z]+-[0-9]{2,3}\b' -e '\bborder-[a-z]+-[0-9]{2,3}\b' src`（后三个模式查「颜色名-数字」类；不用 `|`，可以照抄） |
-| 不直接改对象或数组，用新值替换 | L2 | review |
-| 没有空 `catch` | L1 | `rg -n -U 'catch\s*(\(\w*\))?\s*\{\s*\}' src` 和 `rg -n '\.catch\(\s*\(\w*\)\s*=>\s*\{\s*\}\s*\)' src` |
-| 注释只写约定、反直觉处理、数值出处、指针 | L3 | review |
+| Rule | Level | How to check |
+|------|-------|--------------|
+| Keep files at or below 800 lines, functions at or below 50 lines, and nesting at or below four levels. | L2 | Review |
+| Use only color roles from `theme.json`. Avoid hex values, palette classes, and `dark:`. | L1 | `rg -n -e '#[0-9a-fA-F]{3,8}\b' -e 'dark:' -e '\bbg-[a-z]+-[0-9]{2,3}\b' -e '\btext-[a-z]+-[0-9]{2,3}\b' -e '\bborder-[a-z]+-[0-9]{2,3}\b' src`. The last three patterns check for classes that combine a color name and a number. The command can be copied as-is. |
+| Replace objects and arrays with new values. | L2 | Review |
+| Do not leave `catch` blocks empty. | L1 | `rg -n -U 'catch\s*(\(\w*\))?\s*\{\s*\}' src` and `rg -n '\.catch\(\s*\(\w*\)\s*=>\s*\{\s*\}\s*\)' src` |
+| Use comments only for conventions, counterintuitive decisions, sources for numbers, and pointers to authoritative definitions. | L3 | Review |

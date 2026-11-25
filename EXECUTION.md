@@ -1,77 +1,75 @@
-# md 执行铁律
+# md Execution Rules
 
-> 所有开发 session 必须遵守的规则。
-> 目标：任何 session 中断都能无损接上，任何「做完了」都有证据。
-> 这里只写本项目特有的部分；通用规则（证据优先、Git、工具、验证分层）的唯一来源在用户全局 `~/.claude/CLAUDE.md` 和 `~/.claude/rules/`。
+> These rules apply to every development session.
+> Leave enough context to resume after any interruption, and provide evidence for every completion claim.
+> This document covers project-specific rules. The user's global guides at `~/.claude/CLAUDE.md` and `~/.claude/rules/` are the single source for general rules on evidence, Git, tools, and verification levels.
 
-## 0. 级别与全局规则
+## 0. Rule Levels and Global Rules
 
-本项目规则表里的级别和全局 BCP 14 用词对应如下：
+The levels in the project rule tables correspond to the global BCP 14 terms as follows.
 
-| 级别 | 对应 | 含义 |
-|------|------|------|
-| L0 | MUST，不可协商 | 违反即停，不交付 |
-| L1 | MUST，有检测命令 | 提交前必须过；要豁免先问用户 |
-| L2 | SHOULD | 默认这样做，偏离要当场说明理由 |
-| L3 | MAY | 建议 |
+| Level | BCP 14 term | Meaning |
+|-------|-------------|---------|
+| L0 | MUST, mandatory | Stop and hold delivery if the rule is violated |
+| L1 | MUST, with a check | Pass the check before committing. Ask the user before making an exception |
+| L2 | SHOULD | Follow by default and explain any deviation when it occurs |
+| L3 | MAY | Optional guidance |
 
-和全局规则不一致的地方（项目优先，这里明说）：
+The following project rules take precedence over the global rules where they differ.
 
-- **默认分支是 `main`**：比较基线用 `origin/main`，代替全局写的 `origin/master`。
-- **commit 和 push 分开授权**：全局里「commit 后不停顿直接 push」和「每个外部操作单独授权」互相矛盾，本项目取后者；用户一次说「提交并推送」时可以连做。
-- **没有 commitlint**：本项目没有 package.json，commit scope 按 `.claude/rules/git-workflow.md` 人工核对。
-- **不用 `ALLOW_HEAVY` / RTK**：项目小，`make check`、`make test`、`make build-*` 都算 scoped 命令。
-- **`@pkgs/theme`、`@pkgs/us-icons`、prism-ui 的全局规则针对公司仓库，本项目不适用**：颜色用 `theme.json`，图标做法见 `CONTRIBUTING.md` 2.2。
+- **Use `main` as the default branch.** Use `origin/main` as the comparison baseline. The global guidance lists `origin/master`.
+- **Obtain separate authorization for commits and pushes.** The global guidance calls for pushing immediately after a commit and also requires authorization for each external action. Follow the authorization rule in this project. An instruction to commit and push authorizes both actions in sequence.
+- **Check commit scopes manually.** This project has no root `package.json` or commitlint configuration. Use `.claude/rules/git-workflow.md` to check the scope.
+- **Run the Make targets directly.** `make check`, `make test`, and `make build-*` are scoped commands for this small project and require neither `ALLOW_HEAVY` nor RTK.
+- **Use this project's theme and icon conventions.** The global requirements for `@pkgs/theme`, `@pkgs/us-icons`, and prism-ui apply to company repositories. Use `theme.json` for colors and follow section 2.2 of `CONTRIBUTING.md` for icons.
 
-## 1. 测试节奏
+## 1. Test Cadence
 
-用户全局规则「测试节奏」优先于 TDD：
+The test cadence in the user's global rules takes precedence over TDD.
 
-| 阶段 | 做什么 |
-|------|--------|
-| 写代码 | 一批改动整体写完，写的过程中不边写边跑 |
-| 全量跑 | `make check && make test` |
-| 修问题 | 按屏幕（或模块）逐个修，修完一个只跑它的测试（`nsh test tests/<file>.test.tsx`），过了再修下一个 |
-| 收尾 | 全部修完再跑一次全量 |
-| 证明测试有效 | 事后变异检查：故意改坏实现，确认对应测试变红，再改回来 |
+| Phase | Action |
+|-------|--------|
+| Implementation | Finish the batch of changes before running its checks |
+| Full run | Run `make check && make test` |
+| Fixes | Fix one screen or module at a time. Run its test with `nsh test tests/<file>.test.tsx` and pass it before moving on |
+| Wrap-up | Repeat the full run after all fixes |
+| Verify test effectiveness | Temporarily break the implementation, confirm the corresponding test fails, and restore the implementation |
 
-测试写法：
+- Place all tests in `tests/`. Use `.test.ts` for pure functions and `.test.tsx` for tests that open the app.
+- Assert only user-observable behavior, such as on-screen text (`app.texts()`), controls a user can press (`app.press("名称")`), and stored Markdown (`app.storage()`). Keep internal functions, signal values, and call counts outside the assertions.
+- Put Markdown round-trip tests in `tests/doc-roundtrip.test.ts` and follow the fidelity rules in `CLAUDE.md`. Section 4.9 of the implementation plan is the single source for required assertions and fixtures. Unchanged text must round-trip byte for byte. Editing one block must preserve the bytes of every other block. Reading and writing a rewritten result again must leave it unchanged. Rewriting must preserve meaning. After deleting, moving, inserting, splitting, or merging blocks, parsing the exported text must reproduce the editor content. Use the project's conversion path for these tests. The built-in `format: "markdown"` and `getMarkdown()` paths lose content, as verified on 2026-11-24.
 
-- 所有测试放在 `tests/`，`.test.ts`（纯函数）和 `.test.tsx`（打开应用）都可以。
-- 只断言用户看得到的结果：屏幕上的文字（`app.texts()`）、按得到的控件（`app.press("名称")`）、存储里的 Markdown（`app.storage()`）。不断言内部函数、signal 的值、调用次数。
-- Markdown 往返测试放 `tests/doc-roundtrip.test.ts`，按 `CLAUDE.md` 的保真约定断言，断言项和样例要求的唯一定义在实施计划 4.9 节（不改直接写出逐字节相同；改一块其余块逐字节相同；重写结果再读再写不变；重写不丢语义；删 / 移 / 插 / 拆 / 并之后写出的文本重新解析等于编辑器内容）。不能只拿 nsh 内置的 `format: "markdown"` 读入 + `getMarkdown()` 写出来对比——内置读写本身会丢内容（2026-11-24 实测）。
+## 2. Progress Documentation
 
-## 2. 进度文档
+| Document | Location | When to update |
+|----------|----------|----------------|
+| Phase checklist | Current Phase in `CLAUDE.md` | Check off a phase after all acceptance criteria pass |
+| Implementation plan | `~/Documents/learning/html/md/<topic>-plan.html`, with an entry in the index table in `~/Documents/learning/html/README.md` | Write it before starting and record the outcome when done |
 
-| 文档 | 位置 | 何时更新 |
-|------|------|---------|
-| 阶段清单 | `CLAUDE.md`「当前阶段」 | 一个阶段的验收全过之后打勾 |
-| 实施计划 | `~/Documents/learning/html/md/<主题>-plan.html`，并在 `~/Documents/learning/html/README.md` 目录表补一行 | 开工前写，做完后标注完成情况 |
+- Start by following the protocol in section 7.
+- To wrap up, run the checks for the batch, update the implementation plan, commit with the user's authorization, and record the next step.
 
-- 开始：按第 7 节 Resume 协议。
-- 结束：跑本批验证 → 更新实施计划 → （用户授权后）commit → 写下下一步。
+## 3. Verification
 
-## 3. 验证
-
-| 声称 | 必须给的证据 | 不算数的说法 |
-|------|-------------|-------------|
-| 「类型检查过了」 | `make check` 输出无错误 | 「编辑器里没报红」 |
-| 「测试过了」 | `make test` 输出 0 失败 | 「应该能过」 |
-| 「Web 端能用」 | `make dev-web` 浏览器里真实操作的截图或步骤记录 | 「macOS 上好了，Web 一样」 |
-| 「macOS 能用」 | `make dev` 窗口里真实操作的截图或步骤记录 | 「Web 上好了」 |
-| 「打包成功」 | `make build-web` / `make build-mac` 退出码 0，`dist/web/Pairdown/index.html` 或 `dist/macos/Pairdown.app` 存在 | 「check 过了」 |
-| 「bug 修了」 | 原始复现步骤不再出现 + 对应测试 | 「改了代码」 |
-| 「同步没问题」 | 两端各改一处后同步，冲突提示出现，选哪边就留哪边 | 「接口返回 200」 |
+| Claim | Required evidence | Insufficient evidence |
+|-------|-------------------|-----------------------|
+| Type checking passed | `make check` reports no errors | The editor shows no errors |
+| Tests passed | `make test` reports zero failures | The tests should pass |
+| The web app works | Screenshots or recorded steps from using `make dev-web` in a browser | The same change works on macOS |
+| The macOS app works | Screenshots or recorded steps from using the `make dev` window | The same change works on the web |
+| Packaging succeeded | `make build-web` or `make build-mac` exits with code 0 and produces `dist/web/Pairdown/index.html` or `dist/macos/Pairdown.app`, respectively | Type checking passed |
+| A bug is fixed | The original reproduction steps no longer trigger it, and a corresponding test is in place | The code changed |
+| Sync works | Edit on both clients and sync. Verify that a conflict appears and the chosen version is kept | The API returned HTTP 200 |
 
 ## 4. Git
 
-- 一次提交一个逻辑改动；只 `git add` 本次改动的文件。
-- commit、push、建 GitHub 仓库、开 Pages、部署 Worker 都是对外操作，每一步单独获得用户授权（见第 0 节）。
-- 提交前：`make check && make test` 通过；`git diff --cached` 里没有 token、secret、`.nsh/`、`dist/`。
+- Make one logical change per commit and use `git add` only for files that belong to it.
+- Obtain user authorization for each external action, including committing, pushing, creating a GitHub repository, enabling Pages, and deploying the Worker. See section 0 for combined commit and push authorization.
+- Before committing, pass `make check && make test` and inspect `git diff --cached` for tokens, secrets, `.nsh/`, and `dist/`. Keep all of them out of the commit.
 
-## 5. 架构守护
+## 5. Architecture Boundaries
 
-依赖方向只能向下：
+Dependencies must follow the directions shown below.
 
 ```text
 features/ ──▶ ui/
@@ -79,68 +77,69 @@ features/ ──▶ ui/
     ├──▶ store/ ──▶ doc/
     │      └──────▶ gateway/src/protocol.ts
     ├──▶ sync/  ──▶ doc/
-    │      └──────▶ store/（登录、同步记录只经 store/sync-store.ts 存取）
-    └──▶ platform/ ──▶ store/（接口和类型）、doc/、gateway/src/protocol.ts（macOS 文库的 assets/ 目录名）
+    │      └──────▶ store/ (access login and sync records only through store/sync-store.ts)
+    └──▶ platform/ ──▶ store/ (interfaces and types), doc/,
+                       gateway/src/protocol.ts (the assets/ directory name for the macOS library)
 ```
 
-`gateway/src/protocol.ts` 是页面和本机网关共用的协议（类型和常量，不 import 任何东西）：只有 `store/` 和 `platform/macos/` 直接引它，`features/` 要用里面的常量经 `store/`（`image-file.ts`、`gateway-store.ts`）转出。**改它时 `gateway/` 和 `src/` 必须在同一个提交里**，不然页面和网关的协议版本对不上。
+`gateway/src/protocol.ts` defines the protocol shared by the app and the local gateway. It contains only types and constants and has no imports. Only `store/` and `platform/macos/` import it directly. Code in `features/` uses protocol constants through the re-exports in `store/` (`image-file.ts` and `gateway-store.ts`). **Commit changes to `gateway/` and `src/` together when updating the protocol** so the app and gateway use compatible versions.
 
-`doc/` 只放不引 nsh 的纯函数（标题、摘要提取，冲突比较，解析结果 → 编辑器 JSON，编辑器 JSON → Markdown 写出，新旧块对齐）。Markdown 的解析和原文切片要调 nsh 自带的 `TextView.parse`（用户 2026-11-24 定：不引 `markdown-it` 等 npm 依赖），所以这一个文件放 `features/` 的编辑页目录下，不放 `doc/`；细节见实施计划 4.1 节。
+Keep `doc/` limited to pure functions with no nsh imports. These include extracting titles and excerpts, comparing conflicting versions, converting parse results to editor JSON, writing Markdown from editor JSON, and aligning old and new blocks. Use the built-in `TextView.parse` for Markdown parsing and slicing the source text. The user decided on 2026-11-24 to avoid npm dependencies such as `markdown-it` for parsing. Keep the file that calls `TextView.parse` in the editor directory under `features/`. See section 4.1 of the implementation plan.
 
-| 违规 | 检测命令（应为空） | 处理 |
-|------|-------------------|------|
-| `doc/` 引用 nsh | `rg -n "from ['\"]nsh" src/doc` | 移出 `doc/` |
-| 平台分支出现在 `platform/index.ts` 以外 | `rg -n '\bplatform\.\w+' src -g '!src/platform/index.ts'` | 改成调 `platform/` 导出的接口 |
-| `store/` 以外用 `Storage` | `rg -n '\bStorage\b' src -g '!src/store/**'` | 改成调 `store/` |
-| `store/`、`platform/` 以外直接引网关协议 | `rg -n 'gateway/src' src -g '!src/store/**' -g '!src/platform/**'` | 经 `store/` 转出 |
-| `sync/`、`store/` 以外碰 token | `rg -n -i -e 'access_?token' -e authorization -e bearer src -g '!src/sync/**' -g '!src/store/**'` | 收回到 `sync/` |
+| Violation | Check (expected to return no matches) | Fix |
+|-----------|---------------------------------------|-----|
+| An nsh import in `doc/` | `rg -n "from ['\"]nsh" src/doc` | Move the code out of `doc/` |
+| A platform branch outside `platform/index.ts` | `rg -n '\bplatform\.\w+' src -g '!src/platform/index.ts'` | Use the interface exported by `platform/` |
+| `Storage` use outside `store/` | `rg -n '\bStorage\b' src -g '!src/store/**'` | Use the `store/` interface |
+| A direct gateway protocol import outside `store/` and `platform/` | `rg -n 'gateway/src' src -g '!src/store/**' -g '!src/platform/**'` | Use a re-export from `store/` |
+| Token access outside `sync/` and `store/` | `rg -n -i -e 'access_?token' -e authorization -e bearer src -g '!src/sync/**' -g '!src/store/**'` | Move the code into `sync/` |
 
-> 检测命令里不用 `|`（在 Markdown 表格里要转义，照抄会变成字面竖线），多个模式用 `-e`。
+> Use multiple `-e` flags for alternatives in these checks. A `|` inside a Markdown table requires escaping and can become a literal pipe when copied.
 
-## 6. 文件变更
+## 6. File Changes
 
-- 改文件前先读；删符号或文件前，用 `rg` 精确搜索确认引用为零。
-- `.nsh/` 是 nsh 生成的类型和缓存，不手改、不提交；删掉后 `nsh check` 会重新生成。
-- 加 `web.host`（`host.js`）时：无头测试会加载它而出错。届时照参考应用的做法，新建 `tests/nsh.json`（不带 `web.host`，`theme`、`tailwind`、`capabilities` 三项和根目录 `nsh.json` 一致）和 `tests/App.tsx`（`import "../App"`），测试里改成 `open("./App.tsx")`，Makefile 的 `test` 改成 `nsh test tests`（给目录时该目录要有 `App.tsx`）。之后改根目录这三项要同步改 `tests/nsh.json`。
+- Read a file before editing it. Before deleting a symbol or file, run a targeted `rg` search and confirm it has zero references.
+- `.nsh/` contains generated nsh types and caches. Keep it out of manual edits and commits. `nsh check` regenerates it after removal.
+- If `web.host` (`host.js`) is added, headless tests will load it and fail. Follow the reference app by creating `tests/nsh.json` without `web.host` and copying the root `nsh.json` values for `theme`, `tailwind`, and `capabilities`. Create `tests/App.tsx` with `import "../App"` and switch tests to `open("./App.tsx")`. Change the Makefile's `test` target to `nsh test tests` because nsh requires `App.tsx` in the specified directory. Keep those three settings in sync when the root configuration changes.
 
-## 7. Resume 协议
+## 7. Resume Protocol
 
-上下文恢复顺序：`CLAUDE.md` → `EXECUTION.md` → 最新实施计划 → `git status` / `git log -5` → `make check` → `make test`。
+Restore context in this order. Read `CLAUDE.md`, `EXECUTION.md`, and the latest implementation plan, then run `git status`, `git log -5`, `make check`, and `make test`.
 
-第一句话模板：
+Use this template for the first sentence.
 
 ```text
-上次停在：<阶段 / 计划里的哪一步>；工作区：<干净 / 有哪些改动>；检查：<check 和 test 结果>；下一步：<要做的事>
+Last session stopped at <phase / plan step>. Working tree <clean / list of changes>. Checks <check and test results>. Next <action>.
 ```
 
-## 8. 质量门禁
+## 8. Quality Gates
 
-| 范围 | 检查 | 级别 |
-|------|------|------|
-| 每次交回 | 没写这批代码的子代理按预期行为审过 diff | L0 |
-| 每个任务 | 相关测试通过 | L1 |
-| 每个任务 | 改到的屏幕在两个 host 里真实操作过 | L0 |
-| 每个阶段 | `make check` 无错误 | L1 |
-| 每个阶段 | `make test` 全部通过 | L1 |
-| 每个阶段 | `make build-web` 和 `make build-mac` 成功 | L1 |
-| 每个阶段 | `CLAUDE.md`「当前阶段」已更新 | L2 |
-| 改了 schema 或编辑器读写 | 往返测试通过 | L0 |
-| 改了同步 | 冲突场景手动验证过 | L0 |
+| Scope | Check | Level |
+|-------|-------|-------|
+| Every handoff | A subagent who did not write the changes reviewed the diff against the expected behavior | L0 |
+| Every task | Relevant tests pass | L1 |
+| Every task | The changed screens were exercised in both hosts | L0 |
+| Every phase | `make check` reports no errors | L1 |
+| Every phase | All `make test` tests pass | L1 |
+| Every phase | `make build-web` and `make build-mac` succeed | L1 |
+| Every phase | Current Phase in `CLAUDE.md` is up to date | L2 |
+| Schema or editor import/export changes | Round-trip tests pass | L0 |
+| Sync changes | The conflict scenario has been verified manually | L0 |
 
-## 9. 异常处理
+## 9. Exception Handling
 
-| 情况 | 做法 |
-|------|------|
-| 测试失败 | 先确认是实现错还是测试错，不改测试去迁就实现 |
-| nsh 行为和类型声明不符 | 先在 `.nsh/types` 和最小复现里确认，再决定绕过还是给 longbridge/nsh 提 issue；绕过的地方写一行注释说明原因和版本 |
-| 文档之间冲突 | 按 `CLAUDE.md` 的冲突优先级；冲突本身告诉用户 |
-| 同一个问题修了 3 次还不对 | 停下，列出试过的方案和当前假设，交还给用户 |
+| Situation | Action |
+|-----------|--------|
+| A test fails | First determine whether the implementation or test is wrong. Keep the test aligned with the expected behavior |
+| nsh behavior differs from its type declarations | Check `.nsh/types` and create a minimal reproduction before deciding whether to work around it or file an issue with longbridge/nsh. Add a one-line comment with the reason and version for any workaround |
+| Documents conflict | Follow the precedence in `CLAUDE.md` and tell the user about the conflict |
+| The same issue remains after three fixes | Stop, list the attempted fixes and current hypotheses, and hand it back to the user |
 
-## 10. 速查
+## 10. Quick Reference
 
-| 要做的事 | 步骤 |
-|---------|------|
-| 开始新功能 | 写计划 → 用户确认 → 改 DESIGN.md → 实现 → 验证 |
-| 接着上次做 | 第 7 节 Resume 协议 |
-| 提交 | `make check && make test` → 只 add 本次文件 → 用户授权 → commit |
-| 说「做完了」 | 第 3 节的证据逐条给出 |
+| Task | Steps |
+|------|-------|
+| Start a feature | Write a plan, obtain user confirmation, update `DESIGN.md`, implement, and verify |
+| Resume work | Follow the resume protocol in section 7 |
+| Commit | Run `make check && make test`, stage only the files for this change, obtain user authorization, and commit |
+| Report completion | Provide the applicable evidence from section 3 |

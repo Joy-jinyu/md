@@ -1,11 +1,11 @@
-# 工具
+# Tools
 
-通用工具优先级（rg / fd / sd / sg / jq）的唯一来源是用户全局 `~/.claude/rules/high-io-tools.md`；本项目不用 `ALLOW_HEAVY` / RTK（见 `EXECUTION.md` 第 0 节）。本项目补充：
+The user's global `~/.claude/rules/high-io-tools.md` is the authoritative source for general tool preferences (rg, fd, sd, sg, and jq). This project skips `ALLOW_HEAVY` and RTK, as described in section 0 of `EXECUTION.md`. The rules below also apply to this repository.
 
-| 规则 | 级别 | 检测方式 |
-|------|------|---------|
-| nsh 版本固定 v0.7.0（2026-11-25 从 0.6.0 升上来）：本机 `nsh --version` 和 CI 的 `NSH_VERSION` 一致，升级时两边一起改 | L1 | `nsh --version` |
-| `make test` 一个文件一个文件跑（`--jobs 1`）：nsh 0.7.0 起 `nsh test` 默认按核数并行，量耗时的用例会被挤超时；单跑一个文件不受影响 | L2 | `Makefile` 的 `test` |
-| 查 nsh API 用 `rg -n '<名字>' .nsh/types/`，不要去猜；全局组件（如 `Each`）在 `.nsh/types/nsh/globals.d.ts` | L2 | 人工 |
-| 打包产物多一层应用名：`dist/web/Pairdown/`、`dist/macos/Pairdown.app`，CI 上传 Pages 用这个路径 | L2 | `make build-web` 后看目录 |
-| 浏览器验收用 `make dev-web` 打开的真实页面，截图可以用 opencli / playwright | L2 | 人工 |
+| Rule | Level | How to check |
+|------|-------|--------------|
+| Pin nsh to v0.7.0, upgraded from 0.6.0 on 2026-11-25. Local `nsh --version` must match `NSH_VERSION` in CI. Update both when upgrading. | L1 | `nsh --version` |
+| Run `make test` one file at a time with `--jobs 1`. Since nsh 0.7.0, `nsh test` runs in parallel by default based on core count, which can cause timing-sensitive tests to time out under load. Running a single file avoids that issue. | L2 | The `test` target in `Makefile` |
+| Look up nsh APIs with `rg -n '<name>' .nsh/types/`. Global components such as `Each` are declared in `.nsh/types/nsh/globals.d.ts`. | L2 | Manual |
+| Packaged outputs include the app name as a path component, as in `dist/web/Pairdown/` and `dist/macos/Pairdown.app`. Use the web output path for CI uploads to Pages. | L2 | Inspect the output directory after `make build-web` |
+| For browser acceptance checks, use the live page served by `make dev-web`. Use opencli or Playwright for screenshots if needed. | L2 | Manual |

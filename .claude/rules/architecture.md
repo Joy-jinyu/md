@@ -1,8 +1,8 @@
-# 架构边界
+# Architecture boundaries
 
-依赖方向、各层职责和违规检测命令的唯一来源是 `EXECUTION.md` 第 5 节，这里只补充要先问用户的事：
+Section 5 of `EXECUTION.md` defines dependency direction, layer responsibilities, and the commands for detecting violations. The rules below cover Markdown persistence and decisions that require user confirmation.
 
-| 规则 | 级别 | 检测方式 |
-|------|------|---------|
-| 存储、同步、导出只用 Markdown 字符串，ProseMirror JSON 不落盘 | L0 | review + 往返测试 |
-| 新增顶层目录、换同步目标（Gist → 仓库）、换登录方式，先和用户确认方案 | L1 | 人工 |
+| Rule | Level | How to check |
+|------|-------|--------------|
+| Use only Markdown strings for storage, sync, and export. Keep ProseMirror JSON in memory. | L0 | Review and round-trip tests |
+| Confirm the approach with the user before adding a top-level directory, changing the sync target from Gists to a repository, or changing the sign-in method. | L1 | Manual |
