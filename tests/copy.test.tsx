@@ -65,16 +65,14 @@ test("web: the edit keys in a dialog's input reach neither the editor nor the ap
   expect(app.storage()[LEGACY_DOC_KEY]).toContain("x");
 });
 
-test("settings, storage page: the gateway's install and start commands each copy with one press", async () => {
+test("settings, storage page: the gateway's one-line start command copies with one press", async () => {
   const app = await open("../App.tsx", { ...WEB, storage: { [LEGACY_DOC_KEY]: "# T\n\nbody\n" } });
   await app.waitFor("text:body");
   await app.press("id:open-settings");
   await app.press("id:settings-tab-storage");
   await app.press("label:复制启动命令");
-  expect(app.clipboard()).toBe("node src/main.mts --library ~/Documents/Pairdown");
+  expect(app.clipboard()).toBe("curl -fsSL https://markdown.pairwise.site/gateway.sh | sh");
   await app.waitFor("text:已复制");
-  await app.press("label:复制安装命令");
-  expect(app.clipboard()).toBe("npm install");
 });
 
 test("a copy button the system refuses says it did not copy", async () => {

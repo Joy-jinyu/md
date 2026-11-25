@@ -8,7 +8,8 @@ import { refreshLibrary } from "../../store/library";
 import { Button } from "../../ui/button";
 import { CopyButton } from "../../ui/copy-button";
 
-const START_COMMAND = "node src/main.mts --library ~/Documents/Pairdown";
+/** 脚本是仓库里的 gateway/install.sh，make build-web 时放到站点根目录。 */
+const START_COMMAND = `curl -fsSL ${OFFICIAL_ORIGIN}/gateway.sh | sh`;
 
 function summary(): { title: string; detail: string } {
   const k = storageKind();
@@ -49,12 +50,11 @@ function GatewayHowTo() {
     <View testID="gateway-howto" class="gap-2">
       <Text class="text-[11px] text-faint">本机网关</Text>
       <Text class="select-text text-xs leading-5 text-muted-foreground">
-        装上本机网关后，网页里的文档就存成你电脑上一个文件夹里的 .md 文件：没有浏览器的容量限制，清浏览器数据也不会丢，别的编辑器和 git 能直接用。网关只听本机（127.0.0.1），只接受这个网站的页面。要 Node 23.6 以上。在 Pairdown 源码的 gateway 文件夹里运行：
+        装上本机网关后，网页里的文档就存成你电脑上一个文件夹里的 .md 文件：没有浏览器的容量限制，清浏览器数据也不会丢，别的编辑器和 git 能直接用。网关只听本机（127.0.0.1），只接受这个网站的页面。要 Node 23.6 以上。在终端里运行：
       </Text>
-      <Code testID="copy-install-command" text="npm install" copyLabel="复制安装命令" />
       <Code testID="copy-start-command" text={START_COMMAND} copyLabel="复制启动命令" />
       <Text class="select-text text-xs leading-5 text-muted-foreground">
-        {`--library 后面换成你想放文档的文件夹（要先建好）。网关默认只接受 ${OFFICIAL_ORIGIN} 的页面，在别的地址（比如本机开发页面）上用时再加 --origin 和那个页面的地址。起来以后刷新这个页面；浏览器问要不要允许访问本地网络时选允许。连不上时页面照常用浏览器本地存储，不会报错。`}
+        文档放在 ~/Documents/Pairdown；想换文件夹，在命令末尾加 -s -- --library 和那个文件夹。起来以后刷新这个页面；浏览器问要不要允许访问本地网络时选允许。下次用再跑一遍这条命令。连不上时页面照常用浏览器本地存储，不会报错。
       </Text>
     </View>
   );
