@@ -18,7 +18,8 @@ Install nsh v0.7.0 using the version pinned in the [CI workflow](.github/workflo
 
 ```sh
 nsh component add web
-make dev-web      # Run in the browser
+make dev-web      # Run the editor in the browser
+make dev-landing  # Preview the landing page at http://127.0.0.1:8813/lp/
 make dev          # Run in a macOS window
 make verify       # Type check and run app, gateway, and Worker tests
 make build-web    # Package the static site in dist/web/Pairdown/

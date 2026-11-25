@@ -370,3 +370,10 @@
 | 侧栏开合 | 正文滑过去让位，180ms 缓入缓出（用 `LayoutAnimation`：类上的 transition 不管位置和宽度） |
 
 减少动效（`motion-reduce:`，以及 `reduceMotion()`）：不做过渡、按下不缩放、侧栏直接开合。其余（弹层出现、提示条、查找条的开合，设置页的打开 / 返回、切分类、窄屏两层之间的进出）不加动效；设置页分类按钮的悬停 / 按下洗色同按钮。
+
+
+## Web landing page
+
+`/lp` presents **River Notes**, a six-page Markdown journal that follows one day by the river. The illustrated desk and paper share a warm palette. The header links to the editor and repository. Book pages are the primary controls. Click left or right, drag the paper, or use the arrow keys to turn them.
+
+The quill follows the strokes of the last words on each page, then rests at the edge of the spread. With reduced motion, the endings appear immediately. The web build serves the landing page as a separate static entry, with its own artwork and no remote assets.

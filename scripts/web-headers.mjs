@@ -22,6 +22,18 @@ const [outDir] = process.argv.slice(2);
 if (!outDir) throw new Error("用法：node scripts/web-headers.mjs <产物目录>");
 const config = JSON.parse(readFileSync(new URL("../nsh.json", import.meta.url), "utf8"));
 const csp = [`connect-src ${sources(config).join(" ")}`, "object-src 'none'", "base-uri 'self'", "frame-ancestors 'none'"].join("; ");
-const text = ["/*", `  Content-Security-Policy: ${csp}`, "  Referrer-Policy: no-referrer", "  X-Content-Type-Options: nosniff", ""].join("\n");
+// 落地页的脚本和样式随站点打包，也不需要发起网络连接。
+const landingCsp = "default-src 'self'; connect-src 'none'; form-action 'none'";
+const text = [
+  "/*",
+  `  Content-Security-Policy: ${csp}`,
+  "  Referrer-Policy: no-referrer",
+  "  X-Content-Type-Options: nosniff",
+  ...["/lp", "/lp/"].flatMap((path) => [
+    path,
+    `  Content-Security-Policy: ${landingCsp}`,
+  ]),
+  "",
+].join("\n");
 writeFileSync(join(outDir, "_headers"), text);
 console.log(`写好了 ${join(outDir, "_headers")}`);
