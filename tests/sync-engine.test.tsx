@@ -243,6 +243,7 @@ test("pulling stops if the document was typed in while GitHub was being asked: t
   });
   await app.press("id:sync-status");
   await app.waitFor("id:sync");
+  await app.waitFor("id:sync-now");
   const syncing = app.press("id:sync-now");
   await app.press("id:sync-close");
   await app.press("text:共同的一段");

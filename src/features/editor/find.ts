@@ -6,6 +6,9 @@ import type { Node } from "./outline";
 import { FIND_KEY } from "./rich-session";
 import { selectionRange } from "./selection";
 
+/** 全部替换一批换多少处，见 replaceAll 里的说明。 */
+const REPLACE_BATCH = 400;
+
 export interface FindQuery {
   query: string;
   caseSensitive: boolean;
@@ -193,10 +196,18 @@ export function createRichFind(session: RichEditorSession) {
       if (!q || matches.length === 0) return Promise.resolve(0);
       // 高亮最多 2000 处，替换要全部：不设上限重找一遍
       const all = findMatches(session.getJSON() as Node, q, Infinity).matches;
-      // 从后往前换，前面的位置不受影响；合成一次改动，撤销一步回来
-      session.run(chain(all.toReversed().flatMap((m) => swap(m, replacementFor(m, q, text)))));
-      refresh();
-      return Promise.resolve(all.length);
+      // 从后往前换，前面的位置不受影响。一批最多 REPLACE_BATCH 处、批与批之间让出一轮：
+      // 两千多处合成一次改动在慢机器上会超过 nsh 单次 2000ms 的预算被中断（2026-11-25 CI 实测 2100 处 2.4s）。
+      // 代价：超过一批的全部替换要撤销多步才回得来
+      const back = all.toReversed();
+      return (async () => {
+        for (let i = 0; i < back.length; i += REPLACE_BATCH) {
+          if (i > 0) await new Promise<void>((done) => setTimeout(done, 0));
+          session.run(chain(back.slice(i, i + REPLACE_BATCH).flatMap((m) => swap(m, replacementFor(m, q, text)))));
+        }
+        refresh();
+        return all.length;
+      })();
     },
   };
   return { engine, refresh, isActive: () => query !== null };
