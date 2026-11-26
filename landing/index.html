@@ -4,65 +4,162 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
+    <title>Pairdown: A WYSIWYG Markdown Editor That Keeps Plain .md Files</title>
     <meta
       name="description"
-      content="A day by the river, told in the pages of an interactive Pairdown Markdown journal."
+      content="Pairdown formats Markdown as you type and saves plain .md text, byte for byte where you didn't edit. Keep files on your disk and sync through GitHub Gists."
     />
+    <link rel="canonical" href="__PAIRDOWN_SITE__/lp/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Pairdown" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:url" content="__PAIRDOWN_SITE__/lp/" />
+    <meta property="og:title" content="Pairdown: a WYSIWYG Markdown editor for plain .md files" />
+    <meta
+      property="og:description"
+      content="Formatting as you type, plain .md files, tables, math and Mermaid diagrams, and optional GitHub sync."
+    />
+    <meta property="og:image" content="__PAIRDOWN_SITE__/lp/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Pairdown, a WYSIWYG Markdown editor" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" href="./pairdown.png" />
     <link rel="stylesheet" href="./style.css" />
-    <title>Pairdown · River Notes</title>
   </head>
   <body>
-    <main class="exhibit" aria-label="Pairdown's interactive journal">
-      <canvas class="desk-art" id="desk-art" aria-hidden="true"></canvas>
-      <header class="desk-header">
-        <h1 class="brand">
-          <img src="./pairdown.png" alt="" width="30" height="30" />Pairdown
-        </h1>
-        <nav aria-label="Main navigation">
-          <a href="/">Open the editor</a>
-          <a class="source-link" href="https://github.com/__PAIRDOWN_REPO__"
-            >GitHub <span aria-hidden="true">↗</span></a
-          >
-        </nav>
-      </header>
-      <div
-        class="stage"
-        id="stage"
-        tabindex="0"
-        aria-label="Journal. Click the left page to go back or the right page to go forward. You can also drag the pages or use the arrow keys."
-      >
-        <canvas id="scene" aria-hidden="true"></canvas>
-      </div>
-      <img
-        class="quill"
-        id="quill"
-        src="/loading/feather.webp"
-        width="660"
-        height="552"
-        alt=""
-      />
-      <div class="sr-only" aria-live="polite">
-        <span id="number">01 / 03</span
-        ><span id="label">The landing and the tea shop</span>
-      </div>
-      <section
-        class="transcript sr-only"
-        id="transcript"
-        aria-label="Journal text"
-      ></section>
-      <p id="fallback" hidden>
-        The 3D journal is unavailable in this browser.
-        <a href="/">Open the editor</a>.
-      </p>
-      <noscript
-        ><p id="no-script">
-          Enable JavaScript to read the 3D journal, or
-          <a href="/">open the editor</a>.
-        </p></noscript
-      >
+    <main>
+      <section class="exhibit" aria-label="Pairdown's interactive journal">
+        <canvas class="desk-art" id="desk-base" aria-hidden="true"></canvas>
+        <canvas class="desk-art" id="desk-art" aria-hidden="true"></canvas>
+        <div class="desk-fade" aria-hidden="true"></div>
+        <header class="desk-header">
+          <h1 class="brand">
+            <img src="./pairdown.png" alt="" width="30" height="30" />Pairdown
+          </h1>
+          <nav aria-label="Main navigation">
+            <a href="/">Open the editor</a>
+            <a href="#about">About</a>
+            <a
+              class="source-link"
+              href="https://github.com/__PAIRDOWN_REPO__"
+              aria-label="Pairdown on GitHub"
+              title="GitHub"
+              ><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"
+                /></svg
+            ></a>
+          </nav>
+        </header>
+        <div
+          class="stage"
+          id="stage"
+          tabindex="0"
+          aria-label="Journal. Click the left page to go back or the right page to go forward. You can also drag the pages or use the arrow keys."
+        >
+          <canvas id="scene" aria-hidden="true"></canvas>
+        </div>
+        <img
+          class="quill"
+          id="quill"
+          src="/loading/feather.webp"
+          width="660"
+          height="552"
+          alt=""
+        />
+        <div class="sr-only" aria-live="polite">
+          <span id="number">01 / 03</span
+          ><span id="label">The landing and the tea shop</span>
+        </div>
+        <section
+          class="transcript sr-only"
+          id="transcript"
+          aria-label="Journal text"
+        ></section>
+        <p id="fallback" hidden>
+          The 3D journal is unavailable in this browser.
+          <a href="/">Open the editor</a>.
+        </p>
+        <noscript
+          ><p id="no-script">
+            Enable JavaScript to read the 3D journal, or
+            <a href="/">open the editor</a>.
+          </p></noscript
+        >
+      </section>
+      <section class="about" id="about" aria-labelledby="about-title">
+        <h2 id="about-title">A WYSIWYG Markdown editor that keeps your files plain</h2>
+        <p class="lede">
+          Pairdown formats Markdown as you type, in your browser. What it saves is
+          ordinary Markdown text: open the file in any other editor and it reads
+          the same, and the blocks you didn't touch are written back byte for byte.
+        </p>
+        <p class="actions">
+          <a class="primary" href="/">Open the editor</a>
+          <a href="https://github.com/__PAIRDOWN_REPO__">Source on GitHub</a>
+        </p>
+
+        <h2>What you can do</h2>
+        <ul class="features">
+          <li>
+            <h3>Write with formatting in place</h3>
+            <p>Headings, lists, links, quotes and tables render as you write. Switch to the Markdown source at any time. Find and replace, an outline, focus mode and typewriter mode are built in.</p>
+          </li>
+          <li>
+            <h3>Keep plain .md files</h3>
+            <p>Pairdown stores Markdown, not a private format. Edited blocks are written in one consistent style, and syntax it doesn't recognize is kept exactly as it was.</p>
+          </li>
+          <li>
+            <h3>Tables, math and diagrams</h3>
+            <p>Tables, TeX math, footnotes, front matter, highlights, subscript and superscript, and Mermaid diagrams, which are drawn as images.</p>
+          </li>
+          <li>
+            <h3>Your files, on your disk</h3>
+            <p>With the optional local gateway, Pairdown edits the .md files in a folder on your computer and puts pasted images in an <code>assets</code> folder beside them. Without it, documents stay in your browser.</p>
+          </li>
+          <li>
+            <h3>Sync through GitHub</h3>
+            <p>Sign in with GitHub to keep each document in a secret Gist. When both copies changed, or one was deleted, Pairdown asks before it overwrites anything.</p>
+          </li>
+          <li>
+            <h3>Open, save and export</h3>
+            <p>Import .md files, save a copy as .md, or export HTML with images included. Version history is kept on your device.</p>
+          </li>
+        </ul>
+
+        <h2>Get started</h2>
+        <ol class="steps">
+          <li><a href="/">Open the editor</a> and start writing. There is no account to create; documents are saved in this browser.</li>
+          <li>
+            To work with files on your disk, install the local gateway (it needs Node.js 23.6 or later):
+            <pre><code>curl -fsSL __PAIRDOWN_SITE__/gateway.sh | sh</code></pre>
+          </li>
+          <li>To sync, choose Sync in the editor and sign in with GitHub.</li>
+        </ol>
+
+        <h2>Questions</h2>
+        <dl class="faq">
+          <dt>Is Pairdown free?</dt>
+          <dd>Yes. The editor runs in your browser and doesn't need an account.</dd>
+          <dt>Where are my documents stored?</dt>
+          <dd>In your browser's storage, or as .md files in a folder on your computer when the local gateway is running. Pairdown has no server that keeps your documents. Synced copies go to Gists in your own GitHub account.</dd>
+          <dt>Will Pairdown rewrite my Markdown?</dt>
+          <dd>Blocks you don't edit are saved back byte for byte. A block you change is written in a consistent style, so saving it again gives the same text.</dd>
+          <dt>What does GitHub sync have access to?</dt>
+          <dd>Pairdown asks only for the gist permission. Signing out removes the sign-in from your device. Images don't sync yet.</dd>
+          <dt>Is there a desktop app?</dt>
+          <dd>A macOS app can be built from the source code. There is no download yet.</dd>
+        </dl>
+      </section>
     </main>
-    <script defer src="./desk.js"></script>
+    <footer class="site-footer">
+      <a href="/">Pairdown</a>
+      <a href="https://github.com/__PAIRDOWN_REPO__">GitHub</a>
+      <!-- pairdown:author -->
+    </footer>
+    <script type="module" src="./desk.js"></script>
     <script type="module" src="./book.js"></script>
   </body>
 </html>

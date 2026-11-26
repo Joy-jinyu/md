@@ -1,6 +1,6 @@
 # main 有新提交就检查、测试（页面、本机网关、登录 Worker）、打包网页版并发布到 Cloudflare（项目名 pairdown，配置在 wrangler.jsonc）。
 # 站点按「独立域名的根路径」打包（nsh.json 的 web.base 是 "/"）。
-# 仓库 secret：PAIRDOWN_SITE（站点来源，也是发布绑的域名）、PAIRDOWN_GITHUB_CLIENT_ID（OAuth App 的 Client ID），说明见 .env.example；
+# 仓库 secret：PAIRDOWN_SITE（站点来源，也是发布绑的域名）、PAIRDOWN_GITHUB_CLIENT_ID（OAuth App 的 Client ID），可选的 PAIRDOWN_AUTHOR_NAME / PAIRDOWN_AUTHOR_URL（落地页链回作者主页），说明见 .env.example；
 # CLOUDFLARE_API_TOKEN（给 Workers 脚本和这个域的路由的编辑权限）和 CLOUDFLARE_ACCOUNT_ID。没配 Cloudflare 或站点时只检查、测试、打包，不发布。
 # /token 的 client id 发布时由 PAIRDOWN_GITHUB_CLIENT_ID 传入；client secret 是 Cloudflare 上的 Worker secret（worker/README.md），CI 不经手。
 name: deploy
@@ -24,6 +24,8 @@ jobs:
       PAIRDOWN_SITE: ${{ secrets.PAIRDOWN_SITE }}
       PAIRDOWN_GITHUB_CLIENT_ID: ${{ secrets.PAIRDOWN_GITHUB_CLIENT_ID }}
       PAIRDOWN_REPO: ${{ github.repository }}
+      PAIRDOWN_AUTHOR_NAME: ${{ secrets.PAIRDOWN_AUTHOR_NAME }}
+      PAIRDOWN_AUTHOR_URL: ${{ secrets.PAIRDOWN_AUTHOR_URL }}
     steps:
       - uses: actions/checkout@v4
         with:

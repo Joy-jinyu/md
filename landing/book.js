@@ -337,6 +337,8 @@ if (renderer) {
       finish(go);
       return;
     }
+    // desk.js 让四角植物跟着翻页的方向晃一下
+    if (go) document.dispatchEvent(new CustomEvent("pairdown:turn", { detail: { direction: state.turn.direction } }));
     state.turn.animation = {
       from: state.turn.progress,
       to: Number(go),

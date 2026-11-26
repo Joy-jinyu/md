@@ -1,8 +1,8 @@
 /**
  * 把部署配置写进网页产物里的两个文件：`node scripts/stamp-web.mjs <产物目录>`，make build-web 末尾调。
  * - `gateway.sh`（仓库里的 gateway/install.sh）：`__PAIRDOWN_SITE__` 换成站点、`__PAIRDOWN_REPO__` 换成网关源码仓库；
- * - `lp/index.html`（落地页）：`__PAIRDOWN_REPO__` 换成源码仓库。
- * 没配的值留着占位并提示：这样打出的 gateway.sh 装不了（install.sh 会说明原因），落地页的源码链接也是坏的。
+ * - `lp/index.html`（落地页）：`__PAIRDOWN_SITE__` 换成站点（canonical、分享卡片、网关安装命令），`__PAIRDOWN_REPO__` 换成源码仓库。
+ * 没配的值留着占位并提示：这样打出的 gateway.sh 装不了（install.sh 会说明原因），落地页的链接也是坏的。
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
