@@ -23,13 +23,16 @@ const credential = () => WEB
   ? t("登录凭证存在这个浏览器里，只有 Gist 权限，退出登录会删除。", "Your sign-in credentials are saved in this browser. They grant access only to Gists and are removed when you sign out. ")
   : t("登录凭证存在这台电脑上 Pairdown 自己的存储里（不是钥匙串），只有 Gist 权限，退出登录会删除。", "Your sign-in credentials are saved in Pairdown’s local storage, outside Keychain. They grant access only to Gists and are removed when you sign out. ");
 
+/** 登录凭证存在哪、退出登录不撤销 GitHub 上的授权（同步面板和设置页都写这一段）。 */
+export const credentialNote = () => credential() + t("退出登录不会撤销 GitHub 上的授权，可以在 GitHub 的设置（Settings → Applications → Authorized OAuth Apps）里撤销。", "Signing out does not revoke access on GitHub. To revoke it, go to Settings → Applications → Authorized OAuth Apps on GitHub.");
+
 /** 上传什么、不上传什么，登录凭证存在哪、怎么撤销。 */
 export function SyncExplain() {
   return (
     <View class="gap-1">
       <Text testID="sync-explain" class="select-text text-xs leading-5 text-muted-foreground">{t("同步只上传文档正文（Markdown 文字）：一篇一个私密 Gist，不公开列出，但拿到链接的人能看。图片不同步（Gist 的接口只收文字），正文里的图片地址照原样上传；版本历史和设置不上传。同步要手动点「立即同步」。", "Sync uploads only the Markdown text, one secret Gist per document. Secret Gists are not listed publicly, but anyone with the link can read them. Image links are uploaded as written; image files, version history, and settings stay on this device. Select “Sync now” to sync.")}</Text>
       <Text testID="sync-credential" class="select-text text-xs leading-5 text-muted-foreground">
-        {credential() + t("退出登录不会撤销 GitHub 上的授权，可以在 GitHub 的设置（Settings → Applications → Authorized OAuth Apps）里撤销。", "Signing out does not revoke access on GitHub. To revoke it, go to Settings → Applications → Authorized OAuth Apps on GitHub.")}
+        {credentialNote()}
       </Text>
     </View>
   );

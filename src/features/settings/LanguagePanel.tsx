@@ -1,7 +1,8 @@
-import { signal, Text, View } from "nsh";
+/** 设置里的「语言」一类：界面语言，改了马上生效。布局见 DESIGN.md「屏幕：设置」。 */
+import { signal, View } from "nsh";
 import { changeLocale, locale, t } from "../../i18n";
 import type { Locale } from "../../store/settings";
-import { Button } from "../../ui/button";
+import { Callout, Group, Row, Segmented } from "./parts";
 
 export function LanguagePanel() {
   const problem = signal(false);
@@ -13,23 +14,26 @@ export function LanguagePanel() {
     if (current === attempt) problem.set(error !== null);
   }
   return (
-    <View class="gap-3">
-      <View class="flex-row flex-wrap gap-2" accessibilityLabel={t("界面语言", "Interface language")}>
-        <Button
-          testID="language-en"
-          label={locale() === "en" ? t("English（当前）", "English (current)") : "English"}
-          variant={locale() === "en" ? "primary" : "ghost"}
-          onPress={() => void select("en")}
+    <View class="gap-4">
+      <Group>
+        <Row
+          label={t("界面语言", "Interface language")}
+          description={t("编辑器、设置、命令和菜单都用这种语言，文档内容和文件名不变。", "Used for the editor, settings, commands, and menus. Documents and file names stay as they are.")}
+          control={
+            <Segmented<Locale>
+              label={t("界面语言", "Interface language")}
+              value={locale()}
+              options={[
+                { value: "en", label: "English", testID: "language-en" },
+                { value: "zh-CN", label: "简体中文", testID: "language-zh-CN" },
+              ]}
+              onChange={(value) => void select(value)}
+            />
+          }
         />
-        <Button
-          testID="language-zh-CN"
-          label={locale() === "zh-CN" ? t("简体中文（当前）", "简体中文 (current)") : "简体中文"}
-          variant={locale() === "zh-CN" ? "primary" : "ghost"}
-          onPress={() => void select("zh-CN")}
-        />
-      </View>
+      </Group>
       <If when={problem()}>
-        <Text class="text-sm text-destructive">{t("没能保存语言设置，请再试一次。", "Could not save the language preference. Try again.")}</Text>
+        <Callout tone="danger">{t("没能保存语言设置，请再试一次。", "Could not save the language preference. Try again.")}</Callout>
       </If>
     </View>
   );

@@ -1,10 +1,13 @@
 /** 设置里的「快捷键」一类：列出全部命令和它的键，可以改、清除、恢复默认。布局见 DESIGN.md「屏幕：设置」。 */
 import { type Phrase, phrase, t } from "../../i18n";
 import { keymap, signal, Text, View } from "nsh";
-import { Input } from "nsh/base";
+import { Button as BaseButton, Input } from "nsh/base";
 import { IN_BROWSER, SYSTEM_KEYS } from "../../platform";
 import type { ShortcutOverrides } from "../../store/settings";
 import { Button } from "../../ui/button";
+import { IconButton } from "../../ui/icon-button";
+import { tip } from "../../ui/tooltip";
+import { Group } from "./parts";
 import { type AppCommand, COMMANDS, commandGroupLabel, isViewCommand, type CommandGroup } from "../editor/commands";
 import { browserMayTake, canonical, conflictOf, currentOverrides, fromKeymapName, keyOf, recordableKeystrokes, rejectReason } from "../editor/keybindings";
 import { toKeymapName } from "../editor/keys";
@@ -147,32 +150,50 @@ function KeyRecorder(props: { onKey: (key: string) => void; onCancel: () => void
   return null;
 }
 
-/** 按钮列定宽、靠左排：「修改」「清除」每行都在同一个位置，键贴在按钮列左边、靠右对齐。宽度放得下三个按钮。 */
-const ACTIONS = "w-40 shrink-0";
+/** 行尾定宽的一列放「清除」「恢复」两个小图标按钮：每行的键都贴着它对齐，系统键那几行也留出这一列。 */
+const ACTIONS = "w-[60px] shrink-0 flex-row items-center justify-end gap-0.5";
 
-/** 一行平时的样子：现在的键、「已改」，和修改 / 清除 / 恢复三个按钮。 */
-function RowActions(props: { command: AppCommand; editor: Editor }) {
+/** 现在的键，本身就是「修改」按钮：点了开始录键。没有键时写「未设置」。 */
+function KeyChip(props: { command: AppCommand; editor: Editor }) {
   const ed = props.editor;
   const c = props.command;
   const key = () => keyOf(c, ed.draft());
+  return (
+    <BaseButton
+      testID={`shortcut-edit-${c.id}`}
+      accessibilityLabel={key() ? t(`修改「${c.label}」的快捷键，现在是 ${label(key() as string)}`, `Change the shortcut for “${c.label}” (now ${label(key() as string)})`) : t(`给「${c.label}」设快捷键`, `Set a shortcut for “${c.label}”`)}
+      tooltip={tip(t("点击修改", "Click to change"))}
+      onPress={() => ed.begin(c)}
+      class="min-h-7 min-w-[72px] flex-row items-center justify-center rounded-(--radius-sm) border border-input bg-background px-1.5 transition duration-180 ease-settle hover:border-primary hover:bg-hover active:bg-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none"
+    >
+      <If when={key()} else={<Text class="text-[11px] text-muted-foreground">{t("未设置", "None")}</Text>}>
+        {(k) => (
+          <Text style={{ fontVariant: ["tabular-nums"] }} class="text-[12px] text-strong">
+            {label(k())}
+          </Text>
+        )}
+      </If>
+    </BaseButton>
+  );
+}
+
+/** 一行平时的样子：「已改」、现在的键（点了修改），和清除 / 恢复两个图标按钮。 */
+function RowActions(props: { command: AppCommand; editor: Editor }) {
+  const ed = props.editor;
+  const c = props.command;
   const changed = () => c.id in ed.draft();
   return (
     <>
-      <View class="flex-row items-center gap-2">
-        <If when={changed()}>
-          <Text class="text-[11px] text-primary">{t("已改", "Customized")}</Text>
-        </If>
-        <If when={key()} else={<Text class="text-[11px] text-muted-foreground">{t("未设置", "None")}</Text>}>
-          {(k) => <KeyCap text={label(k())} />}
-        </If>
-      </View>
-      <View class={`${ACTIONS} flex-row items-center gap-1`}>
-        <Button testID={`shortcut-edit-${c.id}`} label={t("修改", "Change")} accessibilityLabel={t(`修改「${c.label}」的快捷键`, `Change the shortcut for “${c.label}”`)} onPress={() => ed.begin(c)} />
-        <If when={key()}>
-          <Button testID={`shortcut-clear-${c.id}`} label={t("清除", "Clear")} accessibilityLabel={t(`清除「${c.label}」的快捷键`, `Clear the shortcut for “${c.label}”`)} onPress={() => ed.clear(c)} />
+      <If when={changed()}>
+        <Text class="text-[11px] text-primary">{t("已改", "Customized")}</Text>
+      </If>
+      <KeyChip command={c} editor={ed} />
+      <View class={ACTIONS}>
+        <If when={keyOf(c, ed.draft())}>
+          <IconButton testID={`shortcut-clear-${c.id}`} icon="close" compact label={t(`清除「${c.label}」的快捷键`, `Clear the shortcut for “${c.label}”`)} tooltip={t("清除", "Clear")} onPress={() => ed.clear(c)} />
         </If>
         <If when={changed()}>
-          <Button testID={`shortcut-restore-${c.id}`} label={t("恢复", "Reset")} accessibilityLabel={t(`「${c.label}」恢复默认键`, `Reset the shortcut for “${c.label}”`)} onPress={() => ed.restore(c)} />
+          <IconButton testID={`shortcut-restore-${c.id}`} icon="rotateCcw" compact label={t(`「${c.label}」恢复默认键`, `Reset the shortcut for “${c.label}”`)} tooltip={t("恢复默认", "Reset to default")} onPress={() => ed.restore(c)} />
         </If>
       </View>
     </>
@@ -185,19 +206,14 @@ function CommandRow(props: { command: AppCommand; editor: Editor }) {
   const isRecording = () => ed.recording() === c.id;
   const mine = () => (ed.note()?.id === c.id ? ed.note() : null);
   return (
-    <View testID={`shortcut-${c.id}`}>
-      <View class="min-h-9 flex-row items-center gap-2 rounded-(--radius-sm) px-2" classList={{ "bg-hover": isRecording(), "hover:bg-hover": !isRecording() }}>
+    <View testID={`shortcut-${c.id}`} class="border-t border-border">
+      <View class="min-h-11 flex-row items-center gap-2 px-4 py-1.5" classList={{ "bg-hover": isRecording(), "hover:bg-hover": !isRecording() }}>
         <Text style={{ numberOfLines: 1 }} class="min-w-0 flex-1 select-text text-[13px] text-foreground">
           {c.label}
         </Text>
-        <If
-          when={isRecording()}
-          else={
-            <RowActions command={c} editor={ed} />
-          }
-        >
+        <If when={isRecording()} else={<RowActions command={c} editor={ed} />}>
           <KeyRecorder onKey={(key) => ed.pressed(c, key)} onCancel={ed.cancel} />
-          <View testID="shortcut-capture" role="alert">
+          <View testID="shortcut-capture" role="alert" class="min-h-7 justify-center rounded-(--radius-sm) border border-primary bg-background px-2">
             <Text class="text-xs text-primary">{t("请按下新的组合键（Esc 取消）", "Press a new key combination (Esc to cancel)")}</Text>
           </View>
           <Button label={t("取消", "Cancel")} onPress={ed.cancel} />
@@ -205,10 +221,10 @@ function CommandRow(props: { command: AppCommand; editor: Editor }) {
       </View>
       <If when={mine()}>
         {(n) => (
-          <View testID="shortcut-note" role="alert" class="mb-1 flex-row items-center gap-2 rounded-(--radius-sm) bg-warn-tint px-2 py-1">
-            <Text class="min-w-0 flex-1 select-text text-xs leading-5 text-warn">{phrase(n().text)}</Text>
+          <View testID="shortcut-note" role="alert" class="mx-4 mb-2 flex-row flex-wrap items-center gap-2 rounded-(--radius-sm) bg-warn-tint px-3 py-1.5">
+            <Text class="min-w-0 flex-1 select-text text-xs leading-5 text-warn-text">{phrase(n().text)}</Text>
             <If when={n().swap}>
-              <Button testID="shortcut-swap" label={t("换给这条", "Assign to this command")} onPress={() => ed.swap(c)} />
+              <Button testID="shortcut-swap" variant="outline" label={t("换给这条", "Assign to this command")} onPress={() => ed.swap(c)} />
               <Button label={t("取消", "Cancel")} onPress={ed.cancel} />
             </If>
           </View>
@@ -220,11 +236,10 @@ function CommandRow(props: { command: AppCommand; editor: Editor }) {
 
 function SystemKeys() {
   return (
-    <View testID="system-keys">
-      <Text class="px-2 pb-1 pt-3 text-[11px] text-faint">{t("系统键（不能改）", "System shortcuts")}</Text>
+    <Group testID="system-keys" title={t("系统键（不能改）", "System shortcuts (fixed)")}>
       <Each of={SYSTEM_KEYS} key={(k) => k.label}>
         {(k) => (
-          <View class="min-h-9 flex-row items-center gap-2 rounded-(--radius-sm) px-2 hover:bg-hover">
+          <View class="min-h-11 flex-row items-center gap-2 border-t border-border px-4 py-1.5">
             <Text class="min-w-0 flex-1 select-text text-[13px] text-muted-foreground">{k().label}</Text>
             <Each of={k().keys} key={(name) => name}>
               {(name) => <KeyCap text={keymap.label(name())} />}
@@ -233,16 +248,26 @@ function SystemKeys() {
           </View>
         )}
       </Each>
-    </View>
+    </Group>
   );
+}
+
+/** 按组排好的命令（搜索过滤后），一组一张卡片。 */
+function groupsFor(query: string, draft: ShortcutOverrides): { name: CommandGroup; commands: AppCommand[] }[] {
+  const groups: { name: CommandGroup; commands: AppCommand[] }[] = [];
+  for (const row of rowsFor(query, draft)) {
+    if (row.kind === "group") groups.push({ name: row.name, commands: [] });
+    else groups[groups.length - 1] = { ...groups[groups.length - 1], commands: [...groups[groups.length - 1].commands, row.command] };
+  }
+  return groups;
 }
 
 /** 搜索框、「全部恢复默认」和命令表。`autoFocus`：设置页一打开就在这一类时，焦点给搜索框。 */
 export function ShortcutsPanel(props: { editor: ShortcutEditor; autoFocus: boolean }) {
   const ed = props.editor;
   return (
-    <View testID="shortcuts" class="gap-2">
-      <View class="flex-row flex-wrap items-center justify-between gap-2">
+    <View testID="shortcuts" class="gap-6">
+      <View class="flex-row flex-wrap items-center gap-2">
         <Input
           testID="shortcut-search"
           autoFocus={props.autoFocus}
@@ -252,27 +277,30 @@ export function ShortcutsPanel(props: { editor: ShortcutEditor; autoFocus: boole
           accessibilityLabel={t("搜索命令或按键", "Search commands or shortcuts")}
           autoCapitalize="none"
           autoCorrect={false}
-          class="h-8 w-[240px] min-w-0 max-w-[480px] shrink grow rounded-(--radius-sm) border border-input bg-background px-2 text-[13px] text-foreground placeholder:text-faint focus:border-primary"
+          class="h-8 w-[240px] min-w-0 max-w-[360px] shrink grow rounded-(--radius-sm) border border-input bg-background px-2 text-[13px] text-foreground placeholder:text-faint focus:border-primary"
         />
         <Button
           testID="shortcut-reset-all"
+          variant={ed.confirmReset() ? "danger" : "outline"}
           label={ed.confirmReset() ? t("再点一次确认", "Click again to confirm") : t("全部恢复默认", "Reset all to defaults")}
-          labelClass={ed.confirmReset() ? "text-destructive" : ""}
           disabled={Object.keys(ed.draft()).length === 0}
           onPress={ed.resetAll}
         />
       </View>
-      <View>
-        <Each of={rowsFor(ed.query(), ed.draft())} key={(r) => (r.kind === "group" ? `group:${r.name}` : r.command.id)}>
-          {(r) => {
-            const row = r();
-            return row.kind === "group" ? <Text class="px-2 pb-1 pt-3 text-[11px] text-faint">{commandGroupLabel(row.name)}</Text> : <CommandRow command={row.command} editor={ed} />;
-          }}
+      <If when={groupsFor(ed.query(), ed.draft()).length > 0} else={<Text class="px-1 text-[13px] text-muted-foreground">{t("没有找到命令", "No matching commands")}</Text>}>
+        <Each of={groupsFor(ed.query(), ed.draft())} key={(g) => g.name}>
+          {(g) => (
+            <Group title={commandGroupLabel(g().name)}>
+              <Each of={g().commands} key={(c) => c.id}>
+                {(c) => <CommandRow command={c()} editor={ed} />}
+              </Each>
+            </Group>
+          )}
         </Each>
-        <If when={ed.query().trim() === ""}>
-          <SystemKeys />
-        </If>
-      </View>
+      </If>
+      <If when={ed.query().trim() === ""}>
+        <SystemKeys />
+      </If>
     </View>
   );
 }
