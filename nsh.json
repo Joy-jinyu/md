@@ -27,7 +27,7 @@
     },
     "webview": { "hosts": [] },
     "network": {
-      "hosts": ["api.github.com", "github.com", "gist.githubusercontent.com", "pairdown-auth.1825326327.workers.dev"],
+      "hosts": ["api.github.com", "github.com", "gist.githubusercontent.com"],
       "http": [{ "host": "*", "methods": ["GET"] }]
     }
   },

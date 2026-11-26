@@ -18,7 +18,8 @@ const LIBRARY = {
   [LAST_OPENED_KEY]: "da",
 };
 
-const openLibrary = () => open("../App.tsx", { ...WEB, storage: LIBRARY });
+/** 同步配好的入口：「同步…」要有配置才出现，不能靠打包时的部署配置。 */
+const openLibrary = () => open("./fixtures/sync-app.tsx", { ...WEB, storage: LIBRARY });
 type App = Awaited<ReturnType<typeof openLibrary>>;
 
 async function refocus(app: App) {

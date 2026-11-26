@@ -26,7 +26,7 @@ import { assetPathFromSrc, base64ToBytes, bytesToBase64, checkImage } from "./im
 export const GATEWAY_URL = `ws://127.0.0.1:${DEFAULT_PORT}`;
 
 /** 设置页说明网关时要的端口和默认放行的页面来源：features 经这里拿，不直接引 gateway/。 */
-export { DEFAULT_PORT, OFFICIAL_ORIGIN } from "../../gateway/src/protocol";
+export { DEFAULT_PORT } from "../../gateway/src/protocol";
 
 /** 一条连接；测试里换成替身。 */
 export interface Socket {
@@ -165,7 +165,7 @@ interface Timing {
 }
 
 function closeReason(code: number): string | null {
-  if (code === CLOSE_ORIGIN) return t("网关拒绝了这个页面的来源（Origin）。启动网关时加上 --origin 和这个页面的地址", "The gateway rejected this page’s origin. Start the gateway with --origin followed by this site’s address.");
+  if (code === CLOSE_ORIGIN) return t("网关拒绝了这个页面的来源（Origin）。从源码跑的网关，启动时加上 --origin 和这个页面的地址；装成后台服务的网关，再运行一次设置里的安装命令（旧版装的会补上站点）", "The gateway rejected this page’s origin. A gateway run from source needs --origin followed by this site’s address; for an installed gateway, run the install command from Settings again (older installs get the site filled in).");
   if (code === CLOSE_VERSION) return t("网关和页面的协议版本不一样。更新网关后再刷新页面", "The gateway and this page use different protocol versions. Update the gateway, then refresh the page.");
   return null;
 }

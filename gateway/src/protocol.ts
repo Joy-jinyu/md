@@ -12,9 +12,6 @@ export const PROTOCOL_VERSION = 1;
 /** 网关默认端口，页面先试这个。 */
 export const DEFAULT_PORT = 7341;
 
-/** 线上页面的来源，网关默认只放行它；别的来源要用启动参数 --origin 显式加。 */
-export const OFFICIAL_ORIGIN = "https://markdown.pairwise.site";
-
 /** 网关只听这个地址，没有参数能改。 */
 export const LISTEN_HOST = "127.0.0.1";
 

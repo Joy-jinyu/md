@@ -1,7 +1,7 @@
 # md implementation guidelines
 
 > Scope covers TypeScript and nsh TSX (`nsh`, `nsh/base`, `nsh/desktop`, and `nsh/test`).
-> The reference app at `~/workspace/spare/joy-jinyu.github.io/blog/editor-app/` is deployed and uses the same version of nsh.
+> The reference app at `blog/editor-app/` in the public repository github.com/Joy-jinyu/joy-jinyu.github.io is deployed and uses the same version of nsh.
 
 ## 1. General conventions
 

@@ -7,7 +7,7 @@ import { cleanup, Text, View } from "nsh";
 import { messageOf } from "../../doc/message";
 import { SIGN_IN_FLOW } from "../../platform";
 import { beginDeviceLogin, beginWebLogin, cancelDeviceLogin, currentAccount, deviceLogin, signOut } from "../../sync/account";
-import { OAUTH_CALLBACK_ORIGIN, syncConfigured } from "../../sync/config";
+import { siteOrigin, syncConfigured } from "../../sync/config";
 import { Button } from "../../ui/button";
 import { writeClipboard } from "../../ui/clipboard";
 import { CopyButton } from "../../ui/copy-button";
@@ -40,7 +40,7 @@ function NotConfigured() {
     <View testID="sync-not-configured" class="gap-1">
       <Text class="text-[13px] font-medium text-strong">{t("同步还没配置", "Sync is not configured")}</Text>
       <Text class="select-text text-xs leading-5 text-muted-foreground">
-        {t(`要先建一个 GitHub OAuth App，把它的 client id 填进 src/sync/config.ts 的 GITHUB_CLIENT_ID${WEB ? "；网页版还要部署换 token 的中转 Worker（worker/ 文件夹），把地址填进 AUTH_WORKER_URL" : "，并在 App 设置里打开 Device Flow"}。配好以后重新打包，这里就能登录。`, `Create a GitHub OAuth App and set GITHUB_CLIENT_ID in src/sync/config.ts. ${WEB ? "For the web app, deploy the token exchange Worker in worker/ and set AUTH_WORKER_URL." : "Enable Device Flow in the OAuth App settings."} Rebuild Pairdown to enable sign-in.`)}
+        {t(`要先建一个 GitHub OAuth App，把它的 client id 填进部署配置的 PAIRDOWN_GITHUB_CLIENT_ID${WEB ? "，站点地址填进 PAIRDOWN_SITE；站点的 Worker 还要设好 client secret（worker/README.md）" : "，并在 App 设置里打开 Device Flow"}。配好以后重新打包，这里就能登录。`, `Create a GitHub OAuth App and put its client ID in the PAIRDOWN_GITHUB_CLIENT_ID deployment setting. ${WEB ? "For the web app, also set PAIRDOWN_SITE and the site Worker's client secret (see worker/README.md)." : "Enable Device Flow in the OAuth App settings."} Rebuild Pairdown to enable sign-in.`)}
       </Text>
     </View>
   );
@@ -58,7 +58,7 @@ function originOf(url: string): string | null {
 async function startWebLogin() {
   const here = pageUrl();
   if (!here) return say(() => t("读不到这个页面的地址，没法登录。", "Could not determine this page’s address. Sign-in is unavailable."), "warn");
-  if (originOf(here) !== OAUTH_CALLBACK_ORIGIN) return say(() => t(`网页登录只在 ${new URL(OAUTH_CALLBACK_ORIGIN).host} 可用：GitHub 只把登录送回那里登记的地址。`, `Web sign-in is available only at ${new URL(OAUTH_CALLBACK_ORIGIN).host}, where the GitHub callback URL is registered.`), "warn");
+  if (originOf(here) !== siteOrigin()) return say(() => t(`网页登录只在 ${new URL(siteOrigin()).host} 可用：GitHub 只把登录送回那里登记的地址。`, `Web sign-in is available only at ${new URL(siteOrigin()).host}, where the GitHub callback URL is registered.`), "warn");
   try {
     const url = await beginWebLogin();
     if (!(await openLink(url, () => false))) say(() => t("浏览器没让打开 GitHub 的授权页（可能拦了弹出窗口），允许本站打开新窗口后再试。", "Could not open GitHub’s authorization page. Allow this site to open a new window and try again."), "warn");

@@ -9,8 +9,8 @@ import { blockAtLine, lineOfBlock } from "../src/features/editor/source-align";
 import { createUi } from "../src/features/editor/ui-state";
 import { setSyncConfigForTests, syncConfig } from "../src/sync/config";
 
-/** 这个文件按「没配同步」来断言命令清单（真的配置现在是填好的）；配好以后多出「同步…」由下面专门的用例管。 */
-setSyncConfigForTests({ clientId: "", workerUrl: "" });
+/** 这个文件按「没配同步」来断言命令清单（不看打包时的部署配置）；配好以后多出「同步…」由下面专门的用例管。 */
+setSyncConfigForTests({ clientId: "", siteOrigin: "", tokenUrl: "" });
 
 const text = (t: string): Node => ({ type: "text", text: t });
 const para = (...content: Node[]): Node => ({ type: "paragraph", content });
@@ -53,9 +53,9 @@ test("「同步…」 is only offered when sync is configured (a GitHub OAuth Ap
   const sync = COMMANDS.filter((c) => c.id === "file.sync");
   const before = syncConfig();
   try {
-    setSyncConfigForTests({ clientId: "", workerUrl: "" });
+    setSyncConfigForTests({ clientId: "", siteOrigin: "", tokenUrl: "" });
     expect(sync.filter((c) => available(c, ctx))).toEqual([]);
-    setSyncConfigForTests({ clientId: "test-client", workerUrl: "https://api.github.com/test-auth-worker" });
+    setSyncConfigForTests({ clientId: "test-client", siteOrigin: "https://pairdown.example", tokenUrl: "https://api.github.com/test-auth-worker/token" });
     expect(ids(sync.filter((c) => available(c, ctx)))).toEqual(["file.sync"]);
   } finally {
     setSyncConfigForTests(before);

@@ -32,18 +32,23 @@ Local store  Feature code accesses the library through the DocumentStore interfa
              downloads the file and macOS writes it to Downloads. nsh has no save dialog as of v0.7.0
              (checked .nsh/types/ on 2026-11-25).
 Sync         GitHub REST API (fetch), one private Gist per document.
-Sign-in      Web: Browser OAuth. The relay Worker exchanges the code for a token and keeps the client secret off the frontend.
+Sign-in      Web: Browser OAuth. The site's own Worker exchanges the code for a token at same-origin /token and keeps the client secret off the frontend.
              macOS: OAuth Device Flow, which requires no client secret.
-Release      Web: make build-web → npx wrangler deploy → Cloudflare Workers static assets, project pairdown,
-             configured in wrangler.jsonc. Production: https://markdown.pairwise.site/ (first deployed
-             2026-11-25, with nsh.json web.base = /).
+Config       Deployment values live outside the repository: PAIRDOWN_SITE (site origin), PAIRDOWN_GITHUB_CLIENT_ID,
+             PAIRDOWN_REPO. Locally in .env (see .env.example; shell variables win), in CI as repository secrets. Read and validated only in
+             scripts/deploy-config.mjs. make config writes them
+             to src/app-config.gen.ts (not committed); every make target that runs nsh does this first.
+             The Worker gets GITHUB_CLIENT_ID via wrangler --var at deploy; GITHUB_CLIENT_SECRET is a Cloudflare Worker secret.
+Release      Web: make deploy-web (build-web, then publish-web: wrangler deploy --domain <PAIRDOWN_SITE host>) → Cloudflare Workers
+             static assets plus /token, project pairdown, configured in wrangler.jsonc (nsh.json web.base = /).
+             build-web also stamps the site and repository into gateway.sh and the landing page (scripts/stamp-web.mjs).
              build-web runs scripts/web-headers.mjs to generate _headers from nsh.json, including the
              connect-src allowlist (see “External images” in .claude/rules/security.md).
              The local dev server (make dev-web) does not serve these headers.
              macOS: nsh package --target macos → .app.
 CI           GitHub Actions installs nsh v0.7.0 and Node 24, runs make verify (type check, app, gateway,
-             and Worker tests), packages the web app, and runs wrangler deploy (requires two repository
-             secrets, still unset at the time of writing, so deployment is currently manual).
+             and Worker tests), packages the web app, and runs wrangler deploy. Repository secrets:
+             PAIRDOWN_SITE, PAIRDOWN_GITHUB_CLIENT_ID, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID.
 ```
 
 <!-- [inferred] Gist was chosen because one private Gist per document is the simplest option and requires no user-created repository. Update this file and src/sync/ if switching to repository storage. -->
@@ -58,14 +63,14 @@ make dev-web    # Run in the browser
 make check         # Type check (nsh check)
 make test          # App tests (nsh test)
 make test-gateway  # Local gateway tests (gateway/, requires Node ≥ 23.6)
-make test-worker   # OAuth relay Worker tests (worker/, requires Node ≥ 23.6)
+make test-worker   # Site Worker (/token) tests (worker/, requires Node ≥ 23.6)
 make verify        # All four checks above, as in CI
 make build-web     # Package the static site in dist/web/Pairdown/
 make build-mac     # Package the app at dist/macos/Pairdown.app
 
 # The web app connects to the optional local file gateway at 127.0.0.1:7341.
 # To install the background service, pairdown command, and automatic updates, see gateway/README.md:
-# curl -fsSL https://markdown.pairwise.site/gateway.sh | sh
+# curl -fsSL <PAIRDOWN_SITE>/gateway.sh | sh
 # For development, run from source:
 cd gateway && npm install && node src/main.mts --library ~/Documents/Pairdown
 # Add --origin http://127.0.0.1:8811 to allow the local web app (make dev-web). See gateway/README.md.
@@ -96,8 +101,8 @@ md/
 │   └── ui/              Basic components such as buttons, icons, and notices
 ├── tests/               All app tests (*.test.ts / *.test.tsx)
 ├── gateway/             Local Node gateway (.mts) for browser access to local files. Shares gateway/src/protocol.ts with the app.
-├── worker/              Cloudflare Worker that exchanges web OAuth codes for tokens. Deployed on 2026-11-25.
-│                        Run wrangler commands here with --config ./wrangler.toml. See worker/README.md.
+├── worker/              Script of the site Worker: /token exchanges web OAuth codes for tokens (wrangler.jsonc at the root).
+│                        See worker/README.md.
 ├── .github/workflows/   deploy.yml
 └── Makefile
 ```
@@ -118,7 +123,7 @@ md/
 - **Branch on platform only in `src/platform/index.ts`.** Only that file reads nsh's `platform.name`. `features/` and `ui/` call its exported functions.
 - **Access persistence only through `src/store/`.** Keep direct access to `Storage` and IndexedDB and the storage key definitions inside the store.
 - **Use tokens for styles.** Avoid hex colors, palette classes, and `dark:` in components. Light and dark values come from `theme.json` (see `DESIGN.md`). The global requirements for `@pkgs/theme`, `@pkgs/us-icons`, and prism-ui apply to company repositories. See `EXECUTION.md` §0 for this repository's exceptions.
-- **Reference implementation.** `~/workspace/spare/joy-jinyu.github.io/blog/editor-app/` is a deployed app by the same author on the same nsh version. Refer to its UI components, web host bridge, and tests, and reuse only relevant pieces.
+- **Reference implementation.** `blog/editor-app/` in the public repository github.com/Joy-jinyu/joy-jinyu.github.io is a deployed app by the same author on the same nsh version. Refer to its UI components, web host bridge, and tests, and reuse only relevant pieces.
 - See `CONTRIBUTING.md` for detailed conventions.
 
 ## Current Phase
@@ -167,7 +172,7 @@ See plan §6 for remaining S0 items.
 ## Open Questions
 
 - Sync destination: Gist (chosen provisionally) or a user-selected repository.
-- OAuth App: A dedicated Pairdown App and the `pairdown-auth` Worker were set up and verified in production on 2026-11-25. The site domain is markdown.pairwise.site.
+- OAuth App: A dedicated Pairdown App and the `pairdown-auth` Worker were set up and verified in production on 2026-11-25. On 2026-11-26 the token exchange moved into the site Worker (same-origin /token) and the site, client ID and repository moved to deployment configuration; the old `pairdown-auth` Worker is to be deleted after the new one is verified.
 - GitHub client secret rotation: The secret appeared in plaintext in a conversation and in one full-screen capture. Rotation was recommended. Its status is unknown.
 - Two first-sync confirmation defaults: All entries are checked initially. Choosing “先不上传” leaves the document eligible for sync so the prompt appears again next time.
 - Mermaid: The user approved vendoring Mermaid on 2026-11-25, after which diagrams were rendered as images. With `capabilities.webview`, WebView works on the web in a sandboxed iframe. Earlier `available()` tests returned false, likely because the capability was missing according to the types. The package adds 5.5 MB (about 1.2 MB compressed over the network, downloaded only when a document contains a diagram). Keeping it is pending confirmation.
@@ -177,7 +182,7 @@ See plan §6 for remaining S0 items.
 - The macOS caret is too tall next to an image, possibly because the host applies a line-height multiplier to the whole line. Options are to add a block image node with round-trip rules or report a host issue to nsh.
 - Formulas currently export to HTML as raw TeX. Typesetting would require a dependency such as KaTeX, pending a decision.
 - The native macOS title bar is white in dark mode, and nsh has no window appearance API. A custom title bar is undecided.
-- CI: GitHub Actions deployment requires two Cloudflare repository secrets and a `main` branch. Both requirements were unmet at the time of writing.
+- CI: The Cloudflare repository secrets exist (set 2026-11-25); `PAIRDOWN_SITE` and `PAIRDOWN_GITHUB_CLIENT_ID` still need to be added. The workflow has not run yet.
 - Top-level `gateway/`: The direction was approved. The directory name and layering await user confirmation (plan §9).
 - Visual direction: M1 followed the pairwise.site brand provisionally, with teal and light/dark themes defined only in `theme.json`. User approval is pending. The provisional application ID is `site.pairwise.md`.
 - See plan §7 for other pending items, including switching to repository sync for images, macOS folder selection and Save As, PDF export, and leaving out “光标在格式内显示淡色符号.”

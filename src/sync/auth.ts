@@ -1,7 +1,7 @@
 /**
  * GitHub 登录的两种流程，权限只要 gist（.claude/rules/security.md）：
  * - Device Flow（macOS 应用）：要用户码 → 用户在 GitHub 上输入并授权 → 轮询换 token。不需要 client secret。
- * - 网页授权（网页版）：跳 GitHub 授权页（带随机 state 和 PKCE 的 code_challenge）→ 回到本站带 code → 交给中转 Worker 换 token
+ * - 网页授权（网页版）：跳 GitHub 授权页（带随机 state 和 PKCE 的 code_challenge）→ 回到本站带 code → 交给本站的 /token（站点 Worker）换 token
  *   （带上 code_verifier 和 redirect_uri，Worker 原样转给 GitHub）。PKCE：code 半路被截走也换不到 token（GitHub 的 OAuth 文档写了支持，只收 S256）。
  *   github.com 的 token 接口不支持浏览器跨域（OAuth 文档：不支持 CORS 预检），换 token 又要 client secret，所以经 Worker。
  * 流程细节以 docs.github.com「Authorizing OAuth apps」为准（2026-11-25 读）。
@@ -139,7 +139,7 @@ export async function codeChallenge(verifier: string): Promise<string> {
   return base64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
 }
 
-/** GitHub 授权页的地址；`redirectUri` 是授权后回到的本站地址（网页用 config 的 `OAUTH_CALLBACK_URL`），`challenge` 是 PKCE 的 code_challenge。 */
+/** GitHub 授权页的地址；`redirectUri` 是授权后回到的本站地址（网页用 config 的 `oauthCallbackUrl()`），`challenge` 是 PKCE 的 code_challenge。 */
 export function authorizeUrl(clientId: string, state: string, redirectUri: string, challenge: string): string {
   const q = new URLSearchParams({
     client_id: clientId,
@@ -199,15 +199,15 @@ export interface Exchange {
   redirectUri: string;
 }
 
-/** 网页登录最后一步：交给中转 Worker 换 token（Worker 带上 client secret 去问 GitHub）。 */
-export async function exchangeCode(workerUrl: string, x: Exchange, fetchFn: Fetch): Promise<string> {
+/** 网页登录最后一步：交给站点的 `/token`（`tokenUrl`）换 token，Worker 带上 client secret 去问 GitHub。 */
+export async function exchangeCode(tokenUrl: string, x: Exchange, fetchFn: Fetch): Promise<string> {
   let res: Response;
   const payload = JSON.stringify({ code: x.code, state: x.state, code_verifier: x.verifier, redirect_uri: x.redirectUri });
   try {
-    res = await fetchFn(`${workerUrl}/token`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: payload });
+    res = await fetchFn(tokenUrl, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: payload });
   } catch (e) {
     console.warn("code exchange failed", e instanceof Error ? e.message : String(e));
-    throw new SyncError("network", t("连不上登录中转服务，检查网络后再试。", "Could not reach the sign-in service. Check your connection and try again."));
+    throw new SyncError("network", t("连不上本站的登录服务，检查网络后再试。", "Could not reach the sign-in service. Check your connection and try again."));
   }
   let body: Record<string, unknown> = {};
   try {
