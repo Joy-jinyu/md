@@ -1,5 +1,6 @@
 import { command, type RichEditorSession, setTextSelection } from "nsh/base";
-import { expect, open, test } from "nsh/test";
+import { expect, test } from "nsh/test";
+import { open } from "./fixtures/chinese-open";
 import { cellSelectionText, selectionMarkdown } from "../src/doc/selection-markdown";
 import type { PMNode } from "../src/doc/types";
 import { type Segmenter, selectLine, selectWord, wordAround } from "../src/features/editor/select";

@@ -1,6 +1,7 @@
 /** 查找条：顶栏下面一行查找、一行替换。它只管输入和选项，真正去找的是传进来的引擎（所见即所得一个，源码一个）。 */
 import { effect, keymap, signal, Text, untracked, View } from "nsh";
 import { Input } from "nsh/base";
+import { t } from "../../i18n";
 import { Button } from "../../ui/button";
 import { currentDocId } from "../../store/library";
 import { pendingFind } from "../library/requests";
@@ -22,11 +23,11 @@ export function createFindState() {
 export type FindState = ReturnType<typeof createFindState>;
 
 function summary(r: FindResult, query: string): string {
-  if (r.error) return "正则有误";
+  if (r.error) return t("正则有误", "Invalid regular expression");
   if (query === "") return "";
-  if (r.count === 0) return "无结果";
+  if (r.count === 0) return t("无结果", "No matches");
   const total = `${r.count}${r.capped ? "+" : ""}`;
-  return r.current === null ? `${total} 处` : `${r.current + 1} / ${total}`;
+  return r.current === null ? t(`${total} 处`, `${total} ${r.count === 1 && !r.capped ? "match" : "matches"}`) : `${r.current + 1} / ${total}`;
 }
 
 const FIELD =
@@ -97,7 +98,7 @@ export function FindBar(props: { ui: Ui; state: FindState; engine: () => FindEng
   const flip = (s: { (): boolean; set(v: boolean): void }) => () => s.set(!s());
   return (
     <If when={ui.findMode() !== null}>
-      <View testID="find-bar" accessibilityLabel="查找" class="gap-1 border-b border-border bg-card px-5 py-2">
+      <View testID="find-bar" accessibilityLabel={t("查找", "Find")} class="gap-1 border-b border-border bg-card px-5 py-2">
         <EscapeCloses onEscape={close} />
         <View class="flex-row flex-wrap items-center gap-1">
           <Input
@@ -107,17 +108,17 @@ export function FindBar(props: { ui: Ui; state: FindState; engine: () => FindEng
             onChange={({ value }) => state.query.set(value)}
             onSubmit={() => props.engine().next()}
             submitBehavior="submit"
-            placeholder="查找"
-            accessibilityLabel="查找内容"
+            placeholder={t("查找", "Find")}
+            accessibilityLabel={t("查找内容", "Search text")}
             autoCapitalize="none"
             autoCorrect={false}
             class={FIELD}
           />
-          <Button label="Aa" accessibilityLabel="区分大小写" active={state.caseSensitive()} onPress={flip(state.caseSensitive)} />
-          <Button label="词" accessibilityLabel="整词匹配" active={state.wholeWord()} onPress={flip(state.wholeWord)} />
-          <Button label=".*" accessibilityLabel="正则表达式" active={state.regex()} onPress={flip(state.regex)} />
-          <Button label="上一个" disabled={none()} onPress={() => props.engine().previous()} />
-          <Button label="下一个" disabled={none()} onPress={() => props.engine().next()} />
+          <Button label="Aa" accessibilityLabel={t("区分大小写", "Match case")} active={state.caseSensitive()} onPress={flip(state.caseSensitive)} />
+          <Button label={t("词", "Word")} accessibilityLabel={t("整词匹配", "Match whole words")} active={state.wholeWord()} onPress={flip(state.wholeWord)} />
+          <Button label=".*" accessibilityLabel={t("正则表达式", "Regular expression")} active={state.regex()} onPress={flip(state.regex)} />
+          <Button label={t("上一个", "Previous")} disabled={none()} onPress={() => props.engine().previous()} />
+          <Button label={t("下一个", "Next")} disabled={none()} onPress={() => props.engine().next()} />
           <Text
             testID="find-count"
             style={{ fontVariant: ["tabular-nums"], numberOfLines: 1 }}
@@ -126,7 +127,7 @@ export function FindBar(props: { ui: Ui; state: FindState; engine: () => FindEng
           >
             {summary(result(), state.query())}
           </Text>
-          <Button label="关闭" accessibilityLabel="关闭查找" onPress={close} />
+          <Button label={t("关闭", "Close")} accessibilityLabel={t("关闭查找", "Close Find")} onPress={close} />
         </View>
         <If when={ui.findMode() === "replace"}>
           <View class="flex-row flex-wrap items-center gap-1">
@@ -136,14 +137,14 @@ export function FindBar(props: { ui: Ui; state: FindState; engine: () => FindEng
               onChange={({ value }) => state.replacement.set(value)}
               onSubmit={() => props.engine().replace(state.replacement())}
               submitBehavior="submit"
-              placeholder="替换成"
-              accessibilityLabel="替换成"
+              placeholder={t("替换成", "Replace with")}
+              accessibilityLabel={t("替换成", "Replace with")}
               autoCapitalize="none"
               autoCorrect={false}
               class={FIELD}
             />
-            <Button label="替换" disabled={none()} onPress={() => props.engine().replace(state.replacement())} />
-            <Button label="全部替换" disabled={none()} onPress={() => void props.engine().replaceAll(state.replacement())} />
+            <Button label={t("替换", "Replace")} disabled={none()} onPress={() => props.engine().replace(state.replacement())} />
+            <Button label={t("全部替换", "Replace All")} disabled={none()} onPress={() => void props.engine().replaceAll(state.replacement())} />
           </View>
         </If>
       </View>

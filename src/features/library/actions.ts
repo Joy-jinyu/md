@@ -2,6 +2,7 @@
  * 接文档库的请求（打开、新建、导入、删除、恢复旧版本、处理在别处删掉的这篇）。换一篇之前先把当前这篇写完；写不进去就不换，说明原因。
  * `show(id, find)` 由编辑页给：读出那一篇、重建编辑器；读不到（已经不在了）返回 false。
  */
+import { type Phrase, t } from "../../i18n";
 import { messageOf } from "../../doc/message";
 import { locateOpenedFile } from "../../platform";
 import { storageKind } from "../../store/backend";
@@ -16,15 +17,16 @@ import { historyOpen, pendingFind } from "./requests";
 type Show = (id: string, find?: string) => Promise<boolean>;
 
 function whyNotSaved(result: Extract<SaveResult, { ok: false }>, what: string): string {
-  if (result.error.deleted) return `这篇已经在别处删除了，先在上面选「存成新文档」或「放弃这篇」，再${what}。`;
-  if (result.error.conflict) return `这篇在别处改过、和这里的修改冲突，先在上面选保留哪一边，再${what}。`;
-  if (result.error.quota) return `本机存储已满，这篇最近的修改没存上，先不${what}。删掉不用的文档腾出空间后再试。`;
-  return `这篇没能保存（${result.error.detail}），先不${what}。`;
+  if (result.error.deleted) return t(`这篇已经在别处删除了，先在上面选「存成新文档」或「放弃这篇」，再${what}。`, `This document was deleted elsewhere. Choose “Save as new document” or “Discard document” above before you ${what}.`);
+  if (result.error.conflict) return t(`这篇在别处改过、和这里的修改冲突，先在上面选保留哪一边，再${what}。`, `This document was edited elsewhere and conflicts with your changes. Choose which version to keep above before you ${what}.`);
+  if (result.error.quota) return t(`本机存储已满，这篇最近的修改没存上，先不${what}。删掉不用的文档腾出空间后再试。`, `Storage is full, so recent changes could not be saved. Free up space and try to ${what} again.`);
+  return t(`这篇没能保存（${result.error.detail}），先不${what}。`, `Could not save this document (${result.error.detail}). Could not ${what}.`);
 }
 
+/** 这篇现在的名字，留到回执显示时再按语言取：先记下文档，删掉以后回执里还是它的名字。 */
 const nameOf = (id: string) => {
   const doc = allDocs().find((d) => d.id === id);
-  return doc ? displayName(doc) || "未命名" : "这篇文档";
+  return () => (doc ? displayName(doc) || t("未命名", "Untitled") : t("这篇文档", "this document"));
 };
 
 /** 要开的那篇不在了：重读列表，开最近改过的一篇（一篇都没有就新建一篇空的）。 */
@@ -35,29 +37,30 @@ export async function openFallback(show: Show): Promise<boolean> {
 
 export function createLibraryActions(show: Show) {
   /** 关掉当前这篇；关不掉时说明原因，返回 false。 */
-  const leave = async (what: string): Promise<boolean> => {
+  const leave = async (what: () => string): Promise<boolean> => {
     const result = await closeDocument();
-    if (!result.ok) say(whyNotSaved(result, what), "warn");
+    if (!result.ok) say(() => whyNotSaved(result, what()), "warn");
     return result.ok;
   };
   /** 打开 `id`；不在了就回到 `back` 那篇（回不去就开最近的）。 */
   const go = async (id: string, back: string | null, find?: string) => {
     if (await show(id, find)) return;
     await refreshLibrary();
-    say("这篇文档已经不在了（可能在别的标签页里删掉了）。", "warn");
+    say(() => t("这篇文档已经不在了（可能在别的标签页里删掉了）。", "This document is no longer available. It may have been deleted in another tab."), "warn");
     if (!back || !(await show(back))) await openFallback(show);
   };
 
   const open = async (id: string, find?: string) => {
     clearWarning();
     const problem = allDocs().find((d) => d.id === id)?.problem;
-    if (problem) return say(`「${nameOf(id)}」${problemText(problem)}。`, "warn");
+    const name = nameOf(id);
+    if (problem) return say(() => t(`「${name()}」${problemText(problem)}。`, `${name()}: ${problemText(problem)}.`), "warn");
     const from = currentDocId();
     if (id === from) {
       if (find) pendingFind.set({ id, query: find });
       return;
     }
-    if (await leave("切换")) await go(id, from, find);
+    if (await leave(() => t("切换", "switch documents"))) await go(id, from, find);
   };
 
   const history = async (id: string) => {
@@ -66,17 +69,17 @@ export function createLibraryActions(show: Show) {
   };
 
   /** 新建（`text` 为空）或导入：先关当前这篇，再建；建不成就回到当前这篇。`note` 换掉导入成功后的那句回执。 */
-  const create = async (text: string, name?: string, note?: string) => {
+  const create = async (text: string, name?: string, note?: Phrase) => {
     clearWarning();
     const from = currentDocId();
-    if (!(await leave(name ? "打开文件" : "新建"))) return;
+    if (!(await leave(() => (name ? t("打开文件", "open the file") : t("新建", "create a document"))))) return;
     try {
       const meta = await createDocument(text, name);
       await go(meta.id, from);
-      if (name) say(note ?? `已打开「${name}」，存成了文档库里的一篇新文档。`, "info");
+      if (name) say(note ?? (() => t(`已打开「${name}」，存成了文档库里的一篇新文档。`, `Opened “${name}” as a new document in the library.`)), "info");
     } catch (e) {
       console.error("create document failed", e);
-      say(`没能${name ? `打开「${name}」` : "新建文档"}：${messageOf(e)}`, "warn");
+      say(() => t(`没能${name ? `打开「${name}」` : "新建文档"}：${messageOf(e)}`, `${name ? `Could not open “${name}”` : "Could not create a document"}: ${messageOf(e)}`), "warn");
       if (from) await show(from);
     }
   };
@@ -92,9 +95,9 @@ export function createLibraryActions(show: Show) {
       return open(found.id);
     }
     const k = storageKind();
-    const folder = k.kind === "files" ? k.folder : "文库";
-    if (found.text === null) return say(`「${found.name}」不在文库（${folder}）里，应用没有权限读它。把它挪进文库文件夹，或者用「打开文件」选它导入一份。`, "warn");
-    await create(found.text, found.name, `「${found.name}」不在文库（${folder}）里，应用改不了原文件，已导入一份副本到文库。`);
+    const folder = () => (k.kind === "files" ? k.folder : t("文库", "Library"));
+    if (found.text === null) return say(() => t(`「${found.name}」不在文库（${folder()}）里，应用没有权限读它。把它挪进文库文件夹，或者用「打开文件」选它导入一份。`, `“${found.name}” is outside the library (${folder()}), and Pairdown cannot read it there. Move it into the library folder or use Open File to import a copy.`), "warn");
+    await create(found.text, found.name, () => t(`「${found.name}」不在文库（${folder()}）里，应用改不了原文件，已导入一份副本到文库。`, `“${found.name}” is outside the library (${folder()}). Pairdown imported a copy into the library because it cannot edit the original.`));
   };
 
   const remove = async (id: string) => {
@@ -105,11 +108,11 @@ export function createLibraryActions(show: Show) {
       await removeDocument(id);
     } catch (e) {
       console.error("remove document failed", e);
-      say(`没能删除「${name}」：${messageOf(e)}`, "warn");
+      say(() => t(`没能删除「${name()}」：${messageOf(e)}`, `Could not delete “${name()}”: ${messageOf(e)}`), "warn");
       resume?.();
       return;
     }
-    say(`已删除「${name}」。`, "info");
+    say(() => t(`已删除「${name()}」。`, `Deleted “${name()}”.`), "info");
     if (!resume) return;
     discardDocument();
     await openFallback(show);
@@ -119,15 +122,15 @@ export function createLibraryActions(show: Show) {
     const id = currentDocId();
     if (!id) return;
     const saved = await flush();
-    if (!saved.ok) return say(whyNotSaved(saved, "恢复"), "warn");
+    if (!saved.ok) return say(() => whyNotSaved(saved, t("恢复", "restore this version")), "warn");
     const mine = latestDocument();
-    if (!(await addSnapshot(id, mine))) return say("没能把现在的内容先存成一个版本（存储满了），没有恢复。", "warn");
+    if (!(await addSnapshot(id, mine))) return say(() => t("没能把现在的内容先存成一个版本（存储满了），没有恢复。", "Could not save a version of the current content because storage is full. No version was restored."), "warn");
     // 存进历史要等一会儿，这期间又打的字、别处存的改动由 replaceDocument 在同一个排队任务里拦下（和同步拉取一样）
     const result = await replaceDocument(text, { id, text: mine });
-    if (result === STALE) return say("恢复的时候这篇又改了，没有恢复。再点一次「恢复这个版本」。", "warn");
-    if (!result.ok) return say(whyNotSaved(result, "恢复"), "warn");
+    if (result === STALE) return say(() => t("恢复的时候这篇又改了，没有恢复。再点一次「恢复这个版本」。", "The document changed during the restore. Select “Restore this version” again."), "warn");
+    if (!result.ok) return say(() => whyNotSaved(result, t("恢复", "restore this version")), "warn");
     await show(id);
-    say("已恢复到这个版本。恢复前的内容在版本历史里。", "info");
+    say(() => t("已恢复到这个版本。恢复前的内容在版本历史里。", "Restored this version. The previous content is in Version History."), "info");
   };
 
   /**
@@ -142,17 +145,17 @@ export function createLibraryActions(show: Show) {
       meta = await createDocument(latestDocument(), openDocName() || undefined);
     } catch (e) {
       console.error("rescue document failed", e);
-      return say(`没能存成新文档：${messageOf(e)}。内容还在这里，可以先用「另存为」存成文件。`, "warn");
+      return say(() => t(`没能存成新文档：${messageOf(e)}。内容还在这里，可以先用「另存为」存成文件。`, `Could not save a new document: ${messageOf(e)}. Your content is still here. Use Save As to keep a file copy.`), "warn");
     }
     discardDocument();
     if (!(await show(meta.id))) await openFallback(show);
-    say(`已把这里的内容存成新文档「${displayName(meta) || meta.name}」。`, "info");
+    say(() => t(`已把这里的内容存成新文档「${displayName(meta) || meta.name}」。`, `Saved your content as a new document: “${displayName(meta) || meta.name}”.`), "info");
   };
 
   const abandon = async () => {
     discardDocument();
     await openFallback(show);
-    say("已放弃这篇在别处删掉的文档。", "info");
+    say(() => t("已放弃这篇在别处删掉的文档。", "Discarded your copy of the document that was deleted elsewhere."), "info");
   };
 
   return (request: LibraryRequest) => {
@@ -180,7 +183,7 @@ export function createLibraryActions(show: Show) {
     };
     return run().catch((e: unknown) => {
       console.error("library request failed", request.kind, e);
-      say(`出错了：${messageOf(e)}`, "warn");
+      say(() => t(`出错了：${messageOf(e)}`, `Something went wrong: ${messageOf(e)}`), "warn");
     });
   };
 }

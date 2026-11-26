@@ -4,6 +4,7 @@
  */
 import { Image, type JSX, signal, Text, View } from "nsh";
 import { type RichNodeViewProps, TextView } from "nsh/base";
+import { phrase, t } from "../../i18n";
 import { Button } from "../../ui/button";
 import { tip } from "../../ui/tooltip";
 import { buildIndex, docIndex, footnoteLabel, noteNodeViewLayout, revealNode, revealText } from "./doc-index";
@@ -21,7 +22,7 @@ const attr = (props: RichNodeViewProps, name: string): string => {
 /** front matter 的一行摘要：「Front matter · N 行 · 第一行」。 */
 export function frontMatterSummary(yaml: string): string {
   const lines = yaml.split("\n").filter((line) => line.trim() !== "");
-  return lines.length === 0 ? "Front matter · 空" : `Front matter · ${lines.length} 行 · ${lines[0].trim()}`;
+  return lines.length === 0 ? t("Front matter · 空", "Front matter · Empty") : t(`Front matter · ${lines.length} 行 · ${lines[0].trim()}`, `Front matter · ${lines.length} ${lines.length === 1 ? "line" : "lines"} · ${lines[0].trim()}`);
 }
 
 /** 块的外框：浅底、圆角；被选中时边框换成主色。`dashed` 是还没画出来、显示源码的块（Mermaid 渲染中、出错）。 */
@@ -93,11 +94,11 @@ function MathBlockView(p: RichNodeViewProps) {
   return (
     <View
       onLayout={noteNodeViewLayout}
-      accessibilityLabel={`公式：${tex()}`}
+      accessibilityLabel={t(`公式：${tex()}`, `Formula: ${tex()}`)}
       class="min-h-11 justify-center rounded-(--radius-sm) border px-4 py-2"
       classList={{ "border-primary": p.selected, "border-transparent": !p.selected }}
     >
-      <If when={tex() !== ""} else={<Text class="text-[14px] text-faint">空公式，选中后点「编辑」写 LaTeX</Text>}>
+      <If when={tex() !== ""} else={<Text class="text-[14px] text-faint">{t("空公式，选中后点「编辑」写 LaTeX", "Empty formula. Select it and choose Edit to enter LaTeX.")}</Text>}>
         <If when={!MATH_FENCE_LINE.test(tex())} else={<Source text={tex()} />}>
           <TextView markdown={`$$\n${tex()}\n$$`} classes={MATH_CLASSES} />
         </If>
@@ -111,7 +112,7 @@ function MathInlineView(p: RichNodeViewProps) {
   // 源码里有 `$` 时拼成 `$…$` 会提前收尾，剩下的被当成 Markdown：直接显示源码
   return (
     <If when={!tex().includes("$")} else={<SourceInline selected={p.selected} source={tex()} />}>
-      <View accessibilityLabel={`公式：${tex()}`} class="rounded-(--radius-sm) border" classList={{ "border-primary": p.selected, "border-transparent": !p.selected }}>
+      <View accessibilityLabel={t(`公式：${tex()}`, `Formula: ${tex()}`)} class="rounded-(--radius-sm) border" classList={{ "border-primary": p.selected, "border-transparent": !p.selected }}>
         <Scaled scale={INLINE_MATH_SCALE}>
           <TextView markdown={tex() === "" ? "`$$`" : `$${tex()}$`} classes={MATH_CLASSES} />
         </Scaled>
@@ -138,27 +139,27 @@ function DiagramView(p: RichNodeViewProps) {
               testID="diagram-image"
               src={s.url}
               role="image"
-              accessibilityLabel={`Mermaid 图：${code().trim().split("\n")[0]}`}
+              accessibilityLabel={t(`Mermaid 图：${code().trim().split("\n")[0]}`, `Mermaid diagram: ${code().trim().split("\n")[0]}`)}
               style={{ width, height: Math.round((width * s.height) / s.width) }}
             />
           </View>
         );
       }
       case "empty":
-        return <Text class="text-[14px] text-faint">空 Mermaid 图，选中后点「编辑」写代码</Text>;
+        return <Text class="text-[14px] text-faint">{t("空 Mermaid 图，选中后点「编辑」写代码", "Empty Mermaid diagram. Select it and choose Edit to enter Mermaid code.")}</Text>;
       case "loading":
         return (
           <>
-            <Label text="Mermaid 图 · 正在渲染…" />
+            <Label text={t("Mermaid 图 · 正在渲染…", "Mermaid diagram · Rendering…")} />
             <Source text={code()} faint />
           </>
         );
       default:
         return (
           <>
-            <Label text="Mermaid 图 · 没能渲染" />
+            <Label text={t("Mermaid 图 · 没能渲染", "Mermaid diagram · Rendering failed")} />
             <Text testID="diagram-error" class="text-[12px] leading-[18px] text-destructive">
-              {s.message}
+              {phrase(s.message)}
             </Text>
             <Source text={code()} />
           </>
@@ -182,7 +183,7 @@ function FrontMatterView(p: RichNodeViewProps) {
           <Source text={frontMatterSummary(attr(p, "yaml"))} oneLine />
         </View>
         <View {...toggle.mouse}>
-          <Button testID="frontmatter-toggle" label={open() ? "收起" : "展开"} accessibilityLabel={open() ? "收起 front matter" : "展开 front matter"} onPress={toggle.onPress} />
+          <Button testID="frontmatter-toggle" label={open() ? t("收起", "Collapse") : t("展开", "Expand")} accessibilityLabel={open() ? t("收起 front matter", "Collapse front matter") : t("展开 front matter", "Expand front matter")} onPress={toggle.onPress} />
         </View>
       </View>
       <If when={open()}>
@@ -219,7 +220,7 @@ function HtmlBlockView(props: { p: RichNodeViewProps }) {
   const preview = () => !p.selected && htmlHasVisibleText(attr(p, "src"));
   return (
     <Frame selected={p.selected}>
-      <Label text={preview() ? "HTML 预览" : "HTML 源码"} />
+      <Label text={preview() ? t("HTML 预览", "HTML Preview") : t("HTML 源码", "HTML Source")} />
       <If when={preview()} else={<Source text={attr(p, "src")} />}>
         <TextView testID="html-preview" html={attr(p, "src")} classes={HTML_CLASSES} />
       </If>
@@ -242,7 +243,7 @@ function FootnoteDefView(props: { p: RichNodeViewProps; label: string }) {
         </View>
         <If when={docIndex().firstRefs.has(props.label)}>
           <View {...back.mouse}>
-            <Button testID={`footnote-back-${props.label}`} label="↩" accessibilityLabel={`回到脚注 ${props.label} 的引用处`} onPress={back.onPress} />
+            <Button testID={`footnote-back-${props.label}`} label="↩" accessibilityLabel={t(`回到脚注 ${props.label} 的引用处`, `Go back to the reference for footnote ${props.label}`)} onPress={back.onPress} />
           </View>
         </If>
       </View>
@@ -278,8 +279,8 @@ function TocView(p: RichNodeViewProps) {
   };
   return (
     <Frame selected={p.selected}>
-      <Label text="目录" />
-      <If when={headings().length > 0} else={<Text class="text-[14px] text-faint">还没有标题</Text>}>
+      <Label text={t("目录", "Table of Contents")} />
+      <If when={headings().length > 0} else={<Text class="text-[14px] text-faint">{t("还没有标题", "No headings yet")}</Text>}>
         <Each of={headings()} key={(h) => `${h.pos}:${h.text}`}>
           {(h) => {
             const press = nodePress(() => jump(h()));
@@ -287,14 +288,14 @@ function TocView(p: RichNodeViewProps) {
               <View
                 testID="toc-item"
                 role="button"
-                accessibilityLabel={`跳到「${h().text}」`}
+                accessibilityLabel={t(`跳到「${h().text}」`, `Go to “${h().text}”`)}
                 onPress={press.onPress}
                 {...press.mouse}
                 style={{ paddingLeft: (h().level - 1) * 16 }}
                 class="min-h-7 justify-center rounded-(--radius-sm) px-1 hover:bg-hover"
               >
                 <Text style={{ numberOfLines: 1 }} class="text-[15px] text-primary-text">
-                  {h().text || "（空标题）"}
+                  {h().text || t("（空标题）", "(Empty heading)")}
                 </Text>
               </View>
             );
@@ -308,7 +309,7 @@ function TocView(p: RichNodeViewProps) {
 /** 脚注引用：上标样的 `[标签]`；悬停显示脚注内容，点一下跳到定义。 */
 function FootnoteRefView(p: RichNodeViewProps) {
   const label = () => attr(p, "label");
-  const text = () => docIndex().footnotes.get(label())?.text ?? "没有找到这个脚注的定义";
+  const text = () => docIndex().footnotes.get(label())?.text ?? t("没有找到这个脚注的定义", "No definition found for this footnote");
   const jump = nodePress(() => {
     const def = buildIndex(p.editor.getJSON() as Node).footnotes.get(label());
     if (def) revealNode(p.editor, def.pos);
@@ -317,7 +318,7 @@ function FootnoteRefView(p: RichNodeViewProps) {
     <View
       testID={`footnote-ref-${label()}`}
       role="button"
-      accessibilityLabel={`脚注 ${label()}：${text()}`}
+      accessibilityLabel={t(`脚注 ${label()}：${text()}`, `Footnote ${label()}: ${text()}`)}
       tooltip={tip(text())}
       onPress={jump.onPress}
       {...jump.mouse}

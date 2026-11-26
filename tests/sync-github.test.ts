@@ -90,7 +90,7 @@ test("401 signs out (the callback runs) and says to sign in again, without the t
   const e = await failure(createGitHub(TOKEN, f.fetchFn, () => unauthorized++).getGist("g1"));
   expect(e.kind).toBe("auth");
   expect(unauthorized).toBe(1);
-  expect(e.message.includes("重新登录")).toBe(true);
+  expect(e.message.includes("Sign in again")).toBe(true);
   expect(e.message.includes(TOKEN)).toBe(false);
 });
 
@@ -108,7 +108,7 @@ test("no network is a network error that says to check the connection", async ()
   const f = fakeFetch({ [`GET ${API}/gists/g1`]: "offline" });
   const e = await failure(createGitHub(TOKEN, f.fetchFn, () => undefined).getGist("g1"));
   expect(e.kind).toBe("network");
-  expect(e.message.includes("网络")).toBe(true);
+  expect(e.message.includes("Check your connection")).toBe(true);
 });
 
 test("creating makes a secret gist named after the document with the Pairdown mark; renaming moves the file", async () => {
@@ -145,7 +145,7 @@ test("a gist with several files reads the file the link names, and a gist it can
   const gh = createGitHub(TOKEN, f.fetchFn, () => undefined);
   expect((await gh.getGist("g1", "周报.md"))?.text).toBe("# 周报\n");
   const e = await failure(gh.getGist("g1", "gone.md"));
-  expect([e.kind, e.message.includes("好几个文件")]).toEqual(["invalid", true]);
+  expect([e.kind, e.message.includes("multiple files")]).toEqual(["invalid", true]);
   const single = fakeFetch({ [`GET ${API}/gists/g2`]: { body: gist("g2", "", { files: { "notes.md": { content: "n" }, "data.json": { content: "{}" } } }) } });
   expect((await createGitHub(TOKEN, single.fetchFn, () => undefined).getGist("g2", "renamed.md"))?.fileName).toBe("notes.md");
 });

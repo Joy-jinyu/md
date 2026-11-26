@@ -1,13 +1,21 @@
-import { mount } from "nsh";
+import { mount, signal } from "nsh";
 import { Head } from "nsh/web";
 import { EditorScreen } from "./src/features/editor/EditorScreen";
+import { initializeLocale, locale, t } from "./src/i18n";
 
-/** 网页标题和简介（原生应用里 Head 不起作用，窗口名取 nsh.json 的 name）。 */
 function App() {
+  const ready = signal(false);
+  void initializeLocale().then(() => ready.set(true));
   return (
     <>
-      <Head title="Pairdown" description="所见即所得的 Markdown 编辑器，文档只存在你的设备上。" lang="zh-CN" />
-      <EditorScreen />
+      <Head
+        title="Pairdown"
+        description={t("所见即所得的 Markdown 编辑器，文档只存在你的设备上。", "A WYSIWYG Markdown editor that keeps documents on your device.")}
+        lang={locale()}
+      />
+      <If when={ready()}>
+        <EditorScreen />
+      </If>
     </>
   );
 }

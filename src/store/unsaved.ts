@@ -3,6 +3,7 @@
  * 浏览器里页面卸载时 IndexedDB 的写入不提交（2026-11-25 实测：打字后 800ms 内刷新，字就丢了）；Storage 的写入在调用时就落进 localStorage 了（同日实测）。
  * 正常写成以后 document.ts 调 `dropStash` 删掉；并回去成了也删掉，没成的留着下次再试。
  */
+import { type Phrase, t } from "../i18n";
 import { signal, Storage } from "nsh";
 import { backendTag, docsShareStorage, documentStore } from "./backend";
 import type { Version } from "./document-store";
@@ -68,7 +69,7 @@ function parseStash(raw: string | null): Stash | null {
 }
 
 export interface Recovered {
-  text: string;
+  text: Phrase;
   tone: "info" | "warn";
 }
 
@@ -79,17 +80,17 @@ async function mergeBack({ id, base, text }: Stash): Promise<Recovered | null> {
   if (!now) {
     await refreshLibrary();
     const meta = await createDocument(text);
-    return { text: `上次关闭前有一段修改没存上，它所在的那篇已经删除了，这段内容存成了新文档「${displayName(meta)}」。`, tone: "warn" };
+    return { text: () => t(`上次关闭前有一段修改没存上，它所在的那篇已经删除了，这段内容存成了新文档「${displayName(meta)}」。`, `Pairdown recovered edits to a deleted document and saved them as “${displayName(meta)}”.`), tone: "warn" };
   }
   if (now.version === base) {
     const result = await documentStore.write(id, text, base);
     if (result.ok) {
       await noteSaved(id, now.text, text);
-      return { text: "上次关闭前还没存上的修改已经补存好了。", tone: "info" };
+      return { text: () => t("上次关闭前还没存上的修改已经补存好了。", "Edits from the previous session were recovered and saved."), tone: "info" };
     }
   }
-  if (!(await addSnapshot(id, text))) throw new Error("本机存储已满，存不进版本历史");
-  return { text: "上次关闭前有一段修改没存上，而这篇后来在别处改过：那段修改存进了这篇的版本历史（「⋯」→「版本历史」）。", tone: "warn" };
+  if (!(await addSnapshot(id, text))) throw new Error(t("本机存储已满，存不进版本历史", "Storage is full, so the edits could not be saved to version history"));
+  return { text: () => t("上次关闭前有一段修改没存上，而这篇后来在别处改过：那段修改存进了这篇的版本历史（「⋯」→「版本历史」）。", "This document changed elsewhere while it had unsaved edits. Those edits are now in Version History in the document’s More actions menu."), tone: "warn" };
 }
 
 /** 启动时、打开文档之前调：把上次没来得及存的改动并回去。返回要告诉用户的一句话，没有是 null。并不回去的那份留着，下次再试。 */
@@ -116,7 +117,7 @@ export async function recoverUnsaved(): Promise<Recovered | null> {
       await Storage.removeItem(key);
     } catch (e) {
       console.error("unsaved text not recovered", key, e);
-      note = { text: `上次关闭前有一段修改没存上，这次没能补回去（${e instanceof Error ? e.message : String(e)}），下次打开时再试。`, tone: "warn" };
+      note = { text: () => t(`上次关闭前有一段修改没存上，这次没能补回去（${e instanceof Error ? e.message : String(e)}），下次打开时再试。`, `Could not recover edits from the previous session (${e instanceof Error ? e.message : String(e)}). Pairdown will try again the next time it starts.`), tone: "warn" };
     }
   }
   elsewhere.set([...others]);

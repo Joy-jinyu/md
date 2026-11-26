@@ -1,4 +1,5 @@
 /** 文档库：有哪几篇、现在开着哪一篇、上次开的是哪一篇。界面读这里的列表，增删改名都经这里。 */
+import { t } from "../i18n";
 import { signal, Storage } from "nsh";
 import { cleanFileStem, dirOf } from "../doc/file-name";
 import { markdownTitle } from "../doc/title";
@@ -33,15 +34,28 @@ async function lastOpened(): Promise<string | null> {
   const key = lastOpenedKey();
   return (await Storage.getItem(key)) ?? (key === LAST_OPENED_KEY ? null : await Storage.getItem(LAST_OPENED_KEY));
 }
+/** 存储里的兜底名（文件名、Gist 名、重名判断），不随界面语言变，否则切换语言后同一篇对不上原来的文件。 */
 export const DEFAULT_NAME = "未命名";
 
+/** 新建文档按当时的界面语言起名；建好就是普通文档名，以后切换语言不改。 */
+const newDocumentName = () => t(DEFAULT_NAME, "Untitled");
+
 export const mostRecent = (list: DocMeta[]): DocMeta | undefined => [...list].sort((a, b) => b.updatedAt - a.updatedAt)[0];
+
+/** 文库和同步使用的名字不随界面语言变化。 */
+export const documentName = (doc: { title: string; name: string }) => doc.title || doc.name || DEFAULT_NAME;
 
 /**
  * 文档显示的名字，顶栏、侧栏、快速打开、最近文档、删除确认都用它：正文第一个标题，没有就用文档名（文件类后端是文件名），都没有才是「未命名」。
  * 文件类后端的列表不读正文，`doc.title` 是空的，所以列表里是文件名（DESIGN.md「存在哪」）。
  */
-export const displayName = (doc: { title: string; name: string }) => doc.title || doc.name || DEFAULT_NAME;
+export function displayName(doc: { title: string; name: string }): string {
+  if (doc.title) return doc.title;
+  const name = documentName(doc);
+  // 文库里沿用原来的文件名；内置的未命名标签只在显示时翻译。
+  const generated = /^未命名(?: (\d+))?$/.exec(name);
+  return generated ? t(name, generated[1] ? `Untitled ${generated[1]}` : "Untitled") : name;
+}
 
 /**
  * 这次运行里读过、存过的文档的标题，只在内存里：文件类后端的列表不读正文（`doc.title` 是空的），
@@ -106,7 +120,7 @@ export function noteMeta(meta: DocMeta) {
   setDocs(list.some((d) => d.id === meta.id) ? list.map((d) => (d.id === meta.id ? meta : d)) : [...list, meta]);
 }
 
-export async function createDocument(text: string, name = DEFAULT_NAME): Promise<DocMeta> {
+export async function createDocument(text: string, name = newDocumentName()): Promise<DocMeta> {
   const meta = await documentStore.create(uniqueName(name, docs()), text);
   await releaseKeys(meta.id).catch((e: unknown) => console.warn("old keys not released", e));
   noteMeta(meta);
@@ -117,7 +131,7 @@ export async function createDocument(text: string, name = DEFAULT_NAME): Promise
 export async function renameDocument(id: string, name: string): Promise<DocMeta> {
   const clean = name.trim();
   const key = fileKey(dirOf(id), clean);
-  if (docs().some((d) => d.id !== id && fileKey(dirOf(d.id), d.name) === key)) throw new Error(`已经有一篇叫「${clean}」的文档了，换一个名字`);
+  if (docs().some((d) => d.id !== id && fileKey(dirOf(d.id), d.name) === key)) throw new Error(t(`已经有一篇叫「${clean}」的文档了，换一个名字`, `A document named “${clean}” already exists. Enter a different name.`));
   const meta = await renameTracked(id, () => documentStore.rename(id, clean));
   if (meta.id !== id) {
     // 新名字上可能留着删掉的那篇的同步记录：先挪成墓碑，这篇没有记录时也不能接着推进那个 Gist

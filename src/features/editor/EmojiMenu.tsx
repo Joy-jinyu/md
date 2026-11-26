@@ -1,6 +1,7 @@
 /** emoji 补全：在行首或空白后打 `:` 再打两个以上字母时弹出，上下键选，回车或 Tab 插入 emoji 字符本身。 */
 import { signal, Text, View, windowSize } from "nsh";
 import { chain, deleteRange, insertText, type RichEditorSession, setSuggestionOpen } from "nsh/base";
+import { t } from "../../i18n";
 import { type EmojiItem, matchEmoji } from "./emoji";
 import { EMOJI_KEY } from "./rich-session";
 
@@ -80,7 +81,7 @@ export function EmojiMenu(props: { emoji: EmojiState }) {
   const roomy = () => windowSize().width >= MENU_WIDTH * 2 + 32;
   return (
     <View style={{ pointerEvents: "box-none", width: roomy() ? MENU_WIDTH * 2 : MENU_WIDTH }} class="items-end">
-      <View testID="emoji-menu" accessibilityLabel="插入 emoji" style={{ width: MENU_WIDTH }} class="rounded-(--radius) border border-border bg-popover p-1 shadow-md">
+      <View testID="emoji-menu" accessibilityLabel={t("插入 emoji", "Insert emoji")} style={{ width: MENU_WIDTH }} class="rounded-(--radius) border border-border bg-popover p-1 shadow-md">
         <Each of={e.items()} key={(item) => item.name}>
           {(item) => (
             <View

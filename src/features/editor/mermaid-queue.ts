@@ -2,10 +2,11 @@
  * Mermaid 出图的排队、缓存和回包校验：不碰 WebView，发图、计时器、开关渲染页都由 mermaid.tsx 传进来，测试里换成假的。
  * 安全约定见 .claude/rules/security.md 的 Mermaid 一行。
  */
+import { type Phrase, t } from "../../i18n";
 import { bytesToBase64 } from "../../store/image-file";
 
 /** 画好的图（`url` 是 SVG 的 `data:` 地址），或者画不出的原因；`temporary` 的原因（超时、渲染器没开着）不进缓存，下次照样重画。 */
-export type Rendered = { kind: "svg"; url: string; width: number; height: number } | { kind: "error"; message: string; temporary: boolean };
+export type Rendered = { kind: "svg"; url: string; width: number; height: number } | { kind: "error"; message: Phrase; temporary: boolean };
 
 /** 渲染页发回来的：说「好了」，或者一张图的结果。 */
 export type Reply = { kind: "ready" } | { kind: "drawn"; id: number; rendered: Rendered };
@@ -14,7 +15,7 @@ export type Reply = { kind: "ready" } | { kind: "drawn"; id: number; rendered: R
 const MAX_SIDE = 20_000;
 const MAX_RATIO = 100;
 
-const REJECTED = "渲染器交回的图没通过安全检查，没有显示";
+const rejected = () => t("渲染器交回的图没通过安全检查，没有显示", "The diagram did not pass safety checks and was not displayed");
 
 /** SVG 的 `data:` 地址：和应用不同源，在新标签页里打开也碰不到应用的存储。 */
 export const svgDataUrl = (svg: string) => `data:image/svg+xml;base64,${bytesToBase64(new TextEncoder().encode(svg))}`;
@@ -31,14 +32,19 @@ const UNSAFE: RegExp[] = [/<script/, /<foreignobject/, /\son[a-z]+\s*=\s*["']/, 
 
 const isSide = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n > 0 && n <= MAX_SIDE;
 
-/** 渲染页交回的 SVG 能不能显示：不能时返回原因。只认 `<svg` 开头、不带脚本 / 事件属性 / foreignObject / javascript: / 外链地址、尺寸正常的。 */
-export function svgProblem(svg: string, width: unknown, height: unknown): string | null {
-  if (!isSide(width) || !isSide(height) || Math.max(width / height, height / width) > MAX_RATIO) return "渲染器交回的图尺寸不对，没有显示";
-  if (!svg.startsWith("<svg")) return REJECTED;
+const badSize = () => t("渲染器交回的图尺寸不对，没有显示", "The diagram was not displayed because its dimensions were invalid");
+
+/** 渲染页交回的 SVG 能不能显示：不能时返回说原因的那句（显示时再按语言取）。只认 `<svg` 开头、不带脚本 / 事件属性 / foreignObject / javascript: / 外链地址、尺寸正常的。 */
+function svgFault(svg: string, width: unknown, height: unknown): (() => string) | null {
+  if (!isSide(width) || !isSide(height) || Math.max(width / height, height / width) > MAX_RATIO) return badSize;
+  if (!svg.startsWith("<svg")) return rejected;
   const flat = decodeRefs(svg).toLowerCase();
-  if (UNSAFE.some((re) => re.test(flat))) return REJECTED;
-  return flat.replace(/[\s\u0000-\u001f]/g, "").includes("javascript:") ? REJECTED : null;
+  if (UNSAFE.some((re) => re.test(flat))) return rejected;
+  return flat.replace(/[\s\u0000-\u001f]/g, "").includes("javascript:") ? rejected : null;
 }
+
+/** 同 `svgFault`，直接给出原因文字。 */
+export const svgProblem = (svg: string, width: unknown, height: unknown): string | null => svgFault(svg, width, height)?.() ?? null;
 
 /** 读渲染页发回来的一条消息；认不出的是 null。只有 mermaid 自己报的错（`error` 字段）算确定的结果，其余毛病都算临时的。 */
 export function readReply(data: string): Reply | null {
@@ -54,12 +60,15 @@ export function readReply(data: string): Reply | null {
   if (m.ready === true) return { kind: "ready" };
   if (typeof m.id !== "number") return null;
   if (typeof m.svg === "string") {
-    const bad = svgProblem(m.svg, m.width, m.height);
-    const rendered: Rendered = bad ? { kind: "error", message: bad, temporary: true } : { kind: "svg", url: svgDataUrl(m.svg), width: m.width as number, height: m.height as number };
+    const fault = svgFault(m.svg, m.width, m.height);
+    const rendered: Rendered = fault ? { kind: "error", message: fault, temporary: true } : { kind: "svg", url: svgDataUrl(m.svg), width: m.width as number, height: m.height as number };
     return { kind: "drawn", id: m.id, rendered };
   }
-  if (typeof m.error === "string" && m.error.trim() !== "") return { kind: "drawn", id: m.id, rendered: { kind: "error", message: m.error, temporary: false } };
-  return { kind: "drawn", id: m.id, rendered: { kind: "error", message: "图没画出来", temporary: true } };
+  if (typeof m.error === "string" && m.error.trim() !== "") {
+    const message: Phrase = m.error === "md:bad-size" ? () => t("图没有尺寸", "The diagram has no dimensions") : m.error;
+    return { kind: "drawn", id: m.id, rendered: { kind: "error", message, temporary: false } };
+  }
+  return { kind: "drawn", id: m.id, rendered: { kind: "error", message: () => t("图没画出来", "Could not render the diagram"), temporary: true } };
 }
 
 export interface DrawerDeps<T> {
@@ -91,7 +100,7 @@ export interface Drawer {
   /** 渲染页交回一张图；不是正在画的那张就不管。 */
   drawn(id: number, rendered: Rendered): void;
   /** 渲染器开不起来：排着的图都画不了。 */
-  failAll(message: string): void;
+  failAll(message: Phrase): void;
 }
 
 interface Job {
@@ -138,7 +147,7 @@ export function createDrawer<T>(deps: DrawerDeps<T>): Drawer {
     if (current?.job !== job) return;
     current = null;
     isOpen = false;
-    settle(job, { kind: "error", message: `这张图画了 ${deps.timeoutMs / 1000} 秒还没画完，可能太复杂`, temporary: true });
+    settle(job, { kind: "error", message: () => t(`这张图画了 ${deps.timeoutMs / 1000} 秒还没画完，可能太复杂`, `Rendering did not finish after ${deps.timeoutMs / 1000} seconds. The diagram may be too complex.`), temporary: true });
     deps.reset();
     if (queue.length > 0) deps.open();
   }
@@ -185,7 +194,7 @@ export function createDrawer<T>(deps: DrawerDeps<T>): Drawer {
       waiters.set(job.key, left);
       if (left > 0 || !queue.includes(job)) return;
       queue = queue.filter((j) => j !== job);
-      settle(job, { kind: "error", message: "没人等这张图了", temporary: true });
+      settle(job, { kind: "error", message: () => t("没人等这张图了", "The diagram is no longer needed"), temporary: true });
     };
   }
 
@@ -210,7 +219,7 @@ export function createDrawer<T>(deps: DrawerDeps<T>): Drawer {
     pump();
   }
 
-  function failAll(message: string) {
+  function failAll(message: Phrase) {
     closed();
     const all = queue;
     queue = [];

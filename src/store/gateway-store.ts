@@ -3,6 +3,7 @@
  * 文档 id 就是文库内的相对路径（`notes/a.md`），版本是网关给的内容 SHA-256。
  * 断开后每隔一会儿重连，连上后通知 watch（`all`），由编辑页按版本比对、接着保存；断开期间的请求直接失败，不排队。
  */
+import { t } from "../i18n";
 import { signal } from "nsh";
 import {
   CLOSE_BUSY,
@@ -73,9 +74,9 @@ class GatewayFailure extends Error {
   }
 }
 
-const DISCONNECTED = "和本机网关断开了，正在重连";
-const BAD_REPLY = "本机网关的回复看不懂（网关版本不对，或者端口上不是 Pairdown 网关）";
-const NOT_GATEWAY = `端口 ${DEFAULT_PORT} 上的程序不像 Pairdown 网关（握手的回复不对），没有用它。先停掉占着这个端口的程序，再启动网关`;
+const disconnectedMessage = () => t("和本机网关断开了，正在重连", "Lost the connection to the local gateway. Reconnecting…");
+const badReplyMessage = () => t("本机网关的回复看不懂（网关版本不对，或者端口上不是 Pairdown 网关）", "Could not understand the gateway’s reply. Check that Pairdown’s gateway is running and up to date.");
+const notGatewayMessage = () => t(`端口 ${DEFAULT_PORT} 上的程序不像 Pairdown 网关（握手的回复不对），没有用它。先停掉占着这个端口的程序，再启动网关`, `The program on port ${DEFAULT_PORT} did not respond like the Pairdown gateway. Stop the program using that port, then start the gateway.`);
 
 function webSocketConnect(url: string, events: SocketEvents, giveUp: Promise<void>): Promise<Socket> {
   return new Promise((resolve, reject) => {
@@ -89,7 +90,7 @@ function webSocketConnect(url: string, events: SocketEvents, giveUp: Promise<voi
     ws.onmessage = (e) => {
       if (typeof e.data === "string") events.message(e.data);
     };
-    ws.onclose = (e) => (opened ? events.close(e.code) : reject(new Error(`连不上网关（${e.code}）`)));
+    ws.onclose = (e) => (opened ? events.close(e.code) : reject(new Error(t(`连不上网关（${e.code}）`, `Could not connect to the gateway (${e.code})`))));
   });
 }
 
@@ -164,23 +165,23 @@ interface Timing {
 }
 
 function closeReason(code: number): string | null {
-  if (code === CLOSE_ORIGIN) return "网关拒绝了这个页面的来源（Origin）。启动网关时加上 --origin 和这个页面的地址";
-  if (code === CLOSE_VERSION) return "网关和页面的协议版本不一样。更新网关后再刷新页面";
+  if (code === CLOSE_ORIGIN) return t("网关拒绝了这个页面的来源（Origin）。启动网关时加上 --origin 和这个页面的地址", "The gateway rejected this page’s origin. Start the gateway with --origin followed by this site’s address.");
+  if (code === CLOSE_VERSION) return t("网关和页面的协议版本不一样。更新网关后再刷新页面", "The gateway and this page use different protocol versions. Update the gateway, then refresh the page.");
   return null;
 }
 
 /** 断开了但还会重连时，知道原因的说一句。 */
 function dropReason(code: number): string | undefined {
-  if (code === CLOSE_BUSY) return "网关的连接数满了（可能开着很多 Pairdown 页面），过一会儿再连";
-  if (code === CLOSE_MESSAGE_TOO_BIG) return "刚才发给网关的内容太大（多半是图片），网关断开了连接";
-  if (code === CLOSE_NO_REPLY) return "网关好一会儿没有回应";
+  if (code === CLOSE_BUSY) return t("网关的连接数满了（可能开着很多 Pairdown 页面），过一会儿再连", "The gateway has too many connections. Close other Pairdown tabs or try again shortly.");
+  if (code === CLOSE_MESSAGE_TOO_BIG) return t("刚才发给网关的内容太大（多半是图片），网关断开了连接", "A request exceeded the gateway’s size limit, so the connection closed.");
+  if (code === CLOSE_NO_REPLY) return t("网关好一会儿没有回应", "The gateway stopped responding.");
   return undefined;
 }
 
 /** 握手中途失败的原因：网关明确拒绝的不再连。 */
 function handshakeError(code: number): Error {
   const reason = closeReason(code);
-  return reason ? new GatewayRefused(reason) : new Error(`握手时连接断了（${code}）`);
+  return reason ? new GatewayRefused(reason) : new Error(t(`握手时连接断了（${code}）`, `The connection closed during setup (${code})`));
 }
 
 /** 一条连接：发请求、按序号对回包、每个请求限时；`open` 连上并 hello 完才交出去。 */
@@ -211,7 +212,7 @@ class Channel implements Session {
     if (!this.ready) this.failHandshake(handshakeError(code));
     for (const w of this.pending.values()) {
       clearTimeout(w.timer);
-      w.reject(new GatewayFailure("disconnected", DISCONNECTED));
+      w.reject(new GatewayFailure("disconnected", disconnectedMessage()));
     }
     this.pending.clear();
     this.socket?.close();
@@ -230,7 +231,7 @@ class Channel implements Session {
     this.settle(m.id, (w) => {
       if (!m.ok) return w.reject(new GatewayFailure(m.error.code, m.error.message, m.error.version));
       const shaped = RESULT_SHAPE[w.op]?.(m.result as Obj) ?? true;
-      return shaped ? w.resolve(m.result) : w.reject(new GatewayFailure("bad-reply", BAD_REPLY));
+      return shaped ? w.resolve(m.result) : w.reject(new GatewayFailure("bad-reply", badReplyMessage()));
     });
   }
 
@@ -246,7 +247,7 @@ class Channel implements Session {
     if (m === null) {
       console.warn("gateway message has an unexpected shape");
       // 看不懂的回复也要让等它的请求结束，不然请求一直挂着
-      if (isObj(raw) && typeof raw.id === "number") this.settle(raw.id, (w) => w.reject(new GatewayFailure("bad-reply", BAD_REPLY)));
+      if (isObj(raw) && typeof raw.id === "number") this.settle(raw.id, (w) => w.reject(new GatewayFailure("bad-reply", badReplyMessage())));
       return;
     }
     if (m.type === "reply") this.onReply(m);
@@ -256,7 +257,7 @@ class Channel implements Session {
   request<K extends Op>(op: K, params: Params<K>, ms = this.timing.requestMs): Promise<Result<K>> {
     return new Promise<Result<K>>((resolve, reject) => {
       const socket = this.socket;
-      if (!this.live || !socket) return reject(new GatewayFailure("disconnected", DISCONNECTED));
+      if (!this.live || !socket) return reject(new GatewayFailure("disconnected", disconnectedMessage()));
       const id = this.next++;
       const timer = setTimeout(() => {
         console.warn("gateway request timed out", op);
@@ -274,7 +275,7 @@ class Channel implements Session {
   async open(connect: Connect): Promise<Session> {
     const events: SocketEvents = { message: (text) => this.onMessage(text), close: (code) => this.end(code) };
     // 计时从建连接前开始：端口上的程序只接 TCP、不回 WebSocket 握手时，connect 本身就不返回
-    const timer = setTimeout(() => this.failHandshake(new Error("网关握手超时")), this.timing.handshakeMs);
+    const timer = setTimeout(() => this.failHandshake(new Error(t("网关握手超时", "The gateway did not connect in time"))), this.timing.handshakeMs);
     try {
       // 超时以后才连上的那条：关掉，不留着占网关的连接数
       const connecting = connect(GATEWAY_URL, events, this.gaveUp).then((s) => {
@@ -289,7 +290,7 @@ class Channel implements Session {
       return this;
     } catch (e) {
       this.abandon();
-      if (e instanceof GatewayFailure && e.code === "bad-reply") throw new GatewayRefused(NOT_GATEWAY);
+      if (e instanceof GatewayFailure && e.code === "bad-reply") throw new GatewayRefused(notGatewayMessage());
       throw e;
     } finally {
       clearTimeout(timer);
@@ -323,25 +324,28 @@ type Action = "read" | "write" | "other";
 function explain(e: GatewayFailure, path: string, action: Action): Error {
   switch (e.code) {
     case "not-utf8":
-      return new Error(`「${path}」不是 UTF-8 编码的文本，${action === "write" ? "网关不往里写" : "打不开"}（先用别的工具转成 UTF-8）`);
+      return new Error(t(`「${path}」不是 UTF-8 编码的文本，${action === "write" ? "网关不往里写" : "打不开"}（先用别的工具转成 UTF-8）`, `“${path}” is not UTF-8 text. ${action === "write" ? "The gateway did not write to it." : "It cannot be opened."} Convert it to UTF-8 first.`));
     case "too-large":
-      if (action === "write") return new Error("这篇超过 5 MB，网关存不下。拆成几篇再存");
-      return new Error(action === "read" ? `「${path}」超过 5 MB，打不开` : "超过网关能收的大小（文档 5 MB、图片 10 MB）");
+      if (action === "write") return new Error(t("这篇超过 5 MB，网关存不下。拆成几篇再存", "This document exceeds the gateway’s 5 MB limit. Split it into smaller documents to save it."));
+      return new Error(action === "read" ? t(`「${path}」超过 5 MB，打不开`, `“${path}” cannot be opened because it exceeds 5 MB`) : t("超过网关能收的大小（文档 5 MB、图片 10 MB）", "The file exceeds the gateway’s size limit (5 MB for documents, 10 MB for images)"));
     case "bad-path":
-      return new Error(`「${path}」这个文件名或路径网关不收（含 ..、隐藏文件、扩展名不对等）`);
+      return new Error(t(`「${path}」这个文件名或路径网关不收（含 ..、隐藏文件、扩展名不对等）`, `The gateway does not accept the file name or path “${path}”`));
     case "busy":
-      return new Error("网关正忙，过一会儿再试");
+      return new Error(t("网关正忙，过一会儿再试", "The gateway is busy. Try again shortly."));
     case "bad-type":
-      return new Error("不是网关认得的图片格式（png、jpg、gif、webp、avif）");
+      return new Error(t("不是网关认得的图片格式（png、jpg、gif、webp、avif）", "Unsupported image format. Use PNG, JPEG, GIF, WebP, or AVIF."));
     case "not-supported":
     case "bad-request":
     case "no-hello":
     case "version-mismatch":
-      return new Error("网关和页面对不上（版本不同），更新网关后刷新页面");
+      return new Error(t("网关和页面对不上（版本不同），更新网关后刷新页面", "The gateway and this page use different versions. Update the gateway, then refresh the page."));
     case "internal":
-      return new Error("网关内部出错了，详情看网关窗口里的输出");
+      return new Error(t("网关内部出错了，详情看网关窗口里的输出", "The gateway encountered an internal error. Check its output for details."));
+    case "disconnected":
+    case "bad-reply":
+      return e;
     default:
-      return new Error(e.message);
+      return new Error(t(e.message, `The local gateway could not complete this request (${e.code}).`));
   }
 }
 
@@ -413,7 +417,7 @@ class Keeper {
     return true;
   }
 
-  readonly call: Call = (op, params, ms) => (this.session ? this.session.request(op, params, ms) : Promise.reject(new GatewayFailure("disconnected", DISCONNECTED)));
+  readonly call: Call = (op, params, ms) => (this.session ? this.session.request(op, params, ms) : Promise.reject(new GatewayFailure("disconnected", disconnectedMessage())));
 
   /** 等到连着（最多 `ms` 毫秒）；等不到或者不再重连是 false。 */
   readonly whenConnected: WhenConnected = (ms) => {
@@ -479,7 +483,7 @@ class Keeper {
     if (this.disposed) return next.close();
     // 网关换了一个文库：手上的 id 都指向别的文件了，不能接着用
     if (next.library !== this.library) {
-      this.stop(`网关现在开的是文库「${next.library}」，不是这个页面打开时的「${this.library}」。刷新页面后用新的文库`);
+      this.stop(t(`网关现在开的是文库「${next.library}」，不是这个页面打开时的「${this.library}」。刷新页面后用新的文库`, `The gateway now serves “${next.library}” instead of “${this.library}”. Refresh the page to open the new library.`));
       return next.close();
     }
     this.session = next;
@@ -565,10 +569,10 @@ async function renameDoc(call: Call, known: Known, whenConnected: WhenConnected,
       await call("rename", { path: id, to });
     } catch (e) {
       const f = failure(e);
-      if (f?.code === "exists") throw new NameTaken(`文库里已经有「${to}」了`, to);
-      if (f?.code === "not-found") throw new Error("这篇文档已经不在了（可能在别处删掉了）");
+      if (f?.code === "exists") throw new NameTaken(t(`文库里已经有「${to}」了`, `The library already contains “${to}”`), to);
+      if (f?.code === "not-found") throw new Error(t("这篇文档已经不在了（可能在别处删掉了）", "This document is no longer available. It may have been deleted elsewhere."));
       if (f?.code !== "disconnected") throw rethrow(e, to, "other");
-      if (!(await renameLanded(call, whenConnected, id, to))) throw new Error("和本机网关断开了，不知道改名成没成。连上以后看看列表里的名字");
+      if (!(await renameLanded(call, whenConnected, id, to))) throw new Error(t("和本机网关断开了，不知道改名成没成。连上以后看看列表里的名字", "The gateway disconnected before confirming the rename. Check the document list after reconnecting."));
     }
     known.set(to, known.get(id) ?? null);
     known.delete(id);
@@ -595,7 +599,7 @@ function gatewayStore(call: Call, known: Known, whenConnected: WhenConnected): D
         known.set(path, r.version);
         return fresh(path, text, r.version);
       } catch (e) {
-        if (failure(e)?.code === "exists") throw new NameTaken(`文库里已经有「${path}」了`, path);
+        if (failure(e)?.code === "exists") throw new NameTaken(t(`文库里已经有「${path}」了`, `The library already contains “${path}”`), path);
         throw rethrow(e, path, "write");
       }
     },
@@ -647,7 +651,7 @@ function imageHostApi(call: Call): ImageHostApi {
       try {
         return (await call("imageHost", {})).host;
       } catch (e) {
-        if (failure(e)?.code === "bad-request") throw new ImageHostUnsupported("本机网关版本太旧，不支持图床。更新网关后再试");
+        if (failure(e)?.code === "bad-request") throw new ImageHostUnsupported(t("本机网关版本太旧，不支持图床。更新网关后再试", "This gateway version does not support image hosting. Update the gateway and try again."));
         throw hostError(e);
       }
     },
@@ -655,9 +659,9 @@ function imageHostApi(call: Call): ImageHostApi {
       try {
         await call("setImageHost", { host });
       } catch (e) {
-        // 网关不收这份配置（分支、目录不合规等）：原因是网关写的中文句子，照着显示
+        // 旧版网关只回中文详情，英文界面统一指出可检查的配置项。
         const f = failure(e);
-        throw f?.code === "bad-request" && f.message.trim() ? new Error(f.message.trim()) : hostError(e);
+        throw f?.code === "bad-request" && f.message.trim() ? new Error(t(f.message.trim(), "The gateway rejected the image host settings. Check the URL, repository, branch and directory.")) : hostError(e);
       }
     },
     async upload(bytes) {
@@ -672,20 +676,20 @@ function imageHostApi(call: Call): ImageHostApi {
   };
 }
 
-/** 图床请求失败的原因 → 给人看的一句话。upload-failed 用网关的 message：那是网关写的中文原因（令牌不对、找不到仓库），不带密钥。 */
+/** 图床请求失败的原因 → 给人看的一句话。旧版网关只回中文详情，英文界面显示排查提示。 */
 function hostError(e: unknown): unknown {
   const f = failure(e);
   switch (f?.code) {
     case "bad-url":
-      return new Error("上传地址不对（只能是 http / https 的地址）");
+      return new Error(t("上传地址不对（只能是 http / https 的地址）", "Enter an upload URL beginning with http:// or https://."));
     case "no-image-host":
-      return new Error("还没有设置图床");
+      return new Error(t("还没有设置图床", "No image host has been configured."));
     case "upload-failed":
-      return new Error(f.message.trim() || "图床没传成（接口不回、超时、返回的不是成功，或者返回里找不到图片地址）");
+      return new Error(t(f.message.trim() || "图床没传成（接口不回、超时、返回的不是成功，或者返回里找不到图片地址）", "Could not upload the image. Check the image host settings and try again."));
     case "bad-type":
-      return new Error("不是认得的图片（只收 png、jpg、gif、webp、avif；SVG 不收）");
+      return new Error(t("不是认得的图片（只收 png、jpg、gif、webp、avif；SVG 不收）", "Unsupported image format. Use PNG, JPEG, GIF, WebP, or AVIF."));
     case "too-large":
-      return new Error("图片超过 10 MB，网关不传");
+      return new Error(t("图片超过 10 MB，网关不传", "The image exceeds the gateway’s 10 MB upload limit."));
     default:
       return rethrow(e, "", "other");
   }
@@ -706,15 +710,15 @@ function transferError(e: unknown, docId: string): unknown {
   const f = failure(e);
   switch (f?.code) {
     case "bad-url":
-      return new Error("地址不对（只能转存 http / https 的图片）");
+      return new Error(t("地址不对（只能转存 http / https 的图片）", "Only images with HTTP or HTTPS addresses can be saved to the library."));
     case "forbidden-address":
-      return new Error("这个地址指向本机或内网，网关不去下载");
+      return new Error(t("这个地址指向本机或内网，网关不去下载", "The gateway cannot download images from local or private network addresses."));
     case "fetch-failed":
-      return new Error("下载失败（网站不回、超时、或者返回的不是成功）");
+      return new Error(t("下载失败（网站不回、超时、或者返回的不是成功）", "The image download failed. Check the address and try again."));
     case "bad-type":
-      return new Error("下载到的不是认得的图片（只收 png、jpg、gif、webp、avif；SVG 不收）");
+      return new Error(t("下载到的不是认得的图片（只收 png、jpg、gif、webp、avif；SVG 不收）", "The downloaded image uses an unsupported format. Use PNG, JPEG, GIF, WebP, or AVIF."));
     case "too-large":
-      return new Error("图片超过 10 MB，网关不存");
+      return new Error(t("图片超过 10 MB，网关不存", "The image exceeds the gateway’s 10 MB storage limit."));
     default:
       return rethrow(e, docId, "other");
   }

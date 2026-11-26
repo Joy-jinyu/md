@@ -1,6 +1,7 @@
 /** 设置页：整页盖住应用（编辑页在下面留着）。左栏分类、右边内容；窄屏同一套排版，左栏收成抽屉、盖在内容上。布局见 DESIGN.md「屏幕：设置」。 */
 import { type JSX, keymap, Scroll, type Signal, signal, Text, untracked, View, type ViewRef, windowSize } from "nsh";
 import { Button as BaseButton, Dialog, Sheet } from "nsh/base";
+import { t } from "../../i18n";
 import { IN_BROWSER } from "../../platform";
 import type { ShortcutOverrides } from "../../store/settings";
 import { Icon } from "../../ui/icon";
@@ -9,6 +10,7 @@ import { currentOverrides, sanitize } from "../editor/keybindings";
 import { returnFocusToEditor } from "../editor/ui-state";
 import { GatewayPanel } from "./GatewayPanel";
 import { ImageHostPanel } from "./ImageHostPanel";
+import { LanguagePanel } from "./LanguagePanel";
 import { settingsOpen, settingsPage } from "./open";
 import { type Section, SECTIONS, type SectionId, sectionOf } from "./sections";
 import { createShortcutEditor, type ShortcutEditor, ShortcutsPanel } from "./ShortcutsPanel";
@@ -53,7 +55,7 @@ function NavItem(props: { section: Section; on: boolean; autoFocus: boolean; onP
       testID={`settings-tab-${props.section.id}`}
       ref={(node: ViewRef) => props.autoFocus && node.focus()}
       selected={props.on}
-      accessibilityLabel={props.on ? `${props.section.title}（当前）` : props.section.title}
+      accessibilityLabel={props.on ? t(`${props.section.title}（当前）`, `${props.section.title} (current)`) : props.section.title}
       onPress={props.onPress}
       class={`min-h-9 flex-row items-center gap-3 rounded-(--radius) px-3 transition duration-180 ease-settle hover:bg-hover active:bg-pressed selected:bg-pressed motion-reduce:transition-none ${FOCUS_RING}`}
     >
@@ -81,10 +83,10 @@ interface Layout {
 /** 分类栏。宽屏是左栏，最上面「返回」；窄屏是抽屉里的同一列，「返回」在顶栏，这里不重复。 */
 function Nav(props: Layout & { withBack: boolean; onPick: (id: SectionId) => void }) {
   return (
-    <View role="navigation" accessibilityLabel="设置分类" class="w-56 shrink-0 gap-1 border-r border-border bg-card px-3 py-4">
+    <View role="navigation" accessibilityLabel={t("设置分类", "Settings categories")} class="w-56 shrink-0 gap-1 border-r border-border bg-card px-3 py-4">
       <If when={props.withBack}>
         <View class="mb-2 flex-row">
-          <BackButton testID="settings-done" label="返回" accessibilityLabel="返回编辑页" onPress={props.close} />
+          <BackButton testID="settings-done" label={t("返回", "Back")} accessibilityLabel={t("返回编辑页", "Back to editor")} onPress={props.close} />
         </View>
       </If>
       <Each of={SECTIONS} key={(s) => s.id}>
@@ -135,14 +137,14 @@ function Narrow(props: Layout) {
   return (
     <View class="flex-1">
       <View class="h-12 shrink-0 flex-row items-center gap-2 border-b border-border px-2">
-        <IconButton testID="settings-nav-toggle" icon="sidebar" label={open() ? "收起设置分类" : "展开设置分类"} active={open()} onPress={() => props.drawer.set(!open())} />
+        <IconButton testID="settings-nav-toggle" icon="sidebar" label={open() ? t("收起设置分类", "Hide settings categories") : t("展开设置分类", "Show settings categories")} active={open()} onPress={() => props.drawer.set(!open())} />
         <Text role="header" style={{ numberOfLines: 1 }} class="min-w-0 flex-1 text-[15px] font-semibold text-strong">
           {sectionOf(props.page()).title}
         </Text>
-        <BackButton testID="settings-done" label="返回" accessibilityLabel="返回编辑页" autoFocus={props.focusCurrent} onPress={props.close} />
+        <BackButton testID="settings-done" label={t("返回", "Back")} accessibilityLabel={t("返回编辑页", "Back to editor")} autoFocus={props.focusCurrent} onPress={props.close} />
       </View>
       <Content {...props} narrow />
-      <Sheet open={open()} side="left" accessibilityLabel="设置分类" onOpenChange={({ open }) => !open && shut()} backdropClass="bg-scrim" popupClass="flex-row shadow-lg">
+      <Sheet open={open()} side="left" accessibilityLabel={t("设置分类", "Settings categories")} onOpenChange={({ open }) => !open && shut()} backdropClass="bg-scrim" popupClass="flex-row shadow-lg">
         <Nav {...props} focusCurrent withBack={false} onPick={pick} />
       </Sheet>
     </View>
@@ -160,6 +162,8 @@ function sectionBodies(ed: ShortcutEditor, show: (id: SectionId) => void, focusS
         searchFocus = false;
         return <ShortcutsPanel editor={ed} autoFocus={focus} />;
       }
+      case "language":
+        return <LanguagePanel />;
       case "storage":
         return <StoragePanel inBrowser={IN_BROWSER} onGoGateway={goGateway} />;
       case "gateway":
@@ -196,7 +200,7 @@ function SettingsPage(props: { onApply: (next: ShortcutOverrides) => void }) {
       testID="settings"
       open
       animation="none"
-      accessibilityLabel="设置"
+      accessibilityLabel={t("设置", "Settings")}
       closeOnEscape={ed.recording() === null && !(narrow() && drawer())}
       onOpenChange={({ open }) => !open && close()}
       class="h-full w-full bg-background"

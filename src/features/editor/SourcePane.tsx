@@ -1,6 +1,7 @@
 /** 源码编辑框，和接在它上面的查找引擎（用编辑器自带的查找）。源码视图和只能用源码打开的文档共用。 */
 import { keymap, signal, View } from "nsh";
 import { Editor, type EditorCommand, type EditorRef, type EditorSearch } from "nsh/base";
+import { t } from "../../i18n";
 import { SOURCE_MOVE_KEYS } from "../../platform";
 import { type FindEngine, type FindResult, NO_RESULT } from "./find";
 
@@ -75,7 +76,7 @@ export function SourcePane(props: { text: string; find: SourceFind; onChange: (t
         lineNumbers={false}
         fontSize={14}
         lineHeight={22}
-        accessibilityLabel="Markdown 源码"
+        accessibilityLabel={t("Markdown 源码", "Markdown source")}
         // 编辑框占满整宽，滚动条才贴着窗口右边；限宽居中做在文字区上。
         // 上边留白和所见即所得的正文列一样（EDITOR_CLASSES.content 的 pt-10），切换时第一行不跳
         classes={{ content: "mx-auto w-full max-w-[860px] pt-10" }}

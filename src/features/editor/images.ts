@@ -4,6 +4,7 @@
  */
 import { Picker, signal } from "nsh";
 import { chain, command, type RichEditorSession, type RichNodeJSON, setMeta, setNodeAttribute } from "nsh/base";
+import { type Phrase, phrase, t } from "../../i18n";
 import { messageOf } from "../../doc/message";
 import { readImageFile } from "../../platform";
 import { documentStore } from "../../store/backend";
@@ -89,7 +90,7 @@ export const altEditRequest = signal(false);
 
 function docIdOrSay(): string | null {
   const id = currentDocId();
-  if (!id) say("还没有打开的文档，没法存图片", "warn");
+  if (!id) say(() => t("还没有打开的文档，没法存图片", "Open a document before saving images"), "warn");
   return id;
 }
 
@@ -97,46 +98,47 @@ function docIdOrSay(): string | null {
  * 一批图片字节传到图床或存进文档库（image-host.ts 定），在光标处插成图片。存不进去的逐张报原因，存进去的照样插；没传上图床、改存本地的也报。
  * `earlier`：之前就没读出来的几张的原因，和这里的一起报（回执只留最后一句）。
  */
-export async function insertImageBytes(session: RichEditorSession, files: { name: string; data: Uint8Array }[], earlier: string[] = []) {
+export async function insertImageBytes(session: RichEditorSession, files: { name: string; data: Uint8Array }[], earlier: Phrase[] = []) {
   if (files.length === 0) {
-    if (earlier.length > 0) say(`没能插入图片：${earlier.join("；")}`, "warn");
+    if (earlier.length > 0) say(() => t(`没能插入图片：${earlier.map(phrase).join("；")}`, `Could not insert images: ${earlier.map(phrase).join("; ")}`), "warn");
     return;
   }
   const docId = docIdOrSay();
   if (!docId) return;
   const target = await uploadTarget(true, files.length);
   // 上传要几秒：马上说一声，免得以为没反应又贴一次
-  if (target) say(`正在把 ${files.length} 张图片传到图床…`, "info");
+  if (target) say(() => t(`正在把 ${files.length} 张图片传到图床…`, `Uploading ${files.length === 1 ? "one image" : `${files.length} images`}…`), "info");
   const nodes: RichNodeJSON[] = [];
-  const failed = [...earlier];
-  const local: string[] = [];
+  const failed: Phrase[] = [...earlier];
+  const local: Phrase[] = [];
   for (const f of files) {
     try {
       const placed = await placeImage(target, docId, f.data);
-      if (placed.notUploaded) local.push(`「${f.name}」${placed.notUploaded}`);
+      const why = placed.notUploaded;
+      if (why) local.push(() => t(`「${f.name}」${why}`, `${f.name}: ${why}`));
       nodes.push({ type: "image", attrs: { src: placed.src, alt: "" } });
     } catch (e) {
       console.warn("image not stored", e);
-      failed.push(`「${f.name}」${messageOf(e)}`);
+      failed.push(() => t(`「${f.name}」${messageOf(e)}`, `${f.name}: ${messageOf(e)}`));
     }
   }
-  if (nodes.length > 0 && !session.insertContent(nodes)) failed.push("图片存好了，但插不进光标所在的位置");
-  const parts = [failed.length > 0 ? `没能插入图片：${failed.join("；")}` : "", notUploadedText(local)].filter(Boolean);
-  if (parts.length > 0) say(parts.join("。"), "warn");
-  else if (target) say(`${nodes.length} 张图片已传到图床`, "info");
+  if (nodes.length > 0 && !session.insertContent(nodes)) failed.push(() => t("图片存好了，但插不进光标所在的位置", "The image was saved but could not be inserted at the cursor"));
+  const parts: Phrase[] = [failed.length > 0 ? () => t(`没能插入图片：${failed.map(phrase).join("；")}`, `Could not insert images: ${failed.map(phrase).join("; ")}`) : "", notUploadedText(local)].filter(Boolean);
+  if (parts.length > 0) say(() => parts.map(phrase).join(t("。", ". ")), "warn");
+  else if (target) say(() => t(`${nodes.length} 张图片已传到图床`, `Uploaded ${nodes.length === 1 ? "one image" : `${nodes.length} images`}`), "info");
 }
 
 /** 「插入图片」：弹系统的选择框选图（可以多选），存进文档库后插到光标处。 */
 export async function pickImages(session: RichEditorSession) {
   try {
-    const picked = await Picker.pickFiles({ multiple: true, filters: [{ name: "图片", extensions: EXTENSIONS }], maxSize: PICK_MAX_BYTES });
+    const picked = await Picker.pickFiles({ multiple: true, filters: [{ name: t("图片", "Image"), extensions: EXTENSIONS }], maxSize: PICK_MAX_BYTES });
     const tooBig = picked.filter((p) => p.status === "tooLarge" || !p.file).map((p) => p.name);
-    if (tooBig.length > 0) say(`「${tooBig.join("」「")}」超过 10 MB，先压缩一下再插入`, "warn");
+    if (tooBig.length > 0) say(() => t(`「${tooBig.join("」「")}」超过 10 MB，先压缩一下再插入`, tooBig.length === 1 ? `${tooBig[0]} exceeds the 10 MB limit. Compress it before inserting.` : `${tooBig.join(", ")} exceed the 10 MB limit. Compress them before inserting.`), "warn");
     const files = await Promise.all(picked.filter((p) => p.file).map(async (p) => ({ name: p.name, data: new Uint8Array(await p.file!.arrayBuffer()) })));
     await insertImageBytes(session, files);
   } catch (e) {
     console.error("pick images failed", e);
-    say(`没能打开选择框：${messageOf(e)}`, "warn");
+    say(() => t(`没能打开选择框：${messageOf(e)}`, `Could not open the file picker: ${messageOf(e)}`), "warn");
   }
 }
 
@@ -144,19 +146,19 @@ export async function pickImages(session: RichEditorSession) {
 export async function insertImageFiles(session: RichEditorSession, paths: string[]) {
   const files: { name: string; data: Uint8Array }[] = [];
   const failed: string[] = [];
-  const tooBig: string[] = [];
+  const tooBig: Phrase[] = [];
   for (const path of paths) {
     const name = path.slice(path.lastIndexOf("/") + 1);
     try {
       files.push({ name, data: await readImageFile(path) });
     } catch (e) {
       console.warn("dropped image unreadable", e);
-      if (e instanceof AssetRejected) tooBig.push(`「${name}」${e.message}`);
+      if (e instanceof AssetRejected) tooBig.push(() => t(`「${name}」${e.message}`, `${name}: ${e.message}`));
       else failed.push(name);
     }
   }
-  if (tooBig.length > 0) say(`没能插入图片：${tooBig.join("；")}`, "warn");
-  if (failed.length > 0) say(`读不了「${failed.join("」「")}」：应用只能读文库和「下载」文件夹里的文件。先把图片放进这两处之一，或者复制图片本身再粘贴`, "warn");
+  if (tooBig.length > 0) say(() => t(`没能插入图片：${tooBig.map(phrase).join("；")}`, `Could not insert images: ${tooBig.map(phrase).join("; ")}`), "warn");
+  if (failed.length > 0) say(() => t(`读不了「${failed.join("」「")}」：应用只能读文库和「下载」文件夹里的文件。先把图片放进这两处之一，或者复制图片本身再粘贴`, `Could not read ${failed.join(", ")}. Move the image to the library or Downloads folder, or copy and paste the image itself.`), "warn");
   await insertImageBytes(session, files);
 }
 
@@ -188,7 +190,7 @@ async function storeSources(session: RichEditorSession, sources: string[]) {
   if (!docId) return;
   const target = await uploadTarget(false, sources.length);
   const failed: string[] = [];
-  const local: string[] = [];
+  const local: Phrase[] = [];
   for (const src of sources) {
     try {
       const placed = await placeImage(target, docId, base64ToBytes(src.slice(src.indexOf(",") + 1)));
@@ -199,20 +201,21 @@ async function storeSources(session: RichEditorSession, sources: string[]) {
       failed.push(messageOf(e));
     }
   }
-  const parts = [
-    failed.length > 0 ? `粘贴进来的图片有 ${failed.length} 张没能存进文档库，正文里还是原来的内嵌数据：${[...new Set(failed)].join("；")}` : "",
+  const parts: Phrase[] = [
+    failed.length > 0 ? () => t(`粘贴进来的图片有 ${failed.length} 张没能存进文档库，正文里还是原来的内嵌数据：${[...new Set(failed)].join("；")}`, `Could not save ${failed.length === 1 ? "one pasted image" : `${failed.length} pasted images`} to the library. The original image data is still embedded: ${[...new Set(failed)].join("; ")}`) : "",
     notUploadedText(local),
   ].filter(Boolean);
-  if (parts.length > 0) say(parts.join("。"), "warn");
+  if (parts.length > 0) say(() => parts.map(phrase).join(t("。", ". ")), "warn");
 }
 
 /** 下好了、正文里却一处都没换成（转存期间那张图被删了、地址改了）。 */
-const NOT_FOUND = "图片已下到本地，但正文里没找到原地址（转存期间改过），正文没有改";
+const NO_REFERENCE = Symbol();
+const missingReference = () => t("图片已下到本地，但正文里没找到原地址（转存期间改过），正文没有改", "The image was downloaded. The original address could not be found because the document changed during the download.");
 
 /** 转存一张外链图片：成了把正文里这个地址都换成相对路径；失败不改正文，返回原因。正文里一处都没换成也算没成。 */
-async function transferOne(session: RichEditorSession, docId: string, url: string): Promise<string | null> {
+async function transferOne(session: RichEditorSession, docId: string, url: string): Promise<string | typeof NO_REFERENCE | null> {
   try {
-    return replaceSrc(session, url, await documentStore.transfer!(docId, url)) > 0 ? null : NOT_FOUND;
+    return replaceSrc(session, url, await documentStore.transfer!(docId, url)) > 0 ? null : NO_REFERENCE;
   } catch (e) {
     console.warn("image not transferred", e);
     return messageOf(e);
@@ -224,9 +227,9 @@ export async function transferImage(session: RichEditorSession, url: string) {
   const docId = docIdOrSay();
   if (!docId) return;
   const why = await transferOne(session, docId, url);
-  if (why === NOT_FOUND) say(`${shortUrl(url)}：${NOT_FOUND}`, "warn");
-  else if (why) say(`没能转存 ${shortUrl(url)}：${why}。正文没有改`, "warn");
-  else say("已转存到本地，正文里的地址换成了相对路径", "info");
+  if (why === NO_REFERENCE) say(() => `${shortUrl(url)}${t("：", ": ")}${missingReference()}`, "warn");
+  else if (why) say(() => t(`没能转存 ${shortUrl(url)}：${why}。正文没有改`, `Could not save ${shortUrl(url)}: ${why}. The document was not changed.`), "warn");
+  else say(() => t("已转存到本地，正文里的地址换成了相对路径", "The image was saved locally and its address was updated to a relative path."), "info");
 }
 
 /** 「把这篇的外链图片都转存到本地」：一张张转，逐张报结果。 */
@@ -234,15 +237,15 @@ export async function transferAllImages(session: RichEditorSession) {
   const docId = docIdOrSay();
   if (!docId) return;
   const urls = [...new Set(imagesIn(session.getJSON() as Node).map((i) => i.src.trim()))].filter(isExternalSrc);
-  if (urls.length === 0) return say("这篇没有外链图片", "info");
-  const failed: string[] = [];
+  if (urls.length === 0) return say(() => t("这篇没有外链图片", "This document has no linked images."), "info");
+  const failed: Phrase[] = [];
   for (const url of urls) {
     const why = await transferOne(session, docId, url);
-    if (why) failed.push(`${shortUrl(url)}：${why}`);
+    if (why) failed.push(() => `${shortUrl(url)}${t("：", ": ")}${why === NO_REFERENCE ? missingReference() : why}`);
   }
   const done = urls.length - failed.length;
-  if (failed.length === 0) say(`${done} 张外链图片都转存到本地了`, "info");
-  else say(`转存了 ${done} 张，${failed.length} 张没转成（正文里还是原地址）：${failed.join("；")}`, "warn");
+  if (failed.length === 0) say(() => t(`${done} 张外链图片都转存到本地了`, `Saved all ${done} linked ${done === 1 ? "image" : "images"} locally`), "info");
+  else say(() => t(`转存了 ${done} 张，${failed.length} 张没转成（正文里还是原地址）：${failed.map(phrase).join("；")}`, `Saved ${done} locally. Could not save ${failed.length}; their addresses were not changed: ${failed.map(phrase).join("; ")}`), "warn");
 }
 
 /** 开着的所见即所得编辑页（源码视图里是 null）：编辑页外层收到拖进窗口的图片时交给它。 */
@@ -259,7 +262,7 @@ export function attachImageTarget(get: () => RichEditorSession | null): () => vo
 /** 拖进窗口的本地图片（macOS 应用，绝对路径）：插到开着的文档里光标处。 */
 export function dropImages(paths: string[]) {
   const session = target?.();
-  if (!session) return say("现在不能插入图片（源码视图里，或者还没有打开文档）。切回所见即所得再拖进来", "warn");
+  if (!session) return say(() => t("现在不能插入图片（源码视图里，或者还没有打开文档）。切回所见即所得再拖进来", "Open a document in rich-text mode before dropping in an image."), "warn");
   void insertImageFiles(session, paths);
 }
 
@@ -275,7 +278,7 @@ export function dropImageFiles(files: DroppedFile[]) {
   const images = files.filter((f) => isImagePath(f.name));
   if (images.length === 0) return;
   const session = target?.();
-  if (!session) return say("现在不能插入图片（源码视图里，或者还没有打开文档）。切回所见即所得再拖进来", "warn");
+  if (!session) return say(() => t("现在不能插入图片（源码视图里，或者还没有打开文档）。切回所见即所得再拖进来", "Open a document in rich-text mode before dropping in an image."), "warn");
   void readDropped(session, images);
 }
 
@@ -285,18 +288,18 @@ async function readDropped(session: RichEditorSession, files: DroppedFile[]) {
   const failed: string[] = [];
   for (const f of files) {
     if (f.status !== "read" || !f.file) {
-      failed.push(`「${f.name}」太大，浏览器没读进来`);
+      failed.push(t(`「${f.name}」太大，浏览器没读进来`, `${f.name} is too large for the browser to read`));
       continue;
     }
     if (f.file.size > PICK_MAX_BYTES) {
-      failed.push(`「${f.name}」超过 10 MB，先压缩一下再插入`);
+      failed.push(t(`「${f.name}」超过 10 MB，先压缩一下再插入`, `${f.name} exceeds the 10 MB limit. Compress it before inserting.`));
       continue;
     }
     try {
       read.push({ name: f.name, data: new Uint8Array(await f.file.arrayBuffer()) });
     } catch (e) {
       console.warn("dropped image unreadable", e);
-      failed.push(`「${f.name}」读不出来（${messageOf(e)}）`);
+      failed.push(t(`「${f.name}」读不出来（${messageOf(e)}）`, `Could not read ${f.name} (${messageOf(e)})`));
     }
   }
   await insertImageBytes(session, read, failed);

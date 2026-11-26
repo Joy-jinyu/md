@@ -1,10 +1,14 @@
-import { expect, open, test } from "nsh/test";
+import { expect, test } from "nsh/test";
+import { open } from "./fixtures/chinese-open";
 import { documentToHtml, type DiagramPicture } from "../src/doc/to-html";
-import { createDrawer, readReply, svgProblem } from "../src/features/editor/mermaid-queue";
+import { createDrawer, readReply, svgProblem, type Rendered } from "../src/features/editor/mermaid-queue";
+import { phrase } from "../src/i18n";
 import { LEGACY_DOC_KEY as DOC_KEY } from "../src/store/kv";
 
 // 无头运行里没有网页引擎，图画不出来：这里只测画图前后用户看得到的状态和存下来的原文；真出图在浏览器和 macOS 窗口里实测（DESIGN.md「Mermaid 图」）。
 const WEB = { platform: "web" as const, width: 1280, height: 860 };
+/** 渲染结果里的报错是按界面语言显示的文字：比较时取它现在显示的那句。 */
+const shown = (r: Rendered) => (r.kind === "error" ? { ...r, message: phrase(r.message) } : r);
 const FLOW = "```mermaid\nflowchart TD\n  A[开始] --> B{判断}\n```\n";
 
 async function saved(app: Awaited<ReturnType<typeof open>>): Promise<string> {
@@ -117,7 +121,7 @@ test("a diagram that takes too long fails on its own, the renderer is rebuilt, a
   page.drawer.request("graph TD; next", false);
   page.drawer.opened();
   page.fireTimers();
-  expect(await a.result).toEqual({ kind: "error", message: "这张图画了 15 秒还没画完，可能太复杂", temporary: true });
+  expect(shown(await a.result)).toEqual({ kind: "error", message: "Rendering did not finish after 15 seconds. The diagram may be too complex.", temporary: true });
   expect(page.resets()).toBe(1);
   expect(page.pendingTimers()).toBe(0);
   expect(page.posted).toEqual([1]);
@@ -179,7 +183,7 @@ test("a picture from the renderer is shown only if it is a plain SVG of a sane s
   ];
   for (const svg of forged) {
     const r = drawnReply(1, svg);
-    expect(r?.kind === "drawn" && r.rendered).toEqual({ kind: "error", message: "渲染器交回的图没通过安全检查，没有显示", temporary: true });
+    expect(r?.kind === "drawn" && shown(r.rendered)).toEqual({ kind: "error", message: "The diagram did not pass safety checks and was not displayed", temporary: true });
   }
   for (const [width, height] of [[0.001, 1e9], [20_001, 10], [5_000, 10], [Number.NaN, 10], ["10", 10]]) {
     const r = readReply(JSON.stringify({ id: 1, svg: okSvg, width, height }));

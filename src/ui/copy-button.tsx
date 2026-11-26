@@ -1,4 +1,5 @@
 /** 「复制」图标按钮：放在一眼就是拿去用的字旁边（命令、设备码、报错原因），点了写进剪贴板，右边短暂写「已复制」。规则见 DESIGN.md「文字可选、可复制」。 */
+import { t } from "../i18n";
 import { cleanup, signal, Text, View } from "nsh";
 import { writeClipboard } from "./clipboard";
 import { IconButton } from "./icon-button";
@@ -27,10 +28,10 @@ export function CopyButton(props: { text: string; label: string; testID?: string
   };
   return (
     <View class="shrink-0 flex-row items-center gap-1">
-      <IconButton testID={props.testID} icon={state() === "copied" ? "check" : "copy"} label={state() === "copied" ? "已复制" : props.label} compact onPress={copy} />
+      <IconButton testID={props.testID} icon={state() === "copied" ? "check" : "copy"} label={state() === "copied" ? t("已复制", "Copied") : props.label} compact onPress={copy} />
       <If when={state() !== "idle"}>
         <Text class="text-[11px]" classList={{ "text-muted-foreground": state() === "copied", "text-destructive": state() === "failed" }}>
-          {state() === "copied" ? "已复制" : "没能复制"}
+          {state() === "copied" ? t("已复制", "Copied") : t("没能复制", "Could not copy")}
         </Text>
       </If>
     </View>

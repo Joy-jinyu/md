@@ -5,6 +5,7 @@
  * 交回的 SVG 先过校验（mermaid-queue.ts 的 svgProblem），再以 `data:` 地址交给 Image 当图片显示，不当 HTML 插进应用的界面。安全约定见 .claude/rules/security.md。
  */
 import { cleanup, colorScheme, effect, signal, untracked, View, WebView, type WebViewRef } from "nsh";
+import { type Phrase, phrase, t } from "../../i18n";
 import mermaidUrl from "../../../assets/vendor/mermaid/mermaid.min.js?url";
 import { messageOf } from "../../doc/message";
 import { createDrawer, type DiagramRequest, readReply, type Rendered } from "./mermaid-queue";
@@ -44,7 +45,7 @@ const PAGE_SCRIPT = `(function () {
     var root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
     var box = (root.getAttribute("viewBox") || "").split(/[\\s,]+/).map(Number);
     var w = Math.ceil(box[2] || 0), h = Math.ceil(box[3] || 0);
-    if (!(w > 0 && h > 0)) throw new Error("图没有尺寸");
+    if (!(w > 0 && h > 0)) throw new Error("md:bad-size");
     root.setAttribute("width", String(w));
     root.setAttribute("height", String(h));
     root.style.removeProperty("max-width");
@@ -104,32 +105,32 @@ function stop() {
   drawer.closed();
 }
 
-function failAll(message: string) {
+function failAll(message: Phrase) {
   stop();
   drawer.failAll(message);
 }
 
 async function loadPage(): Promise<string> {
-  if (!(await WebView.available())) throw new Error("这里没有网页视图");
+  if (!(await WebView.available())) throw new Error(t("这里没有网页视图", "A web view is unavailable"));
   if (pageCache !== null) return pageCache;
   const res = await fetch(mermaidUrl);
-  if (!res.ok) throw new Error(`载入 mermaid 失败（HTTP ${res.status}）`);
+  if (!res.ok) throw new Error(t(`载入 mermaid 失败（HTTP ${res.status}）`, `Could not load Mermaid (HTTP ${res.status})`));
   pageCache = pageHtml(await res.text());
   return pageCache;
 }
 
 function start() {
   if (starting) return;
-  if (mounted === 0) return failAll("Mermaid 渲染器没有开着");
+  if (mounted === 0) return failAll(() => t("Mermaid 渲染器没有开着", "The Mermaid renderer is unavailable"));
   starting = true;
   const mine = run;
   void loadPage().then(
     (html) => {
       if (mine !== run) return;
-      loadTimer = setTimeout(() => failAll("Mermaid 渲染器没加载出来"), LOAD_TIMEOUT_MS);
+      loadTimer = setTimeout(() => failAll(() => t("Mermaid 渲染器没加载出来", "The Mermaid renderer did not load")), LOAD_TIMEOUT_MS);
       page.set(html);
     },
-    (e: unknown) => mine === run && failAll(`画不了 Mermaid 图：${messageOf(e)}`),
+    (e: unknown) => mine === run && failAll(() => t(`画不了 Mermaid 图：${messageOf(e)}`, `Could not render Mermaid diagram: ${messageOf(e)}`)),
   );
 }
 
@@ -151,11 +152,11 @@ export const requestDiagram = (code: string, dark: boolean): DiagramRequest => d
 /** mermaid 的报错常是几行（第几行、原文摘录、^ 指位置、期望什么）：取首行和末行拼成一行。 */
 export function errorLine(message: string): string {
   const lines = message.split("\n").map((l) => l.trim()).filter((l) => l !== "");
-  const text = lines.length > 1 ? `${lines[0]} ${lines[lines.length - 1]}` : (lines[0] ?? "图没画出来");
+  const text = lines.length > 1 ? `${lines[0]} ${lines[lines.length - 1]}` : (lines[0] ?? t("图没画出来", "Could not render the diagram"));
   return text.length > 200 ? `${text.slice(0, 199)}…` : text;
 }
 
-export type DiagramShown = { kind: "loading" } | { kind: "empty" } | { kind: "ready"; url: string; width: number; height: number } | { kind: "error"; message: string };
+export type DiagramShown = { kind: "loading" } | { kind: "empty" } | { kind: "ready"; url: string; width: number; height: number } | { kind: "error"; message: Phrase };
 
 /**
  * 节点视图用：跟着源码和明暗画图，给出现在该显示什么。
@@ -173,7 +174,7 @@ export function diagramShown(code: () => string): () => DiagramShown {
     cancel = () => undefined;
   };
   const show = (r: Rendered) =>
-    shown.set(r.kind === "error" ? { kind: "error", message: errorLine(r.message) } : { kind: "ready", url: r.url, width: r.width, height: r.height });
+    shown.set(r.kind === "error" ? { kind: "error", message: () => errorLine(phrase(r.message)) } : { kind: "ready", url: r.url, width: r.width, height: r.height });
   effect(() => {
     const source = code();
     const dark = colorScheme() === "dark";
@@ -205,7 +206,7 @@ export function MermaidRenderer() {
   mounted++;
   cleanup(() => {
     mounted--;
-    if (mounted === 0) failAll("Mermaid 渲染器关掉了");
+    if (mounted === 0) failAll(() => t("Mermaid 渲染器关掉了", "The Mermaid renderer closed"));
   });
   return (
     <If when={page()}>
@@ -221,9 +222,9 @@ export function MermaidRenderer() {
               style={FRAME}
               onLoadStart={() => {
                 loads++;
-                if (loads > 1) failAll("Mermaid 渲染器跳到了别的页面，已经停下");
+                if (loads > 1) failAll(() => t("Mermaid 渲染器跳到了别的页面，已经停下", "The Mermaid renderer navigated away and stopped"));
               }}
-              onError={(e) => failAll(`Mermaid 渲染器出错：${e.message}`)}
+              onError={(e) => failAll(() => t(`Mermaid 渲染器出错：${e.message}`, `Mermaid renderer error: ${e.message}`))}
               onMessage={(e) => receive(e.data, mine)}
             />
           </View>

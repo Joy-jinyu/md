@@ -2,11 +2,12 @@
  * 手动同步一次（实施计划 4.8，MVP 不自动）：逐篇按 src/sync/plan.ts 的判定推、拉，或者记下要用户选的事。
  * 不静默丢任何一边：两边都改了、一边删了，都放进「要你选的事」；拉之前本机那版先存进版本历史。
  */
+import { type Phrase, t } from "../../i18n";
 import { signal } from "nsh";
 import { messageOf } from "../../doc/message";
 import { pinBackend } from "../../store/backend";
 import type { DocMeta } from "../../store/document-store";
-import { currentDocId, displayName, refreshLibrary } from "../../store/library";
+import { currentDocId, displayName, documentName, refreshLibrary } from "../../store/library";
 import {
   buryRecord,
   type GistLink,
@@ -36,7 +37,7 @@ export type Issue =
   | { kind: "remote-deleted"; id: string; name: string }
   | { kind: "local-deleted"; id: string; name: string; remote: Gist }
   | { kind: "remote-only"; gist: GistSummary }
-  | { kind: "failed"; id: string; name: string; message: string };
+  | { kind: "failed"; id: string; name: string; message: Phrase };
 
 /**
  * `done`：同步完了，推拉了几篇、当时列出几件要选的事，和之后在要选的事里上传了几篇、几篇没勾标成了不同步（结果句见 `resultText`）；
@@ -47,7 +48,7 @@ export type RunState =
   | { kind: "running" }
   | { kind: "done"; pushed: number; pulled: number; asked: number; uploaded: number; excluded: number }
   | { kind: "listed" }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: Phrase };
 
 const run = signal<RunState>({ kind: "idle" });
 const issues = signal<Issue[]>([]);
@@ -99,9 +100,9 @@ interface Run {
 const linkOf = (record: SyncRecord | undefined, login: string): GistLink | null => (record?.link && record.link.login === login ? record.link : null);
 
 /** 推不上去的原因（空文档、记录是别的账号的）；能推是 null。resolve.ts 的「保留本机的」「重新上传」也用它。 */
-export function pushProblem(local: string, link: GistLink | null | undefined, login: string): string | null {
-  if (local.trim() === "") return "这篇是空的，Gist 存不了空文件，没有推上去（GitHub 上那份没动）。";
-  if (link && link.login !== login) return `这篇连着的是 @${link.login} 的 Gist，现在登录的是 @${login}，没有推。`;
+export function pushProblem(local: string, link: GistLink | null | undefined, login: string): Phrase | null {
+  if (local.trim() === "") return () => t("这篇是空的，Gist 存不了空文件，没有推上去（GitHub 上那份没动）。", "This document is empty and GitHub Gists cannot store empty files. The GitHub copy is unchanged.");
+  if (link && link.login !== login) return () => t(`这篇连着的是 @${link.login} 的 Gist，现在登录的是 @${login}，没有推。`, `This document is linked to a Gist owned by @${link.login}, but you’re signed in as @${login}. It was not pushed.`);
   return null;
 }
 
@@ -115,7 +116,7 @@ export function noteUploaded(uploaded: number, excluded = 0) {
  * `remoteFileName`：已经连着的 Gist 现在的文件名；它还是按文档名起的（早先建的）就不改，只有两个名字都对不上（本机改了名）才换成显示名。
  */
 export function gistNameOf(doc: { title: string; name: string }, remoteFileName?: string): string {
-  return remoteFileName !== undefined && gistFileName(doc.name) === remoteFileName ? doc.name : displayName(doc);
+  return remoteFileName !== undefined && gistFileName(doc.name) === remoteFileName ? doc.name : documentName(doc);
 }
 
 /** 推上去。`remoteFileName` 是刚从 GitHub 读到的文件名：别处改过名时用记录里的旧名字会在 Gist 里多出一个文件。 */
@@ -123,7 +124,7 @@ async function push(r: Run, doc: DocMeta, link: GistLink, local: string, remoteF
   const name = displayName(doc);
   const problem = pushProblem(local, link, r.login);
   if (problem) return { kind: "failed", id: doc.id, name, message: problem };
-  const gist = await r.api.updateGist(link.gistId, remoteFileName, gistNameOf(doc, remoteFileName), name, local);
+  const gist = await r.api.updateGist(link.gistId, remoteFileName, gistNameOf(doc, remoteFileName), documentName(doc), local);
   if (!gist) return { kind: "remote-deleted", id: doc.id, name };
   await linkTo(doc.id, gist, local, r.login);
   return "pushed";
@@ -225,22 +226,23 @@ async function orphans(api: GitHub, login: string, present: Set<string>, records
 function unreadable(docs: DocMeta[], records: Map<string, SyncRecord>, login: string): Issue[] {
   return docs.flatMap((doc): Issue[] => {
     const record = records.get(doc.id);
-    if (!doc.problem || record?.excluded || !linkOf(record, login)) return [];
-    return [{ kind: "failed", id: doc.id, name: displayName(doc), message: `跳过：打不开（${problemText(doc.problem)}），没有同步。GitHub 上那份没动。` }];
+    const problem = doc.problem;
+    if (!problem || record?.excluded || !linkOf(record, login)) return [];
+    return [{ kind: "failed", id: doc.id, name: displayName(doc), message: () => t(`跳过：打不开（${problemText(problem)}），没有同步。GitHub 上那份没动。`, `Skipped this document because it could not be opened (${problemText(problem)}). The GitHub copy is unchanged.`) }];
   });
 }
 
 function summarize(done: Extract<RunState, { kind: "done" }>, open: Issue[]): string {
-  const counts = [done.pushed > 0 ? `推上去 ${done.pushed} 篇` : "", done.pulled > 0 ? `拉下来 ${done.pulled} 篇` : "", done.uploaded > 0 ? `上传了 ${done.uploaded} 篇` : ""];
-  const moved = counts.filter(Boolean).join("，");
+  const counts = [done.pushed > 0 ? t(`推上去 ${done.pushed} 篇`, `Pushed ${done.pushed}`) : "", done.pulled > 0 ? t(`拉下来 ${done.pulled} 篇`, `Pulled ${done.pulled}`) : "", done.uploaded > 0 ? t(`上传了 ${done.uploaded} 篇`, `Uploaded ${done.uploaded}`) : ""];
+  const moved = counts.filter(Boolean).join(t("，", ", "));
   const upload = open.find((i) => i.kind === "upload");
   const others = open.length - (upload ? 1 : 0);
-  const parts = moved ? [`${moved}。`] : [];
-  if (done.excluded > 0) parts.push(`没勾的 ${done.excluded} 篇标成了不同步。`);
-  if (upload) parts.push(`${upload.docs.length} 篇还没上传过，勾选确认后才上传。`);
-  if (others > 0) parts.push(`${others} 件事要你选。`);
-  if (parts.length === 0) parts.push(done.asked > 0 ? "要你选的事都处理完了。" : "都是最新的。");
-  return parts.join("");
+  const parts = moved ? [`${moved}${t("。", ".")}`] : [];
+  if (done.excluded > 0) parts.push(t(`没勾的 ${done.excluded} 篇标成了不同步。`, `Excluded ${done.excluded} ${done.excluded === 1 ? "unselected document" : "unselected documents"} from sync.`));
+  if (upload) parts.push(t(`${upload.docs.length} 篇还没上传过，勾选确认后才上传。`, `${upload.docs.length} ${upload.docs.length === 1 ? "document needs" : "documents need"} your approval before the first upload.`));
+  if (others > 0) parts.push(t(`${others} 件事要你选。`, `${others} ${others === 1 ? "item needs" : "items need"} your attention.`));
+  if (parts.length === 0) parts.push(done.asked > 0 ? t("要你选的事都处理完了。", "All sync decisions are resolved.") : t("都是最新的。", "Everything is up to date."));
+  return parts.join(t("", " "));
 }
 
 /** 结果一句话：推拉了几篇，加上现在还剩的待选事项（处理掉一件就跟着变）。不在「同步完 / 刚列出」时是 null。 */
@@ -250,7 +252,7 @@ export function resultText(): string | null {
   if (state.kind === "done") return summarize(state, open);
   if (state.kind !== "listed") return null;
   const missing = open.filter((i) => i.kind === "remote-only").length;
-  return missing > 0 ? `GitHub 上有 ${missing} 篇 Pairdown 文档这台设备上没有，要的话拉到本机。` : null;
+  return missing > 0 ? t(`GitHub 上有 ${missing} 篇 Pairdown 文档这台设备上没有，要的话拉到本机。`, `${missing} Pairdown ${missing === 1 ? "document is" : "documents are"} on GitHub but not on this device. You can download them here.`) : null;
 }
 
 async function syncDocs(r: Run, docs: DocMeta[], records: Map<string, SyncRecord>) {
@@ -284,7 +286,7 @@ async function claimedIn(records: Map<string, SyncRecord>, login: string): Promi
 export async function runSync() {
   if (run().kind === "running") return;
   const unpin = pinBackend();
-  if (!unpin) return run.set({ kind: "error", message: "正在换存储（重新连接本机网关），换好以后再同步。" });
+  if (!unpin) return run.set({ kind: "error", message: () => t("正在换存储（重新连接本机网关），换好以后再同步。", "Wait for the local gateway to reconnect before syncing.") });
   run.set({ kind: "running" });
   try {
     const { api, login } = await github();

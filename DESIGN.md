@@ -291,6 +291,8 @@
 
 ## 屏幕：设置
 
+- **界面语言**：默认 English，在设置里可选 English 或简体中文。修改即时应用到编辑器、设置、命令和原生菜单，重开应用后沿用本机选择。语言偏好和其他设置一起保存，文档正文与文件名保持原样。
+
 顶栏右侧「设置」按钮（ghost，排在明暗切换前面）、Cmd+, 或命令面板里的「设置」打开（2026-11-25 用户要求改成整页，参考 marketdeck 的设置页）。
 
 **整页**：盖住整个应用（`background` 底，没有遮罩），编辑页在下面留着不拆，回来时文档、光标、撤销栈都在（改过快捷键的除外，见下面「生效」）。「返回」、Esc、系统的返回都回到编辑页并把焦点还给正文；录键时 Esc 只取消录键。开着设置时应用的快捷键不执行（同原来的对话框）。
@@ -377,3 +379,7 @@
 `/lp` presents **River Notes**, a six-page Markdown journal that follows one day by the river. The illustrated desk and paper share a warm palette. The header links to the editor and repository. Book pages are the primary controls. Click left or right, drag the paper, or use the arrow keys to turn them.
 
 The quill follows the strokes of the last words on each page, then rests at the edge of the spread. With reduced motion, the endings appear immediately. The web build serves the landing page as a separate static entry, with its own artwork and no remote assets.
+
+### Web startup
+
+The packaged editor and landing page show a feather quill drawing a short line before the first usable screen. Both use the landing page’s feather asset. The editor follows its light or dark theme, and the landing page uses its paper palette. The loader fades out at readiness, without a fixed display time. Reduced motion uses a static quill. Initialization errors expose a reload action, or the editor host’s own error if available.

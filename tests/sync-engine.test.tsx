@@ -1,4 +1,5 @@
-import { expect, open, test } from "nsh/test";
+import { expect, test } from "nsh/test";
+import { open } from "./fixtures/chinese-open";
 import { LAST_OPENED_KEY } from "../src/store/library";
 import { bodyKey, metaKey } from "../src/store/local-store";
 import { syncRecordKey } from "../src/store/sync-store";

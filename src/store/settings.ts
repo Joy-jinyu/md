@@ -4,6 +4,8 @@ import { Storage } from "nsh";
 /** 设置的存储键。 */
 export const SETTINGS_KEY = "md.settings";
 
+export type Locale = "en" | "zh-CN";
+
 /** 改过的快捷键：命令 id → 键（ProseMirror 写法）；null 是这条命令不绑键。没改过的命令不在里面。 */
 export type ShortcutOverrides = Record<string, string | null>;
 
@@ -24,7 +26,15 @@ async function readSettings(): Promise<Record<string, unknown>> {
 }
 
 /** 只改设置里的一项，别的项原样留着；写不进去时返回原因。 */
-async function saveSetting(key: string, value: unknown): Promise<string | null> {
+let pendingWrite: Promise<unknown> = Promise.resolve();
+
+function saveSetting(key: string, value: unknown): Promise<string | null> {
+  const write = pendingWrite.then(() => writeSetting(key, value));
+  pendingWrite = write;
+  return write;
+}
+
+async function writeSetting(key: string, value: unknown): Promise<string | null> {
   try {
     const now = await readSettings().catch((e: unknown) => {
       console.warn("settings unreadable, starting over", e);
@@ -79,3 +89,14 @@ export async function loadAutoUpload(): Promise<boolean> {
 
 /** 记下「上传前不用问」（false 是每次先问）；写不进去时返回原因。 */
 export const saveAutoUpload = (auto: boolean) => saveSetting("autoUploadImages", auto);
+
+export async function loadLocale(): Promise<Locale> {
+  try {
+    return (await readSettings()).locale === "zh-CN" ? "zh-CN" : "en";
+  } catch (e) {
+    console.warn("settings unreadable, using English", e);
+    return "en";
+  }
+}
+
+export const saveLocale = (locale: Locale) => saveSetting("locale", locale);

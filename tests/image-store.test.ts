@@ -1,5 +1,6 @@
 import { Storage } from "nsh";
 import { expect, test } from "nsh/test";
+import { phrase } from "../src/i18n";
 import { command, insertContent } from "nsh/base";
 import { chooseBackend, copyLocalDocs, documentStore } from "../src/store/backend";
 import type { DocumentStore } from "../src/store/document-store";
@@ -52,16 +53,16 @@ test("browser storage: an image is named by its content, kept once per document,
 
 test("browser storage: SVG and other non-images are refused, so is an image over 10 MB, with a reason a person can act on", async () => {
   const store = createLocalStore(async () => memoryKv());
-  await expect(store.putAsset("d", SVG)).rejects.toThrow("SVG 不收");
-  await expect(store.putAsset("d", new TextEncoder().encode("<html>"))).rejects.toThrow("不是认得的图片格式");
+  await expect(store.putAsset("d", SVG)).rejects.toThrow("Unsupported image format");
+  await expect(store.putAsset("d", new TextEncoder().encode("<html>"))).rejects.toThrow("Unsupported image format");
   const big = new Uint8Array(10 * 1024 * 1024 + 1);
   big.set(RED_PNG);
-  await expect(store.putAsset("d", big)).rejects.toThrow("先压缩一下");
+  await expect(store.putAsset("d", big)).rejects.toThrow("Compress the image");
 });
 
 test("browser storage without IndexedDB says images cannot be kept instead of failing silently", async () => {
   await Storage.clear();
-  await expect(documentStore.putAsset("document", RED_PNG)).rejects.toThrow("存不了图片");
+  await expect(documentStore.putAsset("document", RED_PNG)).rejects.toThrow("only supports text");
 });
 
 async function gateway(seed: Record<string, string> = { "notes/a.md": "x\n" }) {
@@ -79,7 +80,7 @@ test("gateway: images go through putAsset / getAsset; a bad type never reaches t
   expect([...((await store.getAsset("notes/a.md", src))?.bytes ?? [])]).toEqual([...RED_PNG]);
   expect(await store.getAsset("notes/a.md", "assets/none.png")).toBe(null);
   expect(await store.getAsset("notes/a.md", "../../x/assets/a.png")).toBe(null);
-  await expect(store.putAsset("notes/a.md", SVG)).rejects.toThrow("SVG 不收");
+  await expect(store.putAsset("notes/a.md", SVG)).rejects.toThrow("Unsupported image format");
   expect(gw.assets.size).toBe(1);
 });
 
@@ -96,11 +97,11 @@ test("gateway: transferring every linked image replaces the ones that worked and
   const o = openDoc("![a](https://example.com/ok.png)\n\n![b](http://10.0.0.1/inner.png)\n\n![c](https://example.com/ok.png)\n");
   await transferAllImages(o.session);
   expect(dumpMarkdown(o.session.getJSON(), o.origin)).toBe("![a](assets/img1.png)\n\n![b](http://10.0.0.1/inner.png)\n\n![c](assets/img1.png)\n");
-  expect(receipt()?.text).toContain("转存了 1 张，1 张没转成");
-  expect(receipt()?.text).toContain("本机或内网");
+  expect(phrase(receipt()?.text ?? "")).toContain("Saved 1 locally. Could not save 1");
+  expect(phrase(receipt()?.text ?? "")).toContain("local or private network addresses");
   gw.state.downloads = {};
   await transferAllImages(o.session);
-  expect(receipt()?.text).toContain("下载失败");
+  expect(phrase(receipt()?.text ?? "")).toContain("image download failed");
 });
 
 test("browser storage full: an image is refused with a reason and a way out, not the raw error", async () => {
@@ -110,7 +111,7 @@ test("browser storage full: an image is refused with a reason and a way out, not
   kv.update = async () => {
     throw Object.assign(new Error("QuotaExceededError: the quota has been exceeded"), { name: "QuotaExceededError" });
   };
-  await expect(store.putAsset(doc.id, RED_PNG)).rejects.toThrow("浏览器存储满了");
+  await expect(store.putAsset(doc.id, RED_PNG)).rejects.toThrow("Browser storage is full");
 });
 
 test("browser storage: opening a document drops images neither its text nor its history mentions once they are 10 minutes old; fresh ones and unreadable history keep them", async () => {
@@ -174,7 +175,7 @@ test("copying browser documents into the library brings their images; the text f
   expect(moved.failed).toEqual(["Pic", "Two"]);
   expect((await source.list()).length).toBe(2);
   const copied = await copyLocalDocs(broken, false, source);
-  expect(copied.imagesFailed).toEqual(["Pic（1 张）", "Two（1 张）"]);
+  expect(copied.imagesFailed).toEqual(["Pic (1 image)", "Two (1 image)"]);
 });
 
 async function openGatewayDoc(downloads: ReturnType<typeof fakeGateway>["state"]["downloads"] = {}) {
@@ -191,7 +192,7 @@ test("a transfer that finds the address gone from the text says so instead of re
   await openGatewayDoc({ "https://example.com/ok.png": { data: base64(BLUE_PNG) } });
   const o = openDoc("text only\n");
   await transferImage(o.session, "https://example.com/ok.png");
-  expect(receipt()?.text).toContain("正文里没找到原地址");
+  expect(phrase(receipt()?.text ?? "")).toContain("original address could not be found");
   expect(dumpMarkdown(o.session.getJSON(), o.origin)).toBe("text only\n");
 });
 
@@ -219,5 +220,5 @@ test("exporting HTML inlines stored images, and leaves them as addresses with a 
   const capped = await markdownToHtmlWithImages(text, doc.id, limit);
   expect(capped.html.includes("data:image")).toBe(false);
   expect(capped.html).toContain(src);
-  expect(capped.note).toContain("没有内联");
+  expect(phrase(capped.note)).toContain("were not embedded");
 });

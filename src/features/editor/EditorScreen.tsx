@@ -2,6 +2,7 @@
  * 编辑页：读出文档库里开着的那一篇，按大小和能否读进编辑器选富文本或源码方式；换一篇就整个重建。
  * 失焦、切后台、退出时立即保存；窗口重新获得焦点时和存储比对版本（另一个标签页可能改过）。
  */
+import { type Phrase, phrase, t } from "../../i18n";
 import { effect, lifecycle, signal, untracked, View } from "nsh";
 import { messageOf } from "../../doc/message";
 import { droppedPaths, fileLibrary, keepWindowOnClose, onOpenFiles, PROBE_GATEWAY, saveBeforeLeaving } from "../../platform";
@@ -53,8 +54,8 @@ const TABLE_LINE_WEIGHT = 4;
 type Opened =
   | { kind: "loading" }
   | { kind: "rich"; doc: RichOpened }
-  | { kind: "source"; markdown: string; notice: string }
-  | { kind: "failed"; message: string };
+  | { kind: "source"; markdown: string; notice: () => string }
+  | { kind: "failed"; message: () => string };
 
 /**
  * 估出的渲染量超没超上限：非空行数（表格行加权），和最长的一张表。
@@ -75,13 +76,13 @@ function tooBigForRich(markdown: string): boolean {
 
 function choose(markdown: string): Opened {
   if (tooBigForRich(markdown)) {
-    return { kind: "source", markdown, notice: "这篇文档比较大，超过所见即所得编辑能流畅打开的上限，先用源码方式打开。" };
+    return { kind: "source", markdown, notice: () => t("这篇文档比较大，超过所见即所得编辑能流畅打开的上限，先用源码方式打开。", "This document is too large for smooth rich-text editing, so it opened in source mode.") };
   }
   try {
     return { kind: "rich", doc: openRich(markdown) };
   } catch (e) {
     console.error("openRich failed", e);
-    return { kind: "source", markdown, notice: `没能按所见即所得方式打开（${messageOf(e)}），先用源码方式打开，原文没有改动。` };
+    return { kind: "source", markdown, notice: () => t(`没能按所见即所得方式打开（${messageOf(e)}），先用源码方式打开，原文没有改动。`, `Could not open in rich-text mode (${messageOf(e)}). The document opened in source mode without changes.`) };
   }
 }
 
@@ -121,7 +122,7 @@ export function EditorScreen() {
     try {
       text = await openDocument(id);
     } catch (e) {
-      opened.set({ kind: "failed", message: `没能读出本机存的文档：${messageOf(e)}` });
+      opened.set({ kind: "failed", message: () => t(`没能读出本机存的文档：${messageOf(e)}`, `Could not read the local document: ${messageOf(e)}`) });
       return false;
     }
     if (text === null) return false;
@@ -135,8 +136,13 @@ export function EditorScreen() {
   /** 开不了（已经不在了）就开最近改过的一篇，一篇都没有就新建。 */
   const showOrFallback = async (id: string) => {
     if (await show(id)) return;
-    say("这篇文档已经不在了（可能在别的标签页里删掉了）。", "warn");
-    await openFallback(show);
+    say(() => t("这篇文档已经不在了（可能在别的标签页里删掉了）。", "This document no longer exists. It may have been deleted in another tab."), "warn");
+    if (!(await openFallback(show)) && opened().kind === "loading") {
+      opened.set({
+        kind: "failed",
+        message: () => t("没有找到可打开的文档。请重新打开编辑器。", "No document was available to open. Reopen the editor and try again."),
+      });
+    }
   };
   const reopen = async () => {
     const id = currentDocId();
@@ -153,13 +159,13 @@ export function EditorScreen() {
   void loadShortcutOverrides()
     .then(setOverrides)
     .then(() => chooseBackend(fileLibrary(), PROBE_GATEWAY))
-    .then(() => followStoreChanges(() => void reopen().then(() => say(`${elsewhereWords().changed}，已载入最新的内容。`, "info"))))
+    .then(() => followStoreChanges(() => void reopen().then(() => say(() => t(`${elsewhereWords().changed}，已载入最新的内容。`, `${elsewhereWords().changed}. The latest version was loaded.`), "info"))))
     .then(recoverUnsaved)
     .then((note) => note && say(note.text, note.tone))
     .then(startLibrary)
     .then(showOrFallback)
     .then(() => onOpenFiles(openFromSystem))
-    .catch((e: unknown) => opened.set({ kind: "failed", message: `没能读出本机存的文档：${messageOf(e)}` }));
+    .catch((e: unknown) => opened.set({ kind: "failed", message: () => t(`没能读出本机存的文档：${messageOf(e)}`, `Could not read the local document: ${messageOf(e)}`) }));
 
   // 开着的这篇在别处删了：冲突条出来让人选，叠在上面的快速打开、命令面板先收起
   effect(() => {
@@ -181,20 +187,21 @@ export function EditorScreen() {
    * 设置里改了键：存下来，再把编辑页整个重建（会话的键表建好后换不了）。
    * 重建是从存储重新读文档，所以要先把没存的改动写进去；写不进去就不重建、也不改键，免得丢字，并在页面顶上说明。
    */
-  const settingsProblem = signal("");
+  const settingsProblem = signal<Phrase>("");
   const applyShortcuts = async (next: ShortcutOverrides) => {
-    if (!(await flush()).ok) return settingsProblem.set("文档没能存上，这次没有改快捷键（原因见顶栏的保存状态）。存上以后再到设置里改一次。");
+    if (!(await flush()).ok) return settingsProblem.set(() => t("文档没能存上，这次没有改快捷键（原因见顶栏的保存状态）。存上以后再到设置里改一次。", "The document could not be saved. Check the save status, then try changing shortcuts again after it saves."));
     const failed = await saveShortcutOverrides(next);
-    settingsProblem.set(failed ? `快捷键没能存到本机（${failed}）：现在能用，重新打开后会回到原来的键。` : "");
+    settingsProblem.set(failed ? () => t(`快捷键没能存到本机（${failed}）：现在能用，重新打开后会回到原来的键。`, `Could not save shortcuts (${failed}). They will work now and revert when you reopen the editor.`) : "");
     setOverrides(next);
     opened.set({ kind: "loading" });
     await reopen();
   };
   watchLifecycle(() => {
-    void reopen().then(() => say(`${elsewhereWords().changed}，已载入最新的内容。`, "info"));
+    void reopen().then(() => say(() => t(`${elsewhereWords().changed}，已载入最新的内容。`, `${elsewhereWords().changed}. The latest version was loaded.`), "info"));
   });
   return (
     <View
+      testID={opened().kind === "loading" ? undefined : "pairdown-ready"}
       class="flex-1 bg-background"
       onFileDrop={(e) => {
         dropped(droppedPaths(e.uris));
@@ -202,8 +209,8 @@ export function EditorScreen() {
       }}
     >
       <StorageNotice />
-      <If when={settingsProblem()}>{(message) => <Notice testID="settings-problem" message={message()} onDismiss={() => settingsProblem.set("")} />}</If>
-      <If when={receipt()}>{(m) => <Notice testID="receipt" message={m().text} tone={m().tone} copyable={m().tone === "warn"} onDismiss={m().tone === "warn" ? dismissReceipt : undefined} />}</If>
+      <If when={settingsProblem()}>{(message) => <Notice testID="settings-problem" message={phrase(message())} onDismiss={() => settingsProblem.set("")} />}</If>
+      <If when={receipt()}>{(m) => <Notice testID="receipt" message={phrase(m().text)} tone={m().tone} copyable={m().tone === "warn"} onDismiss={m().tone === "warn" ? dismissReceipt : undefined} />}</If>
       <ConflictBar onTheirs={() => void reopen()} />
       <FileActions />
       {screen(opened())}
@@ -228,6 +235,6 @@ function screen(current: Opened) {
     case "source":
       return <SourceDocument markdown={current.markdown} notice={current.notice} />;
     case "failed":
-      return <Notice message={current.message} />;
+      return <Notice message={current.message()} />;
   }
 }

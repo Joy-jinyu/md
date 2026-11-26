@@ -1,4 +1,5 @@
 /** 设置「图床」页的内容（只在连着本机网关时有）：看现在的配置、改、清掉，上传前问不问，重新打开插图时的询问。布局见 DESIGN.md「屏幕：设置」。 */
+import { type Phrase, phrase, t } from "../../i18n";
 import { signal, Text, View } from "nsh";
 import { messageOf } from "../../doc/message";
 import { imageHost } from "../../store/backend";
@@ -14,9 +15,9 @@ const LINE = "select-text text-xs leading-5 text-muted-foreground";
 function HostLines(props: { host: ImageHostView }) {
   const lines = (): string[] => {
     const h = props.host;
-    if (h.kind === "github") return [`GitHub 仓库：${h.repo}`, `分支：${h.branch}`, `目录：${h.dir}`, `令牌：${h.hasToken ? "已设置（值不显示）" : "没有"}`];
-    const headers = h.headerNames.length > 0 ? `${h.headerNames.join("、")}（值不显示）` : "没有";
-    return [`上传地址：${h.url}`, `文件字段名：${h.field}`, `请求头：${headers}`, `图片地址的位置：${h.urlPath || "自动找"}`];
+    if (h.kind === "github") return [t(`GitHub 仓库：${h.repo}`, `GitHub repository: ${h.repo}`), t(`分支：${h.branch}`, `Branch: ${h.branch}`), t(`目录：${h.dir}`, `Directory: ${h.dir}`), t(`令牌：${h.hasToken ? "已设置（值不显示）" : "没有"}`, `Token: ${h.hasToken ? "Configured (value hidden)" : "None"}`)];
+    const headers = h.headerNames.length > 0 ? t(`${h.headerNames.join("、")}（值不显示）`, `${h.headerNames.join(", ")} (values hidden)`) : t("没有", "None");
+    return [t(`上传地址：${h.url}`, `Upload URL: ${h.url}`), t(`文件字段名：${h.field}`, `File field name: ${h.field}`), t(`请求头：${headers}`, `Request headers: ${headers}`), t(`图片地址的位置：${h.urlPath || "自动找"}`, `Image URL path: ${h.urlPath || "Automatic"}`)];
   };
   return (
     <View testID="image-host-current" class="gap-0.5">
@@ -33,7 +34,7 @@ function createHostState() {
   const skipped = signal(false);
   const auto = signal(false);
   const editing = signal(false);
-  const problem = signal("");
+  const problem = signal<Phrase>("");
   const load = async () => {
     const api = imageHost();
     if (!api) return;
@@ -44,7 +45,7 @@ function createHostState() {
     } catch (e) {
       console.warn("image host not read", e);
       if (e instanceof ImageHostUnsupported) loaded.set({ kind: "unsupported", reason: e.message });
-      else problem.set(`没能读出图床设置：${messageOf(e)}`);
+      else problem.set(() => t(`没能读出图床设置：${messageOf(e)}`, `Could not read image hosting settings: ${messageOf(e)}`));
     }
   };
   void load();
@@ -57,17 +58,17 @@ function createHostState() {
       await load();
     } catch (e) {
       console.error("image host not cleared", e);
-      problem.set(`没能清掉图床设置：${messageOf(e)}`);
+      problem.set(() => t(`没能清掉图床设置：${messageOf(e)}`, `Could not clear image hosting settings: ${messageOf(e)}`));
     }
   };
   const askAgain = async () => {
     const why = await saveSkipImageHost(false);
-    if (why) problem.set(`没能保存：${why}`);
+    if (why) problem.set(() => t(`没能保存：${why}`, `Could not save: ${why}`));
     else skipped.set(false);
   };
   const setAuto = async (next: boolean) => {
     const why = await saveAutoUpload(next);
-    if (why) problem.set(`没能保存：${why}`);
+    if (why) problem.set(() => t(`没能保存：${why}`, `Could not save: ${why}`));
     else auto.set(next);
   };
   const host = () => {
@@ -87,44 +88,44 @@ export function ImageHostSection() {
     <View testID="image-host" class="gap-2">
       <If when={unsupported()}>{(reason) => <Text class={LINE}>{reason()}</Text>}</If>
       <If when={loaded().kind === "ready" && !editing()}>
-        <If when={host()} else={<Text class={LINE}>没有设置图床，图片存在文档旁边的 assets/ 里。</Text>}>
+        <If when={host()} else={<Text class={LINE}>{t("没有设置图床，图片存在文档旁边的 assets/ 里。", "Images are saved in the assets/ folder beside the document.")}</Text>}>
           {(h) => <HostLines host={h()} />}
         </If>
         <If when={!host() && skipped()}>
-          <Text class={LINE}>你选过「不用图床」，粘贴图片时不再询问。</Text>
+          <Text class={LINE}>{t("你选过「不用图床」，粘贴图片时不再询问。", "Pairdown no longer asks about image hosting when you paste images.")}</Text>
         </If>
         <If when={host()}>
           <Text testID="image-host-auto" class={LINE}>
-            {auto() ? "插入图片时直接上传，不先问。" : "插入图片时先问要不要上传。"}
+            {auto() ? t("插入图片时直接上传，不先问。", "Inserted images upload automatically.") : t("插入图片时先问要不要上传。", "Pairdown asks before uploading inserted images.")}
           </Text>
         </If>
         <View class="flex-row flex-wrap gap-1">
-          <Button testID="image-host-edit" label={host() ? "修改图床设置" : "设置图床"} onPress={() => editing.set(true)} />
+          <Button testID="image-host-edit" label={host() ? t("修改图床设置", "Edit image hosting settings") : t("设置图床", "Set up image hosting")} onPress={() => editing.set(true)} />
           <If when={host()}>
-            <Button testID="image-host-auto-toggle" label={auto() ? "上传前先问我" : "以后直接上传"} onPress={() => void setAuto(!auto())} />
-            <Button testID="image-host-stop" label="不再用图床" onPress={() => void stop()} />
+            <Button testID="image-host-auto-toggle" label={auto() ? t("上传前先问我", "Ask before uploading") : t("以后直接上传", "Upload automatically")} onPress={() => void setAuto(!auto())} />
+            <Button testID="image-host-stop" label={t("不再用图床", "Turn off image hosting")} onPress={() => void stop()} />
           </If>
           <If when={!host() && skipped()}>
-            <Button testID="image-host-ask-again" label="粘贴图片时再问我" onPress={() => void askAgain()} />
+            <Button testID="image-host-ask-again" label={t("粘贴图片时再问我", "Ask again when I paste images")} onPress={() => void askAgain()} />
           </If>
         </View>
       </If>
       <If when={editing()}>
         <ImageHostForm
           current={host()}
-          saveLabel="保存图床设置"
+          saveLabel={t("保存图床设置", "Save image hosting settings")}
           onSaved={() => {
             editing.set(false);
             void load();
           }}
         >
-          <Button testID="image-host-cancel" label="取消" onPress={() => editing.set(false)} />
+          <Button testID="image-host-cancel" label={t("取消", "Cancel")} onPress={() => editing.set(false)} />
         </ImageHostForm>
       </If>
       <If when={problem()}>
         {(text) => (
           <Text testID="image-host-section-problem" role="alert" class="select-text text-xs leading-5 text-destructive">
-            {text()}
+            {phrase(text())}
           </Text>
         )}
       </If>

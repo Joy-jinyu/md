@@ -1,4 +1,5 @@
-import { expect, open, test } from "nsh/test";
+import { expect, test } from "nsh/test";
+import { open } from "./fixtures/chinese-open";
 import { LEGACY_DOC_KEY } from "../src/store/kv";
 import { SETTINGS_KEY } from "../src/store/settings";
 import { base64, RED_PNG } from "./fixtures/images";

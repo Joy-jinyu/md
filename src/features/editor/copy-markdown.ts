@@ -1,5 +1,6 @@
 /** 「复制为 Markdown」（Cmd+Shift+C）：选中的那段写成 Markdown 放进剪贴板；没有选区或全选时复制整篇（原文本身，逐字节）。 */
 import type { RichEditorSession } from "nsh/base";
+import { t } from "../../i18n";
 import { cellSelectionText, selectionMarkdown } from "../../doc/selection-markdown";
 import type { PMNode } from "../../doc/types";
 import { latestDocument } from "../../store/document";
@@ -26,10 +27,10 @@ export function copyAsMarkdown(session: RichEditorSession) {
   const nothing = selected === null && session.selection.type !== "all";
   const text = selected ?? latestDocument();
   writeClipboard(text).then(
-    () => nothing && say("没有选中内容，已把整篇的 Markdown 复制到剪贴板。", "info"),
+    () => nothing && say(() => t("没有选中内容，已把整篇的 Markdown 复制到剪贴板。", "No content was selected, so the entire document was copied as Markdown."), "info"),
     (e: unknown) => {
       console.warn("copy as markdown failed", e);
-      say("没能复制：写不了剪贴板。可以切到源码视图，选中后按复制键。", "warn");
+      say(() => t("没能复制：写不了剪贴板。可以切到源码视图，选中后按复制键。", "Could not access the clipboard. Try selecting and copying the text in source view."), "warn");
     },
   );
 }

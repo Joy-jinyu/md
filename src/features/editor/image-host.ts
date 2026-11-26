@@ -3,6 +3,7 @@
  * 连着网关但没设置时，问一次（「设置图床」对话框），用户选过「不用图床」就不再问。没有图床接口（浏览器本地、macOS、旧网关）一律存本地。
  */
 import { signal } from "nsh";
+import { type Phrase, phrase, t } from "../../i18n";
 import { messageOf } from "../../doc/message";
 import { documentStore, imageHost } from "../../store/backend";
 import { type ImageHostApi, ImageHostUnsupported, type ImageHostView } from "../../store/document-store";
@@ -46,7 +47,7 @@ export type UploadChoice = "upload" | "always" | "local";
 
 /** 图床叫什么（确认框、回执里用）：GitHub 仓库名，或上传接口的域名。 */
 export function hostName(host: ImageHostView): string {
-  if (host.kind === "github") return `GitHub 仓库 ${host.repo}`;
+  if (host.kind === "github") return t(`GitHub 仓库 ${host.repo}`, `GitHub repository ${host.repo}`);
   return URL.canParse(host.url) ? new URL(host.url).host : host.url;
 }
 
@@ -114,4 +115,8 @@ export async function placeImage(target: ImageHostApi | null, docId: string, byt
 }
 
 /** 回执里「没传上图床」那一句；都传上了是空串。 */
-export const notUploadedText = (reasons: string[]) => (reasons.length > 0 ? `${reasons.length} 张没传上图床，先存在本地：${[...new Set(reasons)].join("；")}` : "");
+export function notUploadedText(reasons: Phrase[]): Phrase {
+  if (reasons.length === 0) return "";
+  const distinct = () => [...new Set(reasons.map(phrase))];
+  return () => t(`${reasons.length} 张没传上图床，先存在本地：${distinct().join("；")}`, `${reasons.length === 1 ? "One image" : `${reasons.length} images`} could not upload and were saved locally: ${distinct().join("; ")}`);
+}

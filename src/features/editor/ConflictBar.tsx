@@ -3,6 +3,7 @@
  * 或者这篇在别处删掉了，让用户选存成新文档还是放弃。都不静默覆盖、不静默丢。
  */
 import { Text, View } from "nsh";
+import { t } from "../../i18n";
 import { elsewhereWords } from "../../store/backend";
 import { keepMine, type SaveResult, saveState, takeTheirs } from "../../store/document";
 import { Button } from "../../ui/button";
@@ -19,7 +20,7 @@ function choose(pick: () => Promise<SaveResult>, done?: () => void) {
     },
     (e: unknown) => {
       console.error("conflict choice failed", e);
-      say(`出错了：${e instanceof Error ? e.message : String(e)}`, "warn");
+      say(() => t(`出错了：${e instanceof Error ? e.message : String(e)}`, `Something went wrong: ${e instanceof Error ? e.message : String(e)}`), "warn");
     },
   );
 }
@@ -38,16 +39,16 @@ export function ConflictBar(props: { onTheirs: () => void }) {
             when={c().deleted}
             else={
               <>
-                <Text class="min-w-0 flex-1 select-text text-xs leading-5 text-warn">{`${elsewhereWords().changed}，和这里没存的修改冲突。选一边保留，另一边会存进版本历史。`}</Text>
-                <Button testID="keep-mine" label="保留我的" onPress={() => choose(keepMine)} />
-                <Button testID="take-theirs" label="载入外面的" onPress={() => choose(takeTheirs, props.onTheirs)} />
+                <Text class="min-w-0 flex-1 select-text text-xs leading-5 text-warn">{t(`${elsewhereWords().changed}，和这里没存的修改冲突。选一边保留，另一边会存进版本历史。`, `${elsewhereWords().changed}. This conflicts with your unsaved changes. Choose which version to keep. The other will be saved in version history.`)}</Text>
+                <Button testID="keep-mine" label={t("保留我的", "Keep mine")} onPress={() => choose(keepMine)} />
+                <Button testID="take-theirs" label={t("载入外面的", "Load external version")} onPress={() => choose(takeTheirs, props.onTheirs)} />
               </>
             }
           >
-            <Text class="min-w-0 flex-1 select-text text-xs leading-5 text-warn">{`${elsewhereWords().deleted}。这里的内容还在：存成一篇新文档留下它，或者放弃。`}</Text>
+            <Text class="min-w-0 flex-1 select-text text-xs leading-5 text-warn">{t(`${elsewhereWords().deleted}。这里的内容还在：存成一篇新文档留下它，或者放弃。`, `${elsewhereWords().deleted}. Save your changes as a new document, or discard them.`)}</Text>
             <Button
               testID="save-as-new"
-              label="存成新文档"
+              label={t("存成新文档", "Save as a new document")}
               onPress={() => {
                 receipt.set(null);
                 requestLibrary({ kind: "rescue" });
@@ -55,7 +56,7 @@ export function ConflictBar(props: { onTheirs: () => void }) {
             />
             <Button
               testID="abandon-deleted"
-              label="放弃这篇"
+              label={t("放弃这篇", "Discard this document")}
               onPress={() => {
                 receipt.set(null);
                 requestLibrary({ kind: "abandon" });

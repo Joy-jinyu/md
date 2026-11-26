@@ -1,4 +1,5 @@
 /** 快速打开（Cmd+Shift+O）：按名字或标题模糊找一篇文档，回车打开。样子和命令面板一样。 */
+import { t } from "../../i18n";
 import { signal, Text, View } from "nsh";
 import { Command, Dialog } from "nsh/base";
 import { allDocs, currentDocId, displayName, knownTitle } from "../../store/library";
@@ -26,11 +27,11 @@ export function QuickOpen() {
     return was;
   });
   const ranked = () => (quickOpenOpen() ? rankDocs(allDocs(), query(), currentDocId()) : []);
-  const items = () => ranked().map((d) => ({ id: d.id, label: displayName(d) || "未命名", keywords: [d.name] }));
+  const items = () => ranked().map((d) => ({ id: d.id, label: displayName(d) || t("未命名", "Untitled"), keywords: [d.name] }));
   const subtitle = (id: string) => {
     const doc = allDocs().find((d) => d.id === id);
     if (!doc) return "";
-    const when = id === currentDocId() ? "正开着" : timeLabel(doc.updatedAt);
+    const when = id === currentDocId() ? t("正开着", "Currently open") : timeLabel(doc.updatedAt);
     // 名字和标题里不是大字显示的那个写在小字里：按它搜中了也看得出为什么
     const label = displayName(doc);
     const other = label === doc.name ? knownTitle(doc) : doc.name;
@@ -41,7 +42,7 @@ export function QuickOpen() {
       testID="quick-open"
       open={quickOpenOpen()}
       animation="fade"
-      accessibilityLabel="快速打开"
+      accessibilityLabel={t("快速打开", "Quick Open")}
       closeOnEscape
       closeOnBackdropPress
       onOpenChange={({ open }) => !open && close()}
@@ -55,8 +56,8 @@ export function QuickOpen() {
           onQueryChange={({ query: next }) => query.set(next)}
           filterable={false}
           autoFocus
-          placeholder="按名字或标题找文档…"
-          accessibilityLabel="文档"
+          placeholder={t("按名字或标题找文档…", "Search by name or title…")}
+          accessibilityLabel={t("文档", "Documents")}
           onSelect={({ id }) => close(() => requestLibrary({ kind: "open", id }))}
           onCancel={() => close()}
           searchBarClass="border-b border-border px-3"
@@ -73,7 +74,7 @@ export function QuickOpen() {
               </Text>
             </View>
           )}
-          empty={<Text class="px-3 py-4 text-xs text-faint">没有匹配的文档</Text>}
+          empty={<Text class="px-3 py-4 text-xs text-faint">{t("没有匹配的文档", "No matching documents")}</Text>}
         />
       </View>
     </Dialog>

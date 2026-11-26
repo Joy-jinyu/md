@@ -3,6 +3,7 @@
  * 每行右边的「⋯」展开这一行的操作（重命名、版本历史、删除）。有鼠标时悬停这一行才出现（键盘移到它上面、展开着时也在）；
  * 触屏没有悬停，一直显示。
  */
+import { t } from "../../i18n";
 import { Scroll, Text, View } from "nsh";
 import { Button as BaseButton, Input } from "nsh/base";
 import type { DocMeta } from "../../store/document-store";
@@ -27,7 +28,7 @@ const RIGHT_INSET = "mr-2";
 /** 排序按钮：图标 + 现在的排法，和工具行右边的「+」一样 28 高；图标落在内容线上（左内边距 8）。 */
 function SortButton() {
   const byTime = () => panel.sort() === "time";
-  const spoken = () => (byTime() ? "现在按改动时间排，改成按名字排" : "现在按名字排，改成按改动时间排");
+  const spoken = () => (byTime() ? t("现在按改动时间排，改成按名字排", "Sorted by last edit. Switch to sorting by name.") : t("现在按名字排，改成按改动时间排", "Sorted by name. Switch to sorting by last edit."));
   return (
     <BaseButton
       testID="doc-sort"
@@ -37,7 +38,7 @@ function SortButton() {
       class="h-7 flex-row items-center gap-1 rounded-(--radius-sm) px-2 transition duration-180 ease-settle hover:bg-hover active:scale-[0.97] active:bg-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none motion-reduce:active:scale-100"
     >
       <Icon name="arrowUpDown" size={14} color="muted-foreground" />
-      <Text class="text-xs font-medium text-foreground">{byTime() ? "按改动时间" : "按名字"}</Text>
+      <Text class="text-xs font-medium text-foreground">{byTime() ? t("按改动时间", "Last edited") : t("按名字", "Name")}</Text>
     </BaseButton>
   );
 }
@@ -46,21 +47,21 @@ function SortButton() {
 export function DocumentsPanel(props: { onPicked: () => void }) {
   const searching = () => panel.query().trim() !== "";
   return (
-    <View testID="documents" accessibilityLabel="文档" class="flex-1">
+    <View testID="documents" accessibilityLabel={t("文档", "Documents")} class="flex-1">
       <View class={`gap-1 pb-1 pt-1 ${SIDE_PAD}`}>
         <Input
           testID="doc-search"
           value={panel.query()}
           onChange={({ value }) => setQuery(value)}
-          placeholder="搜索所有文档"
-          accessibilityLabel="搜索所有文档的正文"
+          placeholder={t("搜索所有文档", "Search all documents")}
+          accessibilityLabel={t("搜索所有文档的正文", "Search the contents of all documents")}
           autoCapitalize="none"
           autoCorrect={false}
           class={FIELD}
         />
         <View class="flex-row items-center justify-between">
           <SortButton />
-          <IconButton testID="doc-new" icon="plus" label="新建文档" compact class={RIGHT_INSET} onPress={() => requestLibrary({ kind: "create" })} />
+          <IconButton testID="doc-new" icon="plus" label={t("新建文档", "New document")} compact class={RIGHT_INSET} onPress={() => requestLibrary({ kind: "create" })} />
         </View>
       </View>
       <If when={searching()} else={<DocList onPicked={props.onPicked} />}>
@@ -73,7 +74,7 @@ export function DocumentsPanel(props: { onPicked: () => void }) {
 function DocList(props: { onPicked: () => void }) {
   return (
     <Scroll class="flex-1">
-      <If when={allDocs().length > 0} else={<Text class={`pt-1 ${SIDE_TEXT}`}>还没有文档。点「+」新建一篇。</Text>}>
+      <If when={allDocs().length > 0} else={<Text class={`pt-1 ${SIDE_TEXT}`}>{t("还没有文档。点「+」新建一篇。", "No documents yet. Select + to create one.")}</Text>}>
         <View class={SIDE_LIST}>
           <Each of={sorted(allDocs(), panel.sort())} key={(d) => d.id}>
             {(doc) => <DocRow doc={doc()} onPicked={props.onPicked} />}
@@ -89,7 +90,7 @@ function DocRow(props: { doc: DocMeta; onPicked: () => void }) {
   const expanded = () => panel.expanded() === props.doc.id;
   const name = () => displayName(props.doc);
   const problem = () => (props.doc.problem ? problemText(props.doc.problem) : null);
-  const sub = () => problem() ?? (props.doc.title && props.doc.title !== props.doc.name ? `文库名：${props.doc.name}.md · ${timeLabel(props.doc.updatedAt)}` : timeLabel(props.doc.updatedAt));
+  const sub = () => problem() ?? (props.doc.title && props.doc.title !== props.doc.name ? t(`文库名：${props.doc.name}.md · ${timeLabel(props.doc.updatedAt)}`, `Library name: ${props.doc.name}.md · ${timeLabel(props.doc.updatedAt)}`) : timeLabel(props.doc.updatedAt));
   const open = () => {
     if (!current()) requestLibrary({ kind: "open", id: props.doc.id });
     props.onPicked();
@@ -100,13 +101,13 @@ function DocRow(props: { doc: DocMeta; onPicked: () => void }) {
         <View
           testID={`doc-${props.doc.id}`}
           role="button"
-          accessibilityLabel={problem() ? `${name()}（${problem()}）` : name()}
+          accessibilityLabel={problem() ? t(`${name()}（${problem()}）`, `${name()} (${problem()})`) : name()}
           accessibilityState={{ selected: current() }}
           onPress={open}
           class="min-h-11 min-w-0 flex-1 justify-center rounded-(--radius-sm) py-1 pl-2 pr-1 active:bg-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <Text style={{ numberOfLines: 1 }} class="text-[13px] leading-5" classList={{ "font-semibold text-strong": current(), "text-foreground": !current() && !problem(), "text-muted-foreground": !!problem() }}>
-            {name() || "未命名"}
+            {name() || t("未命名", "Untitled")}
           </Text>
           <Text style={{ numberOfLines: 1 }} class="text-[11px] leading-4" classList={{ "text-subtle": !problem(), "text-warn-text": !!problem() }}>
             {sub()}
@@ -115,8 +116,8 @@ function DocRow(props: { doc: DocMeta; onPicked: () => void }) {
         <IconButton
           testID={`doc-more-${props.doc.id}`}
           icon="ellipsis"
-          label={`「${name()}」的更多操作`}
-          tooltip="更多操作"
+          label={t(`「${name()}」的更多操作`, `More actions for “${name()}”`)}
+          tooltip={t("更多操作", "More actions")}
           active={expanded()}
           compact
           class={CAN_HOVER && !expanded() ? `${RIGHT_INSET} opacity-0 group-hover:opacity-100 focus-visible:opacity-100` : RIGHT_INSET}
@@ -125,9 +126,9 @@ function DocRow(props: { doc: DocMeta; onPicked: () => void }) {
       </View>
       <If when={expanded()}>
         <View class="flex-row flex-wrap gap-1 pb-1 pl-2">
-          <Button testID="doc-rename" label="改文库名" onPress={() => panel.renaming.set(props.doc)} />
-          <Button testID="doc-history" label="版本历史" onPress={() => requestLibrary({ kind: "history", id: props.doc.id })} />
-          <Button testID="doc-delete" label="删除" onPress={() => panel.deleting.set(props.doc)} />
+          <Button testID="doc-rename" label={t("改文库名", "Rename in library")} onPress={() => panel.renaming.set(props.doc)} />
+          <Button testID="doc-history" label={t("版本历史", "Version history")} onPress={() => requestLibrary({ kind: "history", id: props.doc.id })} />
+          <Button testID="doc-delete" label={t("删除", "Delete")} onPress={() => panel.deleting.set(props.doc)} />
         </View>
       </If>
     </View>
@@ -135,16 +136,16 @@ function DocRow(props: { doc: DocMeta; onPicked: () => void }) {
 }
 
 function summary(found: { query: string; result: SearchResult } | null): string {
-  if (!found) return "正在搜索…";
+  if (!found) return t("正在搜索…", "Searching…");
   const { query, result } = found;
-  if (result.hits.length === 0) return `没有找到「${query}」`;
-  return `${result.docs} 篇文档里找到${result.capped ? "（只列出前 100 处）" : ""}`;
+  if (result.hits.length === 0) return t(`没有找到「${query}」`, `No results for “${query}”`);
+  return t(`${result.docs} 篇文档里找到${result.capped ? "（只列出前 100 处）" : ""}`, `Found in ${result.docs} ${result.docs === 1 ? "document" : "documents"}${result.capped ? " (showing the first 100 matches)" : ""}`);
 }
 
 function SearchResults(props: { onPicked: () => void }) {
   const titleOf = (id: string) => {
     const doc = allDocs().find((d) => d.id === id);
-    return doc ? displayName(doc) || "未命名" : "（已删除）";
+    return doc ? displayName(doc) || t("未命名", "Untitled") : t("（已删除）", "(Deleted)");
   };
   const done = () => {
     const s = panel.search();
@@ -164,7 +165,7 @@ function SearchResults(props: { onPicked: () => void }) {
                   <View
                     testID={`hit-${index()}`}
                     role="button"
-                    accessibilityLabel={`${titleOf(hit().id)}：${hit().snippet}`}
+                    accessibilityLabel={t(`${titleOf(hit().id)}：${hit().snippet}`, `${titleOf(hit().id)}: ${hit().snippet}`)}
                     onPress={() => {
                       requestLibrary({ kind: "open", id: hit().id, find: found().query });
                       props.onPicked();

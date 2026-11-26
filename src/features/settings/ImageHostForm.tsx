@@ -1,4 +1,5 @@
 /** 图床表单：设置页「存储」和「设置图床」对话框共用。布局见 DESIGN.md「屏幕：设置」的「图床表单」。 */
+import { type Phrase, phrase, t } from "../../i18n";
 import { type JSX, type Signal, signal, Text, View } from "nsh";
 import { Input } from "nsh/base";
 import { messageOf } from "../../doc/message";
@@ -43,12 +44,12 @@ function DraftInput(props: { draft: Draft; name: keyof HostDraft; label: string;
 function KindPicker(props: { kind: Signal<HostKind> }) {
   const option = (kind: HostKind, label: string) => {
     const on = () => props.kind() === kind;
-    return <Button testID={`image-host-kind-${kind}`} label={on() ? `✓ ${label}` : label} accessibilityLabel={on() ? `${label}（当前）` : label} active={on()} onPress={() => props.kind.set(kind)} />;
+    return <Button testID={`image-host-kind-${kind}`} label={on() ? `✓ ${label}` : label} accessibilityLabel={on() ? t(`${label}（当前）`, `${label} (current)`) : label} active={on()} onPress={() => props.kind.set(kind)} />;
   };
   return (
-    <View accessibilityLabel="图床种类" class="flex-row flex-wrap gap-1">
-      {option("upload", "上传接口")}
-      {option("github", "GitHub 仓库")}
+    <View accessibilityLabel={t("图床种类", "Image host type")} class="flex-row flex-wrap gap-1">
+      {option("upload", t("上传接口", "Upload endpoint"))}
+      {option("github", t("GitHub 仓库", "GitHub repository"))}
     </View>
   );
 }
@@ -57,13 +58,13 @@ function KindPicker(props: { kind: Signal<HostKind> }) {
 function UploadFields(props: { draft: Draft; headerNames: string[] }) {
   return (
     <>
-      <Labeled label="上传地址">
-        <DraftInput draft={props.draft} name="url" label="上传地址" placeholder="https://example.com/upload" testID="image-host-url" autoFocus />
+      <Labeled label={t("上传地址", "Upload URL")}>
+        <DraftInput draft={props.draft} name="url" label={t("上传地址", "Upload URL")} placeholder="https://example.com/upload" testID="image-host-url" autoFocus />
       </Labeled>
-      <Labeled label="文件字段名">
-        <DraftInput draft={props.draft} name="field" label="文件字段名" placeholder="file" testID="image-host-field" />
+      <Labeled label={t("文件字段名", "File field name")}>
+        <DraftInput draft={props.draft} name="field" label={t("文件字段名", "File field name")} placeholder="file" testID="image-host-field" />
       </Labeled>
-      <Labeled label="请求头（可选，一行一个「名字: 值」）">
+      <Labeled label={t("请求头（可选，一行一个「名字: 值」）", "Request headers (optional, one Name: Value per line)")}>
         <Input
           testID="image-host-headers"
           value={props.draft().headers}
@@ -71,19 +72,19 @@ function UploadFields(props: { draft: Draft; headerNames: string[] }) {
           multiline
           submitBehavior="newline"
           placeholder="Authorization: Bearer xxx"
-          accessibilityLabel="请求头"
+          accessibilityLabel={t("请求头", "Request headers")}
           autoCapitalize="none"
           autoCorrect={false}
           class="h-[72px] rounded-(--radius-sm) border border-input bg-background px-2 py-1 font-mono text-[12px] leading-5 text-foreground placeholder:text-faint focus:border-primary"
         />
         <If when={props.headerNames.length > 0}>
           <Text testID="image-host-header-names" class={NOTE}>
-            {`已设置：${props.headerNames.join("、")}（值不显示）。留空就不改，填了就整个换掉；要去掉已设置的，先「不再用图床」再重新设置。`}
+            {t(`已设置：${props.headerNames.join("、")}（值不显示）。留空就不改，填了就整个换掉；要去掉已设置的，先「不再用图床」再重新设置。`, `Configured headers: ${props.headerNames.join(", ")}. Leave blank to keep them, or enter a complete replacement. To remove them, turn off image hosting and set it up again.`)}
           </Text>
         </If>
       </Labeled>
-      <Labeled label="返回里图片地址的位置（可选）">
-        <DraftInput draft={props.draft} name="urlPath" label="返回里图片地址的位置" placeholder="留空自动找，比如 data.url" testID="image-host-path" />
+      <Labeled label={t("返回里图片地址的位置（可选）", "Image URL path in response (optional)")}>
+        <DraftInput draft={props.draft} name="urlPath" label={t("返回里图片地址的位置", "Image URL path in response")} placeholder={t("留空自动找，比如 data.url", "Leave blank for automatic detection, or enter a path such as data.url")} testID="image-host-path" />
       </Labeled>
     </>
   );
@@ -93,18 +94,18 @@ function UploadFields(props: { draft: Draft; headerNames: string[] }) {
 function GithubFields(props: { draft: Draft; hasToken: boolean }) {
   return (
     <>
-      <Text class={NOTE}>图片提交到这个仓库，正文写 raw.githubusercontent.com 的地址，所以仓库要是公开的。令牌建议用 fine-grained token，只给这一个仓库的 Contents 读写权限；它存在本机网关的配置里，页面读不回。</Text>
-      <Labeled label="仓库（用户/仓库）">
-        <DraftInput draft={props.draft} name="repo" label="仓库" placeholder="octocat/images" testID="image-host-repo" autoFocus />
+      <Text class={NOTE}>{t("图片提交到这个仓库，正文写 raw.githubusercontent.com 的地址，所以仓库要是公开的。令牌建议用 fine-grained token，只给这一个仓库的 Contents 读写权限；它存在本机网关的配置里，页面读不回。", "Use a public repository because documents link to images on raw.githubusercontent.com. Use a fine-grained token with Contents read and write permission for this repository only. The gateway stores the token locally.")}</Text>
+      <Labeled label={t("仓库（用户/仓库）", "Repository (owner/repo)")}>
+        <DraftInput draft={props.draft} name="repo" label={t("仓库", "Repository")} placeholder="octocat/images" testID="image-host-repo" autoFocus />
       </Labeled>
-      <Labeled label="分支">
-        <DraftInput draft={props.draft} name="branch" label="分支" placeholder="main" testID="image-host-branch" />
+      <Labeled label={t("分支", "Branch")}>
+        <DraftInput draft={props.draft} name="branch" label={t("分支", "Branch")} placeholder="main" testID="image-host-branch" />
       </Labeled>
-      <Labeled label="目录">
-        <DraftInput draft={props.draft} name="dir" label="目录" placeholder="images" testID="image-host-dir" />
+      <Labeled label={t("目录", "Directory")}>
+        <DraftInput draft={props.draft} name="dir" label={t("目录", "Directory")} placeholder="images" testID="image-host-dir" />
       </Labeled>
-      <Labeled label="令牌">
-        <DraftInput draft={props.draft} name="token" label="令牌" placeholder={props.hasToken ? "已设置，留空就不改" : "github_pat_…"} testID="image-host-token" masked />
+      <Labeled label={t("令牌", "Token")}>
+        <DraftInput draft={props.draft} name="token" label={t("令牌", "Token")} placeholder={props.hasToken ? t("已设置，留空就不改", "Configured. Leave blank to keep it") : "github_pat_…"} testID="image-host-token" masked />
       </Labeled>
     </>
   );
@@ -117,13 +118,13 @@ function GithubFields(props: { draft: Draft; hasToken: boolean }) {
 export function ImageHostForm(props: { current: ImageHostView | null; saveLabel: string; onSaved: () => void; children?: JSX.Element }) {
   const kind = signal<HostKind>(kindOf(props.current));
   const draft = signal<HostDraft>(draftOf(props.current));
-  const problem = signal("");
+  const problem = signal<Phrase>("");
   const saving = signal(false);
   const save = async () => {
     const input = toInput(kind(), draft(), props.current);
     if (typeof input === "string") return problem.set(input);
     const api = imageHost();
-    if (!api) return problem.set("要连着本机网关才能设置图床");
+    if (!api) return problem.set(() => t("要连着本机网关才能设置图床", "Connect the local gateway to configure image hosting."));
     problem.set("");
     saving.set(true);
     try {
@@ -131,7 +132,7 @@ export function ImageHostForm(props: { current: ImageHostView | null; saveLabel:
       props.onSaved();
     } catch (e) {
       console.error("image host not saved", e);
-      problem.set(`没能保存：${messageOf(e)}`);
+      problem.set(() => t(`没能保存：${messageOf(e)}`, `Could not save: ${messageOf(e)}`));
     } finally {
       saving.set(false);
     }
@@ -146,13 +147,13 @@ export function ImageHostForm(props: { current: ImageHostView | null; saveLabel:
       <If when={problem()}>
         {(text) => (
           <Text testID="image-host-problem" role="alert" class="select-text text-xs leading-5 text-destructive">
-            {text()}
+            {phrase(text())}
           </Text>
         )}
       </If>
       <View class="flex-row flex-wrap justify-end gap-1">
         {props.children}
-        <Button testID="image-host-save" label={saving() ? "正在保存…" : props.saveLabel} variant="primary" disabled={saving()} onPress={() => void save()} />
+        <Button testID="image-host-save" label={saving() ? t("正在保存…", "Saving…") : props.saveLabel} variant="primary" disabled={saving()} onPress={() => void save()} />
       </View>
     </View>
   );

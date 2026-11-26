@@ -1,4 +1,5 @@
-import { expect, open, test } from "nsh/test";
+import { expect, open as openDefault, test } from "nsh/test";
+import { open } from "./fixtures/chinese-open";
 // 旧版（单篇）的正文键：存进去的那篇启动时原地成为文档库的第一篇，测试照旧在这里读写
 import { LEGACY_DOC_KEY as DOC_KEY } from "../src/store/kv";
 import { SETTINGS_KEY } from "../src/store/settings";
@@ -45,7 +46,7 @@ test("a rebound shortcut works, the old key stops working, and the choice is sto
   await done(app);
   expect(await typeAfter(app, "mod+b")).toBe("xhello\n");
   expect(await typeAfter(app, "mod+alt+b")).toBe("x**x**hello\n");
-  expect(JSON.parse(app.storage()[SETTINGS_KEY] ?? "{}")).toEqual({ shortcuts: { "format.bold": "Mod-Alt-b" } });
+  expect(JSON.parse(app.storage()[SETTINGS_KEY] ?? "{}")).toEqual({ locale: "zh-CN", shortcuts: { "format.bold": "Mod-Alt-b" } });
 });
 
 test("text typed before changing a shortcut is still there after the editor reloads", async () => {
@@ -87,7 +88,7 @@ test("restoring a changed shortcut brings the default key back", async () => {
   await app.press("id:shortcut-restore-format.bold");
   await done(app);
   expect(await typeAfter(app, "mod+b")).toBe("**x**hello\n");
-  expect(JSON.parse(app.storage()[SETTINGS_KEY] ?? "{}")).toEqual({ shortcuts: {} });
+  expect(JSON.parse(app.storage()[SETTINGS_KEY] ?? "{}")).toEqual({ locale: "zh-CN", shortcuts: {} });
 });
 
 test("a command without a default key can be given one", async () => {
@@ -101,9 +102,11 @@ test("a command without a default key can be given one", async () => {
 });
 
 test("broken stored settings do not stop the app: defaults apply", async () => {
-  const app = await openApp("hello\n", "{not json");
+  const app = await openDefault("../App.tsx", { ...WEB, storage: { [DOC_KEY]: "hello\n", [SETTINGS_KEY]: "{not json" } });
   await app.waitFor("text:hello");
-  expect(await typeAfter(app, "mod+b")).toBe("**x**hello\n");
+  await app.keyboard.press("mod+b");
+  await app.type("label:Body", "x");
+  expect(await saved(app)).toBe("**x**hello\n");
 });
 
 test("shortcuts do not run while the settings dialog is open", async () => {
@@ -175,7 +178,7 @@ test("clearing a shortcut leaves the command without a key", async () => {
   await app.press("id:shortcut-clear-format.bold");
   await done(app);
   expect(await typeAfter(app, "mod+b")).toBe("xhello\n");
-  expect(JSON.parse(app.storage()[SETTINGS_KEY] ?? "{}")).toEqual({ shortcuts: { "format.bold": null } });
+  expect(JSON.parse(app.storage()[SETTINGS_KEY] ?? "{}")).toEqual({ locale: "zh-CN", shortcuts: { "format.bold": null } });
 });
 
 test("one Escape closes settings opened with Mod+, while the document has the focus, on macOS too", async () => {

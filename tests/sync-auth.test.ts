@@ -1,6 +1,10 @@
 import { expect, test } from "nsh/test";
-import { authorizeUrl, checkState, codeChallenge, exchangeCode, parseCallback, pollDeviceToken, randomVerifier, requestDeviceCode, STATE_TTL, withoutCallback } from "../src/sync/auth";
+import { authorizeUrl, checkState, codeChallenge, exchangeCode, parseCallback, pollDeviceToken, type PollResult, randomVerifier, requestDeviceCode, STATE_TTL, withoutCallback } from "../src/sync/auth";
+import { phrase } from "../src/i18n";
 import { SyncError } from "../src/sync/github";
+
+/** 失败原因是按界面语言显示的文字：比较时取它现在显示的那句。 */
+const shown = (r: PollResult) => (r.kind === "failed" ? { ...r, message: phrase(r.message) } : r);
 
 const CODE = { deviceCode: "dev-1", userCode: "WDJB-MJHT", verificationUri: "https://github.com/login/device", expiresIn: 900, interval: 5 };
 
@@ -58,10 +62,10 @@ test("slow_down without a new interval adds 5 seconds", async () => {
 });
 
 test("an expired code, a cancel on GitHub, and a disabled device flow each stop with a reason", async () => {
-  expect(await polling([{ error: "expired_token" }]).run()).toEqual({ kind: "failed", message: "验证码过期了，重新点「用 GitHub 登录」拿一个新的。" });
-  expect(await polling([{ error: "access_denied" }]).run()).toEqual({ kind: "failed", message: "在 GitHub 上取消了授权，没有登录。" });
+  expect(shown(await polling([{ error: "expired_token" }]).run())).toEqual({ kind: "failed", message: "The verification code expired. Select “Sign in with GitHub” to request another one." });
+  expect(shown(await polling([{ error: "access_denied" }]).run())).toEqual({ kind: "failed", message: "Authorization was canceled on GitHub. You weren’t signed in." });
   const disabled = await polling([{ error: "device_flow_disabled" }]).run();
-  expect(disabled.kind === "failed" && disabled.message.includes("Device Flow")).toBe(true);
+  expect(disabled.kind === "failed" && phrase(disabled.message).includes("Device Flow")).toBe(true);
 });
 
 test("polling past the code's lifetime stops as expired, and a cancel stops it quietly", async () => {
@@ -76,7 +80,7 @@ test("a blip in the network while waiting is tolerated a couple of times; three 
   const blips = polling(["offline", { error: "authorization_pending" }, "offline", "offline", { access_token: "test-token-y" }]);
   expect(await blips.run()).toEqual({ kind: "token", token: "test-token-y" });
   const down = await polling(["offline", "offline", "offline", { access_token: "never" }]).run();
-  expect(down.kind === "failed" && down.message.includes("网络")).toBe(true);
+  expect(down.kind === "failed" && phrase(down.message).includes("Check your connection")).toBe(true);
 });
 
 test("the authorize page asks for gist with the state, the redirect back to the page, and a PKCE S256 challenge", async () => {
@@ -107,9 +111,9 @@ test("the page address after GitHub is read for code / error and cleaned of them
 test("the state must have been saved here, be fresh, and match", () => {
   const saved = { state: "s1", at: 1000 };
   expect(checkState(saved, "s1", 2000)).toBe(null);
-  expect(checkState(saved, "s2", 2000)?.includes("对不上")).toBe(true);
-  expect(checkState(saved, "s1", 1000 + STATE_TTL + 1)?.includes("过期")).toBe(true);
-  expect(checkState(null, "s1", 2000)?.includes("不是从这个页面发起")).toBe(true);
+  expect(checkState(saved, "s2", 2000)?.includes("did not match")).toBe(true);
+  expect(checkState(saved, "s1", 1000 + STATE_TTL + 1)?.includes("expired")).toBe(true);
+  expect(checkState(null, "s1", 2000)?.includes("started on another page")).toBe(true);
   expect(checkState(saved, "", 2000) === null).toBe(false);
 });
 

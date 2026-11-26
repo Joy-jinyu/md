@@ -1,4 +1,5 @@
-import { expect, open, test } from "nsh/test";
+import { expect, test } from "nsh/test";
+import { open } from "./fixtures/chinese-open";
 import { RICH_MAX_CHARS, RICH_MAX_LINES, RICH_MAX_TABLE_ROWS } from "../src/features/editor/EditorScreen";
 import { linkTarget } from "../src/features/editor/links";
 // 旧版（单篇）的正文键：存进去的那篇启动时原地成为文档库的第一篇，测试照旧在这里读写

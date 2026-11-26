@@ -1,4 +1,5 @@
 /** 平台差异的唯一位置：features 只引这里导出的值。 */
+import { type Phrase, t } from "../i18n";
 import { cleanup, keymap, platform } from "nsh";
 import { Application, currentWindow, Menu, type WindowRef } from "nsh/desktop";
 import type { FileLibrary } from "../store/backend";
@@ -17,24 +18,19 @@ export const IN_BROWSER = platform.name === "web";
 /** 有鼠标、能悬停（macOS、桌面浏览器）。手机和平板的浏览器没有悬停，靠悬停才出现的按钮在那里要常驻。 */
 export const CAN_HOVER = platform.desktop;
 
+function systemKey(zh: string, en: string, keys: string[]) {
+  return { get label() { return t(zh, en); }, keys };
+}
+
 /** 由系统和编辑器内核管、应用不改的键，设置页里列出来给人查。键用 keymap 的写法，多个写法用数组。 */
-export const SYSTEM_KEYS: { label: string; keys: string[] }[] = appleKeys
-  ? [
-      { label: "到行首 / 行尾", keys: ["mod+arrowleft", "mod+arrowright", "home", "end"] },
-      { label: "按词移动", keys: ["alt+arrowleft", "alt+arrowright"] },
-      { label: "到文首 / 文末", keys: ["mod+arrowup", "mod+arrowdown"] },
-      { label: "全选", keys: ["mod+a"] },
-      { label: "撤销 / 重做", keys: ["mod+z", "mod+shift+z"] },
-      { label: "复制 / 剪切 / 粘贴", keys: ["mod+c", "mod+x", "mod+v"] },
-    ]
-  : [
-      { label: "到行首 / 行尾", keys: ["home", "end"] },
-      { label: "按词移动", keys: ["mod+arrowleft", "mod+arrowright"] },
-      { label: "到文首 / 文末", keys: ["mod+home", "mod+end"] },
-      { label: "全选", keys: ["mod+a"] },
-      { label: "撤销 / 重做", keys: ["mod+z", "mod+y"] },
-      { label: "复制 / 剪切 / 粘贴", keys: ["mod+c", "mod+x", "mod+v"] },
-    ];
+export const SYSTEM_KEYS = [
+  systemKey("到行首 / 行尾", "Start / end of line", appleKeys ? ["mod+arrowleft", "mod+arrowright", "home", "end"] : ["home", "end"]),
+  systemKey("按词移动", "Move by word", appleKeys ? ["alt+arrowleft", "alt+arrowright"] : ["mod+arrowleft", "mod+arrowright"]),
+  systemKey("到文首 / 文末", "Start / end of document", appleKeys ? ["mod+arrowup", "mod+arrowdown"] : ["mod+home", "mod+end"]),
+  systemKey("全选", "Select all", ["mod+a"]),
+  systemKey("撤销 / 重做", "Undo / redo", appleKeys ? ["mod+z", "mod+shift+z"] : ["mod+z", "mod+y"]),
+  systemKey("复制 / 剪切 / 粘贴", "Copy / cut / paste", ["mod+c", "mod+x", "mod+v"]),
+];
 
 /**
  * 源码编辑器里移动光标的键（keymap 的写法）→ 编辑器命令。nsh 0.6.0 的源码编辑器在 web host 上自己不处理这几个键
@@ -76,7 +72,7 @@ export const PLAIN_PASTE_KEY = platform.name === "macos" ? "Mod-Shift-v" : null;
 
 /** 另存的结果：一句「存到哪了」；`confirmed` 是能不能确定文件已经落盘。 */
 export interface SavedFile {
-  message: string;
+  message: Phrase;
   confirmed: boolean;
 }
 
@@ -88,9 +84,10 @@ export interface SavedFile {
 export async function saveTextFile(name: string, text: string, type?: string): Promise<SavedFile> {
   if (IN_BROWSER) {
     downloadText(name, text, type);
-    return { message: `已交给浏览器下载：${name}`, confirmed: false };
+    return { message: () => t(`已交给浏览器下载：${name}`, `Download sent to your browser: ${name}`), confirmed: false };
   }
-  return { message: `已存到 ${await saveToDownloads(name, text)}`, confirmed: true };
+  const path = await saveToDownloads(name, text);
+  return { message: () => t(`已存到 ${path}`, `Saved to ${path}`), confirmed: true };
 }
 
 /**
@@ -197,11 +194,41 @@ const showingWindow = (commands: MenuCommand[]): MenuCommand[] =>
 export function setMenuBar(file: MenuCommand[], view: MenuCommand[]) {
   if (platform.name !== "macos") return;
   Menu.setApplicationMenu([
-    { label: "Pairdown", submenu: [{ role: "about" }, { type: "separator" }, { role: "hide" }, { role: "hideOthers" }, { role: "showAll" }, { type: "separator" }, { role: "quit" }] },
-    { label: "文件", submenu: showingWindow(file) },
-    { label: "编辑", submenu: [{ role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" }] },
-    { label: "视图", submenu: showingWindow(view) },
-    { label: "窗口", submenu: [{ role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "toggleFullScreen" }] },
+    {
+      label: "Pairdown",
+      submenu: [
+        { role: "about", label: t("关于 Pairdown", "About Pairdown") },
+        { type: "separator" },
+        { role: "hide", label: t("隐藏 Pairdown", "Hide Pairdown") },
+        { role: "hideOthers", label: t("隐藏其他", "Hide Others") },
+        { role: "showAll", label: t("全部显示", "Show All") },
+        { type: "separator" },
+        { role: "quit", label: t("退出 Pairdown", "Quit Pairdown") },
+      ],
+    },
+    { label: t("文件", "File"), submenu: showingWindow(file) },
+    {
+      label: t("编辑", "Edit"),
+      submenu: [
+        { role: "undo", label: t("撤销", "Undo") },
+        { role: "redo", label: t("重做", "Redo") },
+        { type: "separator" },
+        { role: "cut", label: t("剪切", "Cut") },
+        { role: "copy", label: t("复制", "Copy") },
+        { role: "paste", label: t("粘贴", "Paste") },
+        { role: "selectAll", label: t("全选", "Select All") },
+      ],
+    },
+    { label: t("视图", "View"), submenu: showingWindow(view) },
+    {
+      label: t("窗口", "Window"),
+      submenu: [
+        { role: "minimize", label: t("最小化", "Minimize") },
+        { role: "zoom", label: t("缩放", "Zoom") },
+        { type: "separator" },
+        { role: "toggleFullScreen", label: t("切换全屏", "Toggle Full Screen") },
+      ],
+    },
   ]);
 }
 
@@ -228,7 +255,7 @@ export function droppedPaths(uris: string[]): string[] {
 
 /** 拖进窗口、从访达复制来的本地图片（绝对路径）的字节：只有 macOS 应用拿得到路径；读不了（不在文库和「下载」里）抛错。 */
 export function readImageFile(path: string): Promise<Uint8Array> {
-  if (platform.name !== "macos") return Promise.reject(new Error("这里读不了本地文件"));
+  if (platform.name !== "macos") return Promise.reject(new Error(t("这里读不了本地文件", "Local files cannot be read here")));
   return readFileBytes(path);
 }
 

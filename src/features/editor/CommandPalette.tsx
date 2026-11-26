@@ -1,9 +1,10 @@
 /** 命令面板（Cmd+Shift+P）：所有现在能用的命令，加上最近的几篇文档、跳到某个标题。 */
 import { Text, untracked, View } from "nsh";
 import { Command, type CommandItem, Dialog } from "nsh/base";
+import { t } from "../../i18n";
 import { allDocs, currentDocId, displayName } from "../../store/library";
 import { requestLibrary } from "../library/requests";
-import { type AppCommand, available, type CommandContext, COMMANDS } from "./commands";
+import { type AppCommand, available, type CommandContext, commandGroupLabel, COMMANDS } from "./commands";
 import { keyOf } from "./keybindings";
 import { toKeymapName } from "./keys";
 import type { HeadingEntry } from "./outline";
@@ -19,7 +20,7 @@ function recentDocs(): CommandItem[] {
     .filter((d) => d.id !== currentDocId())
     .sort((a, b) => b.updatedAt - a.updatedAt)
     .slice(0, RECENT_DOCS);
-  return recent.map((d) => ({ id: `${DOC_PREFIX}${d.id}`, label: displayName(d) || "未命名", keywords: [d.name], group: "最近文档" }));
+  return recent.map((d) => ({ id: `${DOC_PREFIX}${d.id}`, label: displayName(d) || t("未命名", "Untitled"), keywords: [d.name], group: t("最近文档", "Recent documents") }));
 }
 
 function items(ctx: CommandContext, headings: HeadingEntry[]): CommandItem[] {
@@ -27,10 +28,10 @@ function items(ctx: CommandContext, headings: HeadingEntry[]): CommandItem[] {
     id: c.id,
     label: c.label,
     keywords: c.keywords,
-    group: c.group,
+    group: commandGroupLabel(c.group),
     shortcut: keyOf(c) ? toKeymapName(keyOf(c) as string) : null,
   }));
-  const jumps = headings.map((h, i) => ({ id: `${HEADING_PREFIX}${i}`, label: h.text || "（空标题）", group: "标题" }));
+  const jumps = headings.map((h, i) => ({ id: `${HEADING_PREFIX}${i}`, label: h.text || t("（空标题）", "(Empty heading)"), group: t("标题", "Heading") }));
   return [...commands, ...recentDocs(), ...jumps];
 }
 
@@ -78,7 +79,7 @@ export function CommandPalette(props: {
       testID="palette"
       open={open()}
       animation="fade"
-      accessibilityLabel="命令面板"
+      accessibilityLabel={t("命令面板", "Command Palette")}
       closeOnEscape
       closeOnBackdropPress
       onOpenChange={({ open: next }) => !next && close()}
@@ -89,8 +90,8 @@ export function CommandPalette(props: {
         <Command
           items={list()}
           autoFocus
-          placeholder="输入命令或标题…"
-          accessibilityLabel="命令"
+          placeholder={t("输入命令或标题…", "Type a command or heading…")}
+          accessibilityLabel={t("命令", "Command")}
           onSelect={({ id }) => select(id)}
           onCancel={() => close()}
           searchBarClass="border-b border-border px-3"
@@ -106,7 +107,7 @@ export function CommandPalette(props: {
               <If when={entry.shortcutLabel}>{(label) => <Text class="text-[11px] text-faint">{label()}</Text>}</If>
             </View>
           )}
-          empty={<Text class="px-3 py-4 text-xs text-faint">没有匹配的命令</Text>}
+          empty={<Text class="px-3 py-4 text-xs text-faint">{t("没有匹配的命令", "No matching commands")}</Text>}
         />
       </View>
     </Dialog>

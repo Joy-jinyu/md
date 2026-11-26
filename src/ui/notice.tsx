@@ -1,4 +1,5 @@
 /** 顶栏下面的一条提示（超大文档、读入失败、文件存到哪了）：浅底、小字，整条宽。 */
+import { t } from "../i18n";
 import { Text, View } from "nsh";
 import { CopyButton } from "./copy-button";
 import { IconButton } from "./icon-button";
@@ -16,9 +17,9 @@ export function Notice(props: { message: string; testID?: string; tone?: "warn" 
         {props.message}
       </Text>
       <If when={props.copyable}>
-        <CopyButton testID={props.testID ? `${props.testID}-copy` : undefined} text={props.message} label="复制这条提示" />
+        <CopyButton testID={props.testID ? `${props.testID}-copy` : undefined} text={props.message} label={t("复制这条提示", "Copy this notice")} />
       </If>
-      <If when={props.onDismiss}>{(dismiss) => <IconButton testID={props.testID ? `${props.testID}-dismiss` : undefined} icon="close" label="关掉这条提示" onPress={dismiss()} />}</If>
+      <If when={props.onDismiss}>{(dismiss) => <IconButton testID={props.testID ? `${props.testID}-dismiss` : undefined} icon="close" label={t("关掉这条提示", "Dismiss this notice")} onPress={dismiss()} />}</If>
     </View>
   );
 }

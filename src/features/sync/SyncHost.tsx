@@ -3,6 +3,7 @@
  * 窗口回到前台时重读登录（别的标签页可能刚登录、退出或换了账号：换了就清掉上一个账号的待选事项）。
  * `reload`：同步把开着的这篇换成了 GitHub 上的内容，编辑页要重新载入。
  */
+import { t } from "../../i18n";
 import { effect, lifecycle, untracked } from "nsh";
 import { messageOf } from "../../doc/message";
 import { SIGN_IN_FLOW } from "../../platform";
@@ -23,7 +24,7 @@ async function completeWebLogin() {
   setPageUrl(withoutCallback(here));
   try {
     const login = await finishWebLogin(callback);
-    say(`已登录 GitHub：@${login}。从这一页打开的登录，原来那一页回到前台时也会变成已登录。`, "info");
+    say(() => t(`已登录 GitHub：@${login}。从这一页打开的登录，原来那一页回到前台时也会变成已登录。`, `Signed in to GitHub as @${login}. If you started in another tab, it will pick up the sign-in when you return to it.`), "info");
     syncOpen.set(true);
     await discoverRemote();
   } catch (e) {

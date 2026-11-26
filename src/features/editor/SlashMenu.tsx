@@ -1,6 +1,7 @@
 /** 斜杠菜单：在正文里打 `/` 弹出，接着打字过滤，上下键选，回车或 Tab 确定。 */
 import { keymap, signal, Text, View, windowSize } from "nsh";
 import { deleteRange, type RichEditorSession, setSuggestionOpen } from "nsh/base";
+import { t } from "../../i18n";
 import { type AppCommand, filterCommands, SLASH_COMMANDS } from "./commands";
 import { keyOf } from "./keybindings";
 import { toKeymapName } from "./keys";
@@ -75,7 +76,7 @@ export function SlashMenu(props: { slash: SlashState }) {
   const roomy = () => windowSize().width >= MENU_WIDTH * 2 + 32;
   return (
     <View style={{ pointerEvents: "box-none", width: roomy() ? MENU_WIDTH * 2 : MENU_WIDTH }} class="items-end">
-      <View testID="slash-menu" accessibilityLabel="插入" style={{ width: MENU_WIDTH }} class="rounded-(--radius) border border-border bg-popover p-1 shadow-md">
+      <View testID="slash-menu" accessibilityLabel={t("插入", "Insert")} style={{ width: MENU_WIDTH }} class="rounded-(--radius) border border-border bg-popover p-1 shadow-md">
         <Each of={rows()} key={(c) => c.id}>
           {(c) => (
             <View
