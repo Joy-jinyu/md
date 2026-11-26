@@ -2,8 +2,11 @@
 import { Text, type ViewRef } from "nsh";
 import { Button as BaseButton } from "nsh/base";
 
-/** primary：一组里唯一的默认操作（回车对应的那个）。ghost：顶栏、弹层里的安静操作。 */
-export type ButtonVariant = "primary" | "ghost";
+/**
+ * primary：一组里唯一的默认操作（回车对应的那个）。ghost：顶栏、弹层里的安静操作。
+ * outline：页面里单独放着、要让人看出能点的操作（设置页的「复制到文库」）。danger：outline 的样子、`destructive` 字，删掉或关掉一样东西。
+ */
+export type ButtonVariant = "primary" | "ghost" | "outline" | "danger";
 
 export interface ButtonProps {
   label: string;
@@ -37,7 +40,8 @@ export function Button(props: ButtonProps) {
         "opacity-45": !!props.disabled,
         "bg-primary": v() === "primary",
         "hover:opacity-90": v() === "primary" && !props.disabled,
-        "hover:bg-hover active:bg-pressed": v() === "ghost" && !props.disabled,
+        "hover:bg-hover active:bg-pressed": v() !== "primary" && !props.disabled,
+        "border border-input bg-background": v() === "outline" || v() === "danger",
       }}
     >
       <Text
@@ -45,8 +49,9 @@ export function Button(props: ButtonProps) {
         class={`text-xs font-medium ${props.labelClass ?? ""}`}
         classList={{
           "text-primary-foreground": v() === "primary",
-          "text-foreground": v() === "ghost" && !props.active,
-          "text-primary": v() === "ghost" && !!props.active,
+          "text-foreground": (v() === "ghost" || v() === "outline") && !props.active,
+          "text-primary": (v() === "ghost" || v() === "outline") && !!props.active,
+          "text-destructive": v() === "danger",
         }}
       >
         {props.label}

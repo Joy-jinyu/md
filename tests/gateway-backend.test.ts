@@ -1,5 +1,6 @@
 import { Storage } from "nsh";
 import { expect, test } from "nsh/test";
+import { changeLocale } from "../src/i18n";
 import { followStoreChanges } from "../src/features/library/external";
 import { beginSwitch, chooseBackend, documentStore, gatewayRefusal, missedGatewayLibrary, pinBackend, storageKind, useGateway } from "../src/store/backend";
 import { flush, markChanged, openDocument, saveState } from "../src/store/document";
@@ -29,6 +30,14 @@ test("when the gateway refuses this page, the browser storage is used and the re
   await chooseBackend(null, true, gw.connect);
   expect(storageKind().kind).toBe("local");
   expect(gatewayRefusal()).toContain("--origin");
+  // 原因跟着界面语言变：设置页一直显示它
+  try {
+    await changeLocale("zh-CN");
+    expect(gatewayRefusal()).toContain("网关拒绝了这个页面的来源");
+  } finally {
+    await changeLocale("en");
+  }
+  expect(gatewayRefusal()).toContain("The gateway rejected this page’s origin");
 });
 
 test("when the gateway used last time is not there, the browser storage is used, it is pointed out, and the last opened document is kept", async () => {

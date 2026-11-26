@@ -44,6 +44,8 @@ async function markdownMatching(app: App, pattern: RegExp) {
 }
 
 const receiptSays = (app: App, words: string) => app.texts().some((t) => t.includes(words));
+/** 设置页「当前图床」里的一项（名字和值分两列，读屏连起来读「名字：值」）。 */
+const fieldSays = (app: App, line: string) => app.shows(`label:${line}`);
 
 async function openStorageSettings(app: App) {
   await app.press("id:open-settings");
@@ -74,8 +76,9 @@ test("without an image host, pasting asks to set one; saving it uploads this ima
   expect(await markdownMatching(app, /img\.example/)).toBe("# A\n\nbody![](https://img.example.com/up1.png)\n");
   await openStorageSettings(app);
   await app.waitFor("id:image-host-current");
-  expect(receiptSays(app, "上传地址：https://up.example.com/api")).toBe(true);
-  expect(receiptSays(app, "请求头：Authorization（值不显示）")).toBe(true);
+  expect(fieldSays(app, "上传地址：https://up.example.com/api")).toBe(true);
+  expect(app.shows("id:image-host-current >> text:https://up.example.com/api")).toBe(true);
+  expect(fieldSays(app, "请求头：Authorization（值不显示）")).toBe(true);
   expect(app.texts().some((t) => t.includes("secret"))).toBe(false);
 });
 
@@ -146,15 +149,15 @@ test("the storage settings show the image host, and it can be changed and cleare
   const app = await openOnGateway({ imageHost: HOST });
   await openStorageSettings(app);
   await app.waitFor("id:image-host-current");
-  expect(receiptSays(app, "文件字段名：file")).toBe(true);
-  expect(receiptSays(app, "图片地址的位置：自动找")).toBe(true);
+  expect(fieldSays(app, "文件字段名：file")).toBe(true);
+  expect(fieldSays(app, "图片地址的位置：自动找")).toBe(true);
   await app.press("id:image-host-edit");
   await app.waitFor("id:image-host-header-names");
   await app.clear("label:文件字段名");
   await app.type("label:文件字段名", "image");
   await app.press("id:image-host-save");
-  await app.waitFor("text:文件字段名：image");
-  expect(receiptSays(app, "请求头：Authorization（值不显示）")).toBe(true);
+  await app.waitFor("label:文件字段名：image");
+  expect(fieldSays(app, "请求头：Authorization（值不显示）")).toBe(true);
   await app.press("id:image-host-stop");
   await app.waitFor("text:没有设置图床，图片存在文档旁边的 assets/ 里。");
   await app.press("id:settings-done");
@@ -191,21 +194,21 @@ test("GitHub repository: picking it in the dialog checks the repository and asks
   await app.waitUntil(() => !app.shows("id:image-host-ask"), { timeout: 3000 });
   expect(await markdownMatching(app, /raw\.githubusercontent/)).toBe("# A\n\nbody![](https://raw.githubusercontent.com/me/pics/main/images/up1.png)\n");
   await openStorageSettings(app);
-  await app.waitFor("text:GitHub 仓库：me/pics");
-  for (const line of ["分支：main", "目录：images", "令牌：已设置（值不显示）"]) expect(receiptSays(app, line)).toBe(true);
+  await app.waitFor("label:GitHub 仓库：me/pics");
+  for (const line of ["分支：main", "目录：images", "令牌：已设置（值不显示）"]) expect(fieldSays(app, line)).toBe(true);
   expect(receiptSays(app, GOOD_TOKEN)).toBe(false);
 });
 
 test("GitHub repository: changing the branch with the token left empty keeps the saved token", async () => {
   const app = await openOnGateway({ imageHost: GITHUB, githubToken: GOOD_TOKEN });
   await openStorageSettings(app);
-  await app.waitFor("text:GitHub 仓库：me/pics");
+  await app.waitFor("label:GitHub 仓库：me/pics");
   await app.press("id:image-host-edit");
   expect(app.shows("label:GitHub 仓库（当前）")).toBe(true);
   await app.clear("label:分支");
   await app.type("label:分支", "pages");
   await app.press("id:image-host-save");
-  await app.waitFor("text:分支：pages");
+  await app.waitFor("label:分支：pages");
   await app.press("id:settings-done");
   await pasteAndUpload(app);
   expect(await markdownMatching(app, /raw\.githubusercontent/)).toBe("# A\n\nbody![](https://raw.githubusercontent.com/me/pics/pages/images/up1.png)\n");

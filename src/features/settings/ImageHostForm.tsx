@@ -1,4 +1,4 @@
-/** 图床表单：设置页「存储」和「设置图床」对话框共用。布局见 DESIGN.md「屏幕：设置」的「图床表单」。 */
+/** 图床表单：设置页「图床」和「设置图床」对话框共用。布局见 DESIGN.md「屏幕：设置」的「图床表单」。 */
 import { type Phrase, phrase, t } from "../../i18n";
 import { type JSX, type Signal, signal, Text, View } from "nsh";
 import { Input } from "nsh/base";
@@ -7,8 +7,9 @@ import { imageHost } from "../../store/backend";
 import type { ImageHostView } from "../../store/document-store";
 import { Button } from "../../ui/button";
 import { draftOf, type HostDraft, type HostKind, kindOf, toInput } from "./image-host-input";
+import { Segmented } from "./parts";
 
-const FIELD = "h-8 rounded-(--radius-sm) border border-input bg-background px-2 text-[13px] text-foreground placeholder:text-faint focus:border-primary";
+const FIELD = "h-8 w-full max-w-[480px] rounded-(--radius-sm) border border-input bg-background px-2 text-[13px] text-foreground placeholder:text-faint focus:border-primary";
 const NOTE = "select-text text-xs leading-5 text-muted-foreground";
 
 type Draft = Signal<HostDraft>;
@@ -16,7 +17,7 @@ type Draft = Signal<HostDraft>;
 function Labeled(props: { label: string; children: JSX.Element }) {
   return (
     <View class="gap-1">
-      <Text class="text-[11px] text-faint">{props.label}</Text>
+      <Text class="text-xs font-medium text-foreground">{props.label}</Text>
       {props.children}
     </View>
   );
@@ -40,17 +41,18 @@ function DraftInput(props: { draft: Draft; name: keyof HostDraft; label: string;
   );
 }
 
-/** 种类切换：两个按钮，当前的字前加「✓」、读屏名加「（当前）」（同图片操作条）。 */
+/** 种类切换：分段选择，当前项前面一个对勾、读屏名加「（当前）」。 */
 function KindPicker(props: { kind: Signal<HostKind> }) {
-  const option = (kind: HostKind, label: string) => {
-    const on = () => props.kind() === kind;
-    return <Button testID={`image-host-kind-${kind}`} label={on() ? `✓ ${label}` : label} accessibilityLabel={on() ? t(`${label}（当前）`, `${label} (current)`) : label} active={on()} onPress={() => props.kind.set(kind)} />;
-  };
   return (
-    <View accessibilityLabel={t("图床种类", "Image host type")} class="flex-row flex-wrap gap-1">
-      {option("upload", t("上传接口", "Upload endpoint"))}
-      {option("github", t("GitHub 仓库", "GitHub repository"))}
-    </View>
+    <Segmented<HostKind>
+      label={t("图床种类", "Image host type")}
+      value={props.kind()}
+      options={[
+        { value: "upload", label: t("上传接口", "Upload endpoint"), testID: "image-host-kind-upload" },
+        { value: "github", label: t("GitHub 仓库", "GitHub repository"), testID: "image-host-kind-github" },
+      ]}
+      onChange={(kind) => props.kind.set(kind)}
+    />
   );
 }
 
@@ -58,7 +60,7 @@ function KindPicker(props: { kind: Signal<HostKind> }) {
 function UploadFields(props: { draft: Draft; headerNames: string[] }) {
   return (
     <>
-      <Labeled label={t("上传地址", "Upload URL")}>
+      <Labeled label={t("上传地址（必填）", "Upload URL (required)")}>
         <DraftInput draft={props.draft} name="url" label={t("上传地址", "Upload URL")} placeholder="https://example.com/upload" testID="image-host-url" autoFocus />
       </Labeled>
       <Labeled label={t("文件字段名", "File field name")}>
@@ -75,10 +77,10 @@ function UploadFields(props: { draft: Draft; headerNames: string[] }) {
           accessibilityLabel={t("请求头", "Request headers")}
           autoCapitalize="none"
           autoCorrect={false}
-          class="h-[72px] rounded-(--radius-sm) border border-input bg-background px-2 py-1 font-mono text-[12px] leading-5 text-foreground placeholder:text-faint focus:border-primary"
+          class="h-[72px] w-full max-w-[480px] rounded-(--radius-sm) border border-input bg-background px-2 py-1 font-mono text-[12px] leading-5 text-foreground placeholder:text-faint focus:border-primary"
         />
         <If when={props.headerNames.length > 0}>
-          <Text testID="image-host-header-names" class={NOTE}>
+          <Text testID="image-host-header-names" class={`${NOTE} max-w-[480px]`}>
             {t(`已设置：${props.headerNames.join("、")}（值不显示）。留空就不改，填了就整个换掉；要去掉已设置的，先「不再用图床」再重新设置。`, `Configured headers: ${props.headerNames.join(", ")}. Leave blank to keep them, or enter a complete replacement. To remove them, turn off image hosting and set it up again.`)}
           </Text>
         </If>
@@ -94,8 +96,8 @@ function UploadFields(props: { draft: Draft; headerNames: string[] }) {
 function GithubFields(props: { draft: Draft; hasToken: boolean }) {
   return (
     <>
-      <Text class={NOTE}>{t("图片提交到这个仓库，正文写 raw.githubusercontent.com 的地址，所以仓库要是公开的。令牌建议用 fine-grained token，只给这一个仓库的 Contents 读写权限；它存在本机网关的配置里，页面读不回。", "Use a public repository because documents link to images on raw.githubusercontent.com. Use a fine-grained token with Contents read and write permission for this repository only. The gateway stores the token locally.")}</Text>
-      <Labeled label={t("仓库（用户/仓库）", "Repository (owner/repo)")}>
+      <Text class={`${NOTE} max-w-[640px]`}>{t("图片提交到这个仓库，正文写 raw.githubusercontent.com 的地址，所以仓库要是公开的。令牌建议用 fine-grained token，只给这一个仓库的 Contents 读写权限；它存在本机网关的配置里，页面读不回。", "Use a public repository because documents link to images on raw.githubusercontent.com. Use a fine-grained token with Contents read and write permission for this repository only. The gateway stores the token locally.")}</Text>
+      <Labeled label={t("仓库（用户/仓库，必填）", "Repository (owner/repo, required)")}>
         <DraftInput draft={props.draft} name="repo" label={t("仓库", "Repository")} placeholder="octocat/images" testID="image-host-repo" autoFocus />
       </Labeled>
       <Labeled label={t("分支", "Branch")}>
@@ -151,7 +153,7 @@ export function ImageHostForm(props: { current: ImageHostView | null; saveLabel:
           </Text>
         )}
       </If>
-      <View class="flex-row flex-wrap justify-end gap-1">
+      <View class="w-full max-w-[480px] flex-row flex-wrap justify-end gap-1">
         {props.children}
         <Button testID="image-host-save" label={saving() ? t("正在保存…", "Saving…") : props.saveLabel} variant="primary" disabled={saving()} onPress={() => void save()} />
       </View>

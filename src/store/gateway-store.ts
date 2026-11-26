@@ -47,7 +47,12 @@ export type Connect = (url: string, events: SocketEvents, giveUp: Promise<void>)
 export type GatewayLink = { state: "connected" } | { state: "reconnecting"; reason?: string } | { state: "stopped"; reason: string };
 
 /** 网关明确不合作（来源不在白名单、协议版本不同、对方根本不是 Pairdown 网关）：不再连，原因给人看。 */
-export class GatewayRefused extends Error {}
+export class GatewayRefused extends Error {
+  /** `reason` 每次调用按当前界面语言给出原因。 */
+  constructor(readonly reason: () => string) {
+    super(reason());
+  }
+}
 
 /** 重连的间隔（毫秒），断得越久隔得越长，最长 15 秒：网关没起时不刷屏，起来后十几秒内连上。 */
 const RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000];
@@ -164,9 +169,10 @@ interface Timing {
   requestMs: number;
 }
 
-function closeReason(code: number): string | null {
-  if (code === CLOSE_ORIGIN) return t("网关拒绝了这个页面的来源（Origin）。从源码跑的网关，启动时加上 --origin 和这个页面的地址；装成后台服务的网关，再运行一次设置里的安装命令（旧版装的会补上站点）", "The gateway rejected this page’s origin. A gateway run from source needs --origin followed by this site’s address; for an installed gateway, run the install command from Settings again (older installs get the site filled in).");
-  if (code === CLOSE_VERSION) return t("网关和页面的协议版本不一样。更新网关后再刷新页面", "The gateway and this page use different protocol versions. Update the gateway, then refresh the page.");
+/** 返回函数而不是字符串：设置页一直显示它，切换界面语言时要跟着变。 */
+function closeReason(code: number): (() => string) | null {
+  if (code === CLOSE_ORIGIN) return () => t("网关拒绝了这个页面的来源（Origin）。从源码跑的网关，启动时加上 --origin 和这个页面的地址；装成后台服务的网关，再运行一次设置里的安装命令（旧版装的会补上站点）", "The gateway rejected this page’s origin. A gateway run from source needs --origin followed by this site’s address; for an installed gateway, run the install command from Settings again (older installs get the site filled in).");
+  if (code === CLOSE_VERSION) return () => t("网关和页面的协议版本不一样。更新网关后再刷新页面", "The gateway and this page use different protocol versions. Update the gateway, then refresh the page.");
   return null;
 }
 
@@ -290,7 +296,7 @@ class Channel implements Session {
       return this;
     } catch (e) {
       this.abandon();
-      if (e instanceof GatewayFailure && e.code === "bad-reply") throw new GatewayRefused(notGatewayMessage());
+      if (e instanceof GatewayFailure && e.code === "bad-reply") throw new GatewayRefused(notGatewayMessage);
       throw e;
     } finally {
       clearTimeout(timer);
@@ -465,7 +471,7 @@ class Keeper {
     this.session = null;
     if (this.disposed) return;
     const reason = closeReason(code);
-    if (reason) return this.stop(reason);
+    if (reason) return this.stop(reason());
     const why = dropReason(code);
     this.link.set(why ? { state: "reconnecting", reason: why } : { state: "reconnecting" });
     this.schedule(code === CLOSE_BUSY || code === CLOSE_MESSAGE_TOO_BIG ? BUSY_DELAY : this.backoff());

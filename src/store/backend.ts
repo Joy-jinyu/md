@@ -34,7 +34,7 @@ const chosen = signal<StorageKind>({ kind: "local" });
 const watchers = new Set<(change: StoreChange) => void>();
 let unwatch: (() => void) | null = null;
 /** 网关拒绝了这个页面（来源、版本、端口上不是网关）的原因；没拒绝是 null。 */
-const refusal = signal<string | null>(null);
+const refusal = signal<{ reason: () => string } | null>(null);
 /** 上次用的网关文库名：这次没连上、退回了浏览器本地时才有。 */
 const missedLibrary = signal<string | null>(null);
 /** 第一次搬进文库时没能搬走、还留在应用里的文档。 */
@@ -139,7 +139,7 @@ export function beginSwitch(): (() => void) | null {
 }
 
 /** 网关拒绝了这个页面的原因（设置页「存储」里显示）；没有是 null。 */
-export const gatewayRefusal = () => refusal();
+export const gatewayRefusal = (): string | null => refusal()?.reason() ?? null;
 
 /** 上次用的是本机网关的这个文库、这次没连上，用的是浏览器本地：文库名；不是这种情况是 null。 */
 export const missedGatewayLibrary = () => missedLibrary();
@@ -270,7 +270,7 @@ async function probeGateway(connect?: Connect): Promise<GatewayBackend | null> {
   } catch (e) {
     if (!(e instanceof GatewayRefused)) throw e;
     console.warn("gateway refused this page", e.message);
-    refusal.set(e.message);
+    refusal.set({ reason: e.reason });
     return null;
   }
 }

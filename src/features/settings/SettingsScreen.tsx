@@ -14,6 +14,7 @@ import { LanguagePanel } from "./LanguagePanel";
 import { settingsOpen, settingsPage } from "./open";
 import { type Section, SECTIONS, type SectionId, sectionOf } from "./sections";
 import { createShortcutEditor, type ShortcutEditor, ShortcutsPanel } from "./ShortcutsPanel";
+import { PROSE } from "./parts";
 import { StoragePanel } from "./StoragePanel";
 import { SyncPanel } from "./SyncPanel";
 
@@ -67,7 +68,7 @@ function NavItem(props: { section: Section; on: boolean; autoFocus: boolean; onP
   );
 }
 
-const Description = (props: { id: SectionId }) => <Text class="select-text text-[13px] leading-5 text-muted-foreground">{sectionOf(props.id).description}</Text>;
+const Description = (props: { id: SectionId }) => <Text class={`select-text text-[13px] leading-5 text-muted-foreground ${PROSE}`}>{sectionOf(props.id).description}</Text>;
 
 interface Layout {
   page: () => SectionId;
@@ -100,7 +101,7 @@ function Nav(props: Layout & { withBack: boolean; onPick: (id: SectionId) => voi
 function Content(props: Layout & { narrow: boolean }) {
   return (
     <Scroll class="flex-1" contentClass={props.narrow ? "px-4 py-4" : "px-10 py-8"}>
-      <View class="w-full gap-5">
+      <View class="w-full gap-6">
         <View class="gap-1">
           <If when={!props.narrow}>
             <Text role="header" class="text-xl font-semibold text-strong">

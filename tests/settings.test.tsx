@@ -284,12 +284,16 @@ test("connected to the gateway, its category shows the connection and the image 
   expect(app.shows("id:image-host-needs-gateway")).toBe(false);
 });
 
-test("the shortcut buttons line up in one column whether or not a command has a key", async () => {
+test("the shortcut keys line up on their right edge, and the clear buttons in one column, whether or not a command has a key", async () => {
   const app = await openApp("# Doc\n");
   await app.press("id:open-settings");
   await app.waitFor("id:settings");
   const x = (sel: string) => app.layout(sel)?.x;
-  expect(x("id:shortcut-edit-block.task")).toBe(x("id:shortcut-edit-block.bullet"));
+  const right = (sel: string) => {
+    const box = app.layout(sel);
+    return box ? box.x + box.width : undefined;
+  };
+  expect(right("id:shortcut-edit-block.task")).toBe(right("id:shortcut-edit-block.bullet"));
   expect(app.shows("id:shortcut-clear-block.task")).toBe(false);
   expect(x("id:shortcut-clear-block.bullet")).toBe(x("id:shortcut-clear-block.quote"));
 });
