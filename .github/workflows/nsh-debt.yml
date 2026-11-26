@@ -1,0 +1,47 @@
+# 每天检查 NSH_DEBT.md 里的 nsh 债务是否还在：最新正式版和 nightly 各跑一遍 .github/nsh-debt/check.mjs。
+# 有一条「changed」（探针看不到问题了，可能修好了）或「error」（探针跑不起来）这次运行就失败，去看运行摘要里的表。
+name: nsh-debt
+
+on:
+  schedule:
+    - cron: "17 1 * * *"
+  workflow_dispatch:
+  # 改了债务清单或探针时在 PR 上也跑一遍，确认探针在 Linux 上跑得起来
+  pull_request:
+    paths:
+      - NSH_DEBT.md
+      - .github/nsh-debt/**
+      - .github/workflows/nsh-debt.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [release, nightly]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: 安装 nsh（${{ matrix.channel }}）
+        env:
+          CHANNEL: ${{ matrix.channel }}
+        run: |
+          if [ "$CHANNEL" = nightly ]; then
+            curl -fsSL https://nsh.dev/install.sh | sh -s -- --nightly
+          else
+            curl -fsSL https://nsh.dev/install.sh | sh
+          fi
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: 检查债务
+        env:
+          NSH_CHANNEL: ${{ matrix.channel }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/nsh-debt/check.mjs
