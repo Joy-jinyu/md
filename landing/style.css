@@ -59,6 +59,9 @@ body {
 .stage.over-book {
   cursor: pointer;
 }
+.stage.over-plant {
+  cursor: pointer;
+}
 .stage.dragging {
   cursor: grabbing;
 }
@@ -159,12 +162,20 @@ body {
   outline: 1px solid var(--thin-ink);
   outline-offset: 4px;
 }
+/* 图标只有 15px：内边距把可点区域撑到 25px，负外边距抵掉，看上去的间距仍只由 nav 的 gap 决定 */
 .source-link {
-  border-left: 1px solid var(--wash);
-  padding-left: 19px;
+  display: inline-flex;
+  padding: 5px;
+  margin: -5px;
 }
-.source-link span {
-  margin-left: 2px;
+.source-link svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+.desk-header nav .source-link:focus-visible {
+  outline-offset: 0;
+  border-radius: 4px;
 }
 @media (max-width: 720px) {
   .desk-header {
@@ -177,9 +188,6 @@ body {
   .desk-header nav {
     gap: 17px;
     font-size: 12px;
-  }
-  .source-link {
-    padding-left: 15px;
   }
 }
 
@@ -202,6 +210,22 @@ body {
   min-height: 100svh;
   padding: 132px 0 24px;
 }
+/* 桌面底边渐隐成纸色，接上下面的介绍区。z-index 0：盖住水渍、植物和 ::before/::after 的纹理（都是 -1），排在后面的书（#stage）仍在它上面 */
+.desk-fade {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 0;
+  height: clamp(80px, 22vh, 200px);
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--paper) 45%, transparent) 45%,
+    color-mix(in srgb, var(--paper) 85%, transparent) 75%,
+    var(--paper)
+  );
+}
+.fallback-mode .desk-fade,
 .fallback-mode .desk-art {
   display: none;
 }
@@ -219,4 +243,123 @@ body {
 }
 #scene[hidden] {
   display: none;
+}
+
+/* 3D 日记下面的产品介绍：纯 HTML 文字，不靠脚本，搜索引擎和读屏直接读到 */
+html {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+.about {
+  width: min(720px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: clamp(56px, 9vh, 96px) 0 48px;
+  font: 16px/1.7 Georgia, serif;
+}
+.about h2 {
+  margin: 56px 0 16px;
+  color: #36372d;
+  font: 500 clamp(24px, 3vw, 30px) / 1.25 Georgia, serif;
+  letter-spacing: -0.02em;
+}
+.about h2:first-child {
+  margin-top: 0;
+  font-size: clamp(28px, 4vw, 40px);
+}
+.about h3 {
+  margin: 0 0 6px;
+  color: #36372d;
+  font: 600 17px/1.4 Georgia, serif;
+}
+.about p,
+.about dd {
+  margin: 0 0 12px;
+}
+.about a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+.about a:focus-visible,
+.site-footer a:focus-visible {
+  outline: 1px solid var(--thin-ink);
+  outline-offset: 3px;
+}
+.about code {
+  font: 0.9em ui-monospace, "SF Mono", Menlo, monospace;
+}
+.lede {
+  font-size: 18px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: center;
+  margin-top: 24px;
+}
+.actions .primary {
+  padding: 9px 18px;
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+  text-decoration: none;
+}
+.actions .primary:hover {
+  background: var(--edge);
+}
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 28px 32px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.features li {
+  padding-top: 14px;
+  border-top: 1px solid var(--wash);
+}
+.features p {
+  color: var(--ink);
+}
+.steps {
+  margin: 0;
+  padding-left: 1.4em;
+}
+.steps li {
+  margin-bottom: 12px;
+}
+.steps pre {
+  margin: 8px 0 0;
+  padding: 10px 14px;
+  overflow-x: auto;
+  border: 1px solid var(--wash);
+  border-radius: 8px;
+  background: var(--edge);
+}
+.faq dt {
+  margin-top: 20px;
+  color: #36372d;
+  font-weight: 600;
+}
+.faq dd {
+  margin-left: 0;
+  color: var(--ink);
+}
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 22px;
+  padding: 28px 16px 40px;
+  border-top: 1px solid var(--wash);
+  color: var(--ink);
+  font-size: 13px;
+}
+.site-footer a {
+  color: inherit;
+  text-underline-offset: 3px;
 }

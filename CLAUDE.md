@@ -35,13 +35,15 @@ Sync         GitHub REST API (fetch), one private Gist per document.
 Sign-in      Web: Browser OAuth. The site's own Worker exchanges the code for a token at same-origin /token and keeps the client secret off the frontend.
              macOS: OAuth Device Flow, which requires no client secret.
 Config       Deployment values live outside the repository: PAIRDOWN_SITE (site origin), PAIRDOWN_GITHUB_CLIENT_ID,
-             PAIRDOWN_REPO. Locally in .env (see .env.example; shell variables win), in CI as repository secrets. Read and validated only in
+             PAIRDOWN_REPO, optional PAIRDOWN_AUTHOR_NAME / PAIRDOWN_AUTHOR_URL (landing footer and structured data link back to the author's site). Locally in .env (see .env.example; shell variables win), in CI as repository secrets. Read and validated only in
              scripts/deploy-config.mjs. make config writes them
              to src/app-config.gen.ts (not committed); every make target that runs nsh does this first.
              The Worker gets GITHUB_CLIENT_ID via wrangler --var at deploy; GITHUB_CLIENT_SECRET is a Cloudflare Worker secret.
 Release      Web: make deploy-web (build-web, then publish-web: wrangler deploy --domain <PAIRDOWN_SITE host>) → Cloudflare Workers
              static assets plus /token, project pairdown, configured in wrangler.jsonc (nsh.json web.base = /).
              build-web also stamps the site and repository into gateway.sh and the landing page (scripts/stamp-web.mjs).
+             build-web runs scripts/seo.mjs: real robots.txt and sitemap.xml (otherwise the SPA fallback answers them with HTML),
+             the editor page's title, description, canonical and share card, and the WebApplication JSON-LD on both pages.
              build-web runs scripts/web-headers.mjs to generate _headers from nsh.json, including the
              connect-src allowlist (see “External images” in .claude/rules/security.md).
              The local dev server (make dev-web) does not serve these headers.

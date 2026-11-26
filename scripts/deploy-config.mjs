@@ -38,6 +38,17 @@ export function repo() {
   return v;
 }
 
+/** 作者（可选，两项一起配）：落地页页脚链回作者主页，结构化数据的 author 也用它。URL 只收 https 来源，不带路径。 */
+export function author() {
+  const name = raw("PAIRDOWN_AUTHOR_NAME");
+  const url = raw("PAIRDOWN_AUTHOR_URL");
+  if (name === "" && url === "") return null;
+  if (name === "" || url === "") throw new Error("PAIRDOWN_AUTHOR_NAME 和 PAIRDOWN_AUTHOR_URL 要一起配");
+  if (!/^[^<>&"]{1,60}$/.test(name)) throw new Error(`PAIRDOWN_AUTHOR_NAME 不能有 < > & " 且不超过 60 字：${name}`);
+  if (!SITE.test(url) || !url.startsWith("https://") || new URL(url).origin !== url) throw new Error(`PAIRDOWN_AUTHOR_URL 要写成 https://主机（小写，不带路径和结尾的 /）：${url}`);
+  return { name, url };
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [what] = process.argv.slice(2);
   const value = what === "host" ? site() && new URL(site()).host : what === "client-id" ? clientId() : null;

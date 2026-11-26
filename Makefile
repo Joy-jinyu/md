@@ -50,6 +50,7 @@ build-web: config ## 打包静态站到 dist/web/Pairdown/
 	cp -R landing/. dist/web/Pairdown/lp/
 	cp assets/icon/icon.png dist/web/Pairdown/lp/pairdown.png
 	node scripts/web-loading.mjs dist/web/Pairdown
+	node scripts/seo.mjs dist/web/Pairdown
 	node scripts/stamp-web.mjs dist/web/Pairdown
 
 dev-landing: build-web ## 本机预览落地页：http://127.0.0.1:8813/lp/

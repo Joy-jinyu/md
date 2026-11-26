@@ -1,0 +1,45 @@
+<!doctype html>
+<!--
+  分享卡片（Open Graph / Twitter）的源文件：1200×630，截图存成 landing/og.png（编辑页和落地页共用，scripts/seo.mjs 和 landing/index.html 引用）。
+  不随站点发布。重新生成（在仓库根目录）：
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars \
+      --window-size=1200,630 --virtual-time-budget=3000 --screenshot=landing/og.png "file://$PWD/assets/og/og.html"
+  配色照 landing/style.css 的纸面色。
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Pairdown share card</title>
+<style>
+  html, body { margin: 0; }
+  body {
+    width: 1200px; height: 630px; overflow: hidden; position: relative; box-sizing: border-box;
+    padding: 0 96px; display: flex; align-items: center; gap: 40px;
+    color: #524e42; font-family: Georgia, serif;
+    background:
+      radial-gradient(ellipse at 62% 40%, #f9f6ed 1%, transparent 62%),
+      radial-gradient(ellipse at 6% 90%, #b7a3842c, transparent 39%),
+      #f1eee5;
+  }
+  body::before {
+    content: ""; position: absolute; inset: 0; opacity: 0.42; mix-blend-mode: multiply;
+    background: url("../../landing/desk-grain.webp") 0 0 / 670px;
+  }
+  .text { position: relative; flex: 1; }
+  .brand { display: flex; align-items: center; gap: 18px; margin: 0 0 28px; color: #36372d; font-size: 92px; font-weight: 500; letter-spacing: -0.055em; line-height: 1; }
+  .brand img { width: 76px; height: 76px; border-radius: 18px; }
+  .line { margin: 0 0 30px; color: #36372d; font-size: 42px; line-height: 1.22; letter-spacing: -0.015em; }
+  .pair { display: flex; gap: 14px; font: 21px/1.4 ui-monospace, "SF Mono", Menlo, monospace; color: #776e5e; }
+  .pair span { white-space: nowrap; padding: 6px 14px; border: 1px solid #9e937854; border-radius: 8px; background: #ede9dc; }
+  .quill { position: relative; width: 360px; margin-right: -40px; transform: rotate(-8deg); filter: drop-shadow(6px 8px 6px #5b533f36); }
+</style>
+</head>
+<body>
+  <div class="text">
+    <h1 class="brand"><img src="../icon/icon.png" alt="" />Pairdown</h1>
+    <p class="line">A WYSIWYG Markdown editor<br />that keeps plain .md files</p>
+    <p class="pair"><span># Markdown</span><span>tables · math · Mermaid</span><span>GitHub sync</span></p>
+  </div>
+  <img class="quill" src="../web-loading/feather.webp" alt="" />
+</body>
+</html>

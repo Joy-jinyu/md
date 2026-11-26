@@ -376,9 +376,13 @@
 
 ## Web landing page
 
-`/lp` presents **River Notes**, a six-page Markdown journal that follows one day by the river. The illustrated desk and paper share a warm palette. The header links to the editor and repository. Book pages are the primary controls. Click left or right, drag the paper, or use the arrow keys to turn them.
+`/lp` presents **River Notes**, a six-page Markdown journal that follows one day by the river. The illustrated desk and paper share a warm palette. The header links to the editor and, through a GitHub mark icon, to the repository. Book pages are the primary controls. Click left or right, drag the paper, or use the arrow keys to turn them.
+
+The botanicals in the four corners are alive (2026-11-26). Each corner group bends in a light breeze rather than turning as one piece: the root barely moves, the tips move most (about ±1.5°), and each gust reaches the tips a little after the root, on a 6–9 second rhythm that slowly swells and fades. A fine pointer near a group brushes it aside, and it eases back with a soft spring (about 0.6 Hz) when the pointer leaves; over a plant the cursor becomes a hand. Clicking or tapping a group shakes it and lets a few pieces fall: petals from the flowering sprigs, a leaf or two from the reeds. They flutter down across the desk behind the book and fade, at most 24 at a time. Turning a page sends a gust that sways all four corners, strongest on the side the page swings toward. Every 15–25 seconds a single petal drifts down by itself. The animation pauses while the desk is off screen or the tab is hidden. With reduced motion, the corners stay still and nothing falls.
 
 The quill follows the strokes of the last words on each page, then rests at the edge of the spread. With reduced motion, the endings appear immediately. The web build serves the landing page as a separate static entry, with its own artwork and no remote assets.
+
+The bottom of the desk fades into the plain paper color over 80–200px (22% of the viewport height), so the desk and the section below it read as one surface. Below the full-height journal, the page scrolls to a plain HTML section, **About**, that search engines and screen readers read without scripts (2026-11-26). The header gains an “About” link to it. The section is a single 720px column on the same paper palette: a Georgia headline and lede, an outlined pill “Open the editor” plus a source link, a two-column feature grid (one column below 600px) with hairline `--wash` rules, numbered get-started steps with the gateway command in a code box, and question-and-answer pairs. A thin footer links the editor, the repository and, when configured, the author's site. Copy is English and states only shipped behavior. Smooth scrolling to the section is off with reduced motion. The share card `landing/og.png` (1200×630, source `assets/og/og.html`) uses the same paper, icon and quill.
 
 ### Web startup
 
