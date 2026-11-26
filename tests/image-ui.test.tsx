@@ -106,7 +106,7 @@ test("an http image that does not load on an https page says the browser blocks 
   const app = await open("../App.tsx", {
     ...WEB,
     storage: { [DOC_KEY]: "# T\n\n![](http://example.com/cat.png)\n" },
-    modules: { nsh: { "UrlScheme.url": "https://markdown.pairwise.site/", "UrlScheme.setUrl": () => undefined } },
+    modules: { nsh: { "UrlScheme.url": "https://pairdown.example/", "UrlScheme.setUrl": () => undefined } },
   });
   await app.failImages("http://example.com/*");
   await app.waitFor("text:http://example.com/cat.png");

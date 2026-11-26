@@ -6,7 +6,7 @@ import { SETTINGS_KEY } from "../src/store/settings";
 import { bodyKey } from "../src/store/local-store";
 import { syncRecordKey } from "../src/store/sync-store";
 import { seedLibrary } from "./fixtures/library";
-import { TEST_WORKER } from "./fixtures/sync-config";
+import { TEST_TOKEN_URL } from "./fixtures/sync-config";
 
 const WEB = { platform: "web" as const, width: 1280, height: 860 };
 const API = "https://api.github.com";
@@ -54,7 +54,7 @@ test("without an OAuth App configured, the settings sync tab says so, sign-in is
 });
 
 const VERIFIER = "v".repeat(43);
-const oauthState = (state: string) => ({ "md.sync.oauthState": JSON.stringify({ state, at: Date.now(), verifier: VERIFIER, redirectUri: "https://markdown.pairwise.site/" }) });
+const oauthState = (state: string) => ({ "md.sync.oauthState": JSON.stringify({ state, at: Date.now(), verifier: VERIFIER, redirectUri: "https://pairdown.example/" }) });
 
 test("web sign-in: back from GitHub with the saved state, the code is exchanged at the worker with the PKCE verifier, the address is cleaned and the account shows", async () => {
   let workerBody: unknown = null;
@@ -62,9 +62,9 @@ test("web sign-in: back from GitHub with the saved state, the code is exchanged 
   const app = await open(SYNCED_APP, {
     ...WEB,
     storage: { ...library(), ...oauthState("st4te") },
-    modules: { nsh: { "UrlScheme.url": "https://markdown.pairwise.site/?code=c0de&state=st4te", "UrlScheme.setUrl": (url: string) => void addresses.push(url) } },
+    modules: { nsh: { "UrlScheme.url": "https://pairdown.example/?code=c0de&state=st4te", "UrlScheme.setUrl": (url: string) => void addresses.push(url) } },
     network: {
-      [`POST ${TEST_WORKER}/token`]: (req) => {
+      [`POST ${TEST_TOKEN_URL}`]: (req) => {
         workerBody = JSON.parse(req.body ?? "null");
         return { body: { access_token: TOKEN, token_type: "bearer", scope: "gist" } };
       },
@@ -73,8 +73,8 @@ test("web sign-in: back from GitHub with the saved state, the code is exchanged 
     },
   });
   await app.waitFor("text:已登录：@joy");
-  expect(workerBody).toEqual({ code: "c0de", state: "st4te", code_verifier: VERIFIER, redirect_uri: "https://markdown.pairwise.site/" });
-  expect(addresses).toEqual(["https://markdown.pairwise.site/"]);
+  expect(workerBody).toEqual({ code: "c0de", state: "st4te", code_verifier: VERIFIER, redirect_uri: "https://pairdown.example/" });
+  expect(addresses).toEqual(["https://pairdown.example/"]);
   // 登录后列出 GitHub 上有、这台设备没有的
   await app.waitFor("id:sync-issue-remote:old");
   expect(app.storage()["md.sync.oauthState"]).toBe(undefined);
@@ -85,8 +85,8 @@ test("web sign-in with a state that does not match is refused, nothing is stored
   const app = await open(SYNCED_APP, {
     ...WEB,
     storage: { ...library(), ...oauthState("mine") },
-    modules: { nsh: { "UrlScheme.url": "https://markdown.pairwise.site/?code=c0de&state=forged", "UrlScheme.setUrl": () => undefined } },
-    network: { [`POST ${TEST_WORKER}/token`]: { body: { access_token: TOKEN } } },
+    modules: { nsh: { "UrlScheme.url": "https://pairdown.example/?code=c0de&state=forged", "UrlScheme.setUrl": () => undefined } },
+    network: { [`POST ${TEST_TOKEN_URL}`]: { body: { access_token: TOKEN } } },
   });
   await app.waitFor("text:登录回来的校验码对不上，没有登录。重新点「用 GitHub 登录」。");
   expect(app.storage()["md.sync.auth"]).toBe(undefined);
@@ -105,35 +105,35 @@ async function pressWebSignIn(pageAddress: string) {
 
 test("web sign-in from a page other than the registered one says where it works and does not go to GitHub", async () => {
   const app = await pressWebSignIn("http://127.0.0.1:8811/");
-  await app.waitFor("text:网页登录只在 markdown.pairwise.site 可用：GitHub 只把登录送回那里登记的地址。");
+  await app.waitFor("text:网页登录只在 pairdown.example 可用：GitHub 只把登录送回那里登记的地址。");
   expect(app.openedUrls()).toEqual([]);
   expect(app.storage()["md.sync.oauthState"]).toBe(undefined);
 });
 
 test("web sign-in from the registered page opens GitHub's authorize page", async () => {
-  const app = await pressWebSignIn("https://markdown.pairwise.site/");
+  const app = await pressWebSignIn("https://pairdown.example/");
   await app.waitUntil(() => app.openedUrls().length === 1);
   expect(app.openedUrls()[0].startsWith("https://github.com/login/oauth/authorize?")).toBe(true);
-  expect(JSON.parse(app.storage()["md.sync.oauthState"]).redirectUri).toBe("https://markdown.pairwise.site/");
+  expect(JSON.parse(app.storage()["md.sync.oauthState"]).redirectUri).toBe("https://pairdown.example/");
 });
 
 test("web sign-in always sends GitHub the registered callback as redirect_uri, whatever else is on the page address", async () => {
-  const pages = ["https://markdown.pairwise.site/?iss=https%3A%2F%2Fgithub.com%2Flogin%2Foauth", "https://markdown.pairwise.site/index.html", "https://markdown.pairwise.site/?foo=1#bar"];
+  const pages = ["https://pairdown.example/?iss=https%3A%2F%2Fgithub.com%2Flogin%2Foauth", "https://pairdown.example/index.html", "https://pairdown.example/?foo=1#bar"];
   for (const page of pages) {
     const app = await pressWebSignIn(page);
     await app.waitUntil(() => app.openedUrls().length === 1);
     const url = new URL(app.openedUrls()[0]);
     expect(url.origin + url.pathname).toBe("https://github.com/login/oauth/authorize");
     expect([...url.searchParams.keys()]).toEqual(["client_id", "scope", "state", "redirect_uri", "allow_signup", "code_challenge", "code_challenge_method"]);
-    expect(url.searchParams.get("redirect_uri")).toBe("https://markdown.pairwise.site/");
-    expect(url.search.includes("redirect_uri=https%3A%2F%2Fmarkdown.pairwise.site%2F&")).toBe(true);
-    expect(JSON.parse(app.storage()["md.sync.oauthState"]).redirectUri).toBe("https://markdown.pairwise.site/");
+    expect(url.searchParams.get("redirect_uri")).toBe("https://pairdown.example/");
+    expect(url.search.includes("redirect_uri=https%3A%2F%2Fpairdown.example%2F&")).toBe(true);
+    expect(JSON.parse(app.storage()["md.sync.oauthState"]).redirectUri).toBe("https://pairdown.example/");
   }
 });
 
 test("GitHub's own error codes are explained even when the sign-in was started on another page; other errors without a matching state are refused as before", async () => {
   const cases = [
-    ["redirect_uri_mismatch", "GitHub 不认这个页面的回调地址（redirect_uri_mismatch），没有登录：网页登录只在 markdown.pairwise.site 可用。"],
+    ["redirect_uri_mismatch", "GitHub 不认这个页面的回调地址（redirect_uri_mismatch），没有登录：网页登录只在 pairdown.example 可用。"],
     ["application_suspended", "这个 GitHub OAuth App 被停用了（application_suspended），现在登录不了。"],
     ["access_denied", "在 GitHub 上取消了授权，没有登录。"],
     ["constructor", "这次登录不是从这个页面发起的（或者已经用过了），没有登录。重新点「用 GitHub 登录」。"],
@@ -142,7 +142,7 @@ test("GitHub's own error codes are explained even when the sign-in was started o
     const app = await open(SYNCED_APP, {
       ...WEB,
       storage: library(),
-      modules: { nsh: { "UrlScheme.url": `https://markdown.pairwise.site/?error=${error}&state=st4te`, "UrlScheme.setUrl": () => undefined } },
+      modules: { nsh: { "UrlScheme.url": `https://pairdown.example/?error=${error}&state=st4te`, "UrlScheme.setUrl": () => undefined } },
     });
     await app.waitFor(`text:${said}`);
     expect(app.storage()["md.sync.auth"]).toBe(undefined);

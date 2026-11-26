@@ -1,11 +1,19 @@
-// Cloudflare 上的静态站点（Workers 静态资源，项目名 pairdown）。先 make build-web，再 npx wrangler deploy。
+// Cloudflare 上的站点（项目名 pairdown）：nsh 打包出的静态文件，加上网页登录换 token 的 /token（worker/src/worker.mts，见 worker/README.md）。
+// 先 make build-web，再 make deploy-web：域名由部署配置 PAIRDOWN_SITE 经 --domain 传入，不写在这里。
 {
   "name": "pairdown",
+  "main": "worker/src/worker.mts",
   "compatibility_date": "2026-11-23",
   "assets": {
     // nsh 打包出来的目录；应用只有一个页面，找不到的路径都回到它
     "directory": "dist/web/Pairdown",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // 只有 /token 先过脚本，别的请求照旧直接回静态文件
+    "run_worker_first": ["/token"]
   },
-  "routes": [{ "pattern": "markdown.pairwise.site", "custom_domain": true }]
+  // 只在 PAIRDOWN_SITE 的自定义域名上提供，不开 workers.dev 地址（那里的同源检查会认 workers.dev 这个来源）
+  "workers_dev": false,
+  // 不记日志：不开 observability / logpush
+  "observability": { "enabled": false }
 }

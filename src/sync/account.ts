@@ -19,7 +19,7 @@ import {
   requestDeviceCode,
   STATE_TTL,
 } from "./auth";
-import { OAUTH_CALLBACK_ORIGIN, OAUTH_CALLBACK_URL, syncConfig } from "./config";
+import { oauthCallbackUrl, siteOrigin, syncConfig } from "./config";
 import { createGitHub, type GitHub, SyncError } from "./github";
 
 export type Account = { kind: "loading" } | { kind: "signed-out" } | { kind: "signed-in"; login: string };
@@ -110,18 +110,22 @@ export function cancelDeviceLogin() {
   device.set({ kind: "idle" });
 }
 
-/** 网页：记下 state 和 PKCE 的 code_verifier，返回要打开的 GitHub 授权页地址。回调地址固定是 `OAUTH_CALLBACK_URL`。 */
+/** 网页：记下 state 和 PKCE 的 code_verifier，返回要打开的 GitHub 授权页地址。回调地址固定是 `oauthCallbackUrl()`。 */
 export async function beginWebLogin(): Promise<string> {
   const state = randomState();
   const verifier = randomVerifier();
-  await saveOAuthState({ state, at: Date.now(), verifier, redirectUri: OAUTH_CALLBACK_URL });
-  return authorizeUrl(syncConfig().clientId, state, OAUTH_CALLBACK_URL, await codeChallenge(verifier));
+  const redirectUri = oauthCallbackUrl();
+  await saveOAuthState({ state, at: Date.now(), verifier, redirectUri });
+  return authorizeUrl(syncConfig().clientId, state, redirectUri, await codeChallenge(verifier));
 }
 
 /** GitHub 授权页带回来的固定错误码（OAuth App 文档「Troubleshooting authorization request errors」）各自的说明。 */
+/** 站点没配时说不出主机名（这时网页登录本来就不出现，只有带着错误码打开页面才会走到这里）。 */
+const siteHost = () => (siteOrigin() === "" ? t("配置的站点上", "the configured site") : new URL(siteOrigin()).host);
+
 const CALLBACK_ERRORS = new Map<string, () => string>([
   ["access_denied", () => t("在 GitHub 上取消了授权，没有登录。", "Authorization was canceled on GitHub. You weren’t signed in.")],
-  ["redirect_uri_mismatch", () => t(`GitHub 不认这个页面的回调地址（redirect_uri_mismatch），没有登录：网页登录只在 ${new URL(OAUTH_CALLBACK_ORIGIN).host} 可用。`, `GitHub did not recognize this page’s callback URL (redirect_uri_mismatch). Web sign-in works only at ${new URL(OAUTH_CALLBACK_ORIGIN).host}.`)],
+  ["redirect_uri_mismatch", () => t(`GitHub 不认这个页面的回调地址（redirect_uri_mismatch），没有登录：网页登录只在 ${siteHost()} 可用。`, `GitHub did not recognize this page’s callback URL (redirect_uri_mismatch). Web sign-in works only at ${siteHost()}.`)],
   ["application_suspended", () => t("这个 GitHub OAuth App 被停用了（application_suspended），现在登录不了。", "This GitHub OAuth App has been suspended. Sign-in is unavailable.")],
 ]);
 
@@ -141,6 +145,6 @@ export async function finishWebLogin(callback: Callback): Promise<string> {
   }
   await clearOAuthState();
   if (callback.kind === "error") throw new SyncError("auth", known ?? t(`GitHub 没让登录（${callback.error}）。`, `GitHub rejected sign-in (${callback.error}).`));
-  const token = await exchangeCode(syncConfig().workerUrl, { code: callback.code, state: callback.state, verifier: saved.verifier, redirectUri: saved.redirectUri }, fetch);
+  const token = await exchangeCode(syncConfig().tokenUrl, { code: callback.code, state: callback.state, verifier: saved.verifier, redirectUri: saved.redirectUri }, fetch);
   return finishSignIn(token);
 }

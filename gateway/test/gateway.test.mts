@@ -5,8 +5,8 @@ import { connect as tcpConnect } from "node:net";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { CLOSE_NO_HELLO, CLOSE_ORIGIN, CLOSE_VERSION, OFFICIAL_ORIGIN, PROTOCOL_VERSION } from "../src/protocol.ts";
-import { codeOf, PNG, rawClient, resultOf, setup, until } from "./helpers.mts";
+import { CLOSE_NO_HELLO, CLOSE_ORIGIN, CLOSE_VERSION, PROTOCOL_VERSION } from "../src/protocol.ts";
+import { codeOf, PNG, rawClient, resultOf, setup, TEST_SITE, until } from "./helpers.mts";
 
 const sha = (s: string | Buffer) => createHash("sha256").update(s).digest("hex");
 
@@ -18,7 +18,7 @@ test("hello 回协议版本和文库名；list 只列 .md，不含 assets/、隐
   await writeFile(join(dir, "notes", "assets", "c.md"), "x");
   await writeFile(join(dir, ".hidden.md"), "x");
   await writeFile(join(dir, "readme.txt"), "x");
-  const c = rawClient(t, port, OFFICIAL_ORIGIN);
+  const c = rawClient(t, port, TEST_SITE);
   const hello = resultOf<{ version: number; library: string }>(await c.request("hello", { version: PROTOCOL_VERSION }));
   assert.equal(hello.version, PROTOCOL_VERSION);
   assert.ok(dir.endsWith(hello.library));
@@ -69,28 +69,28 @@ test("create / rename 不覆盖已有文件；改名、删除生效", async (t) 
 
 test("Origin：白名单外、没有 Origin、相近的写法一律 4003；线上来源能连", async (t) => {
   const { port } = await setup(t);
-  const bad = ["https://evil.example", "http://markdown.pairwise.site", "https://markdown.pairwise.site.evil.example", `http://127.0.0.1:${port}`, "null", undefined];
+  const bad = ["https://evil.example", "http://pairdown.example", "https://pairdown.example.evil.example", `http://127.0.0.1:${port}`, "null", undefined];
   for (const origin of bad) {
     const c = rawClient(t, port, origin);
     assert.equal(await c.closed, CLOSE_ORIGIN, String(origin));
   }
-  const ok = rawClient(t, port, OFFICIAL_ORIGIN);
+  const ok = rawClient(t, port, TEST_SITE);
   assert.equal((await ok.request("hello", { version: PROTOCOL_VERSION })).ok, true);
 });
 
 test("Host 头不是 127.0.0.1 / localhost（DNS rebinding）→ 不握手", async (t) => {
   const { port } = await setup(t);
-  const c = rawClient(t, port, OFFICIAL_ORIGIN, `evil.example:${port}`);
+  const c = rawClient(t, port, TEST_SITE, `evil.example:${port}`);
   const status = await new Promise<number>((r) => c.ws.on("unexpected-response", (_req, res) => r(res.statusCode ?? 0)));
   assert.equal(status, 421);
 });
 
 test("没 hello 先发别的 → 4000；协议版本不同 → version-mismatch 后 4002", async (t) => {
   const { port } = await setup(t);
-  const a = rawClient(t, port, OFFICIAL_ORIGIN);
+  const a = rawClient(t, port, TEST_SITE);
   void a.request("list");
   assert.equal(await a.closed, CLOSE_NO_HELLO);
-  const b = rawClient(t, port, OFFICIAL_ORIGIN);
+  const b = rawClient(t, port, TEST_SITE);
   assert.equal(codeOf(await b.request("hello", { version: PROTOCOL_VERSION + 1 })), "version-mismatch");
   assert.equal(await b.closed, CLOSE_VERSION);
 });

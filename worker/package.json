@@ -1,5 +1,5 @@
 {
-  "name": "pairdown-auth-worker",
+  "name": "pairdown-site-worker",
   "private": true,
   "type": "module",
   "engines": {

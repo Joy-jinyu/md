@@ -260,7 +260,7 @@ export function readImageFile(path: string): Promise<Uint8Array> {
 }
 
 /**
- * GitHub 登录走哪种流程：网页里是网页授权（跳 GitHub 再回来，code 经中转 Worker 换 token）；
+ * GitHub 登录走哪种流程：网页里是网页授权（跳 GitHub 再回来，code 交给本站的 /token（站点 Worker）换 token）；
  * 桌面应用里是 Device Flow（显示用户码，应用直接请求 github.com，不受浏览器跨域限制）。
  */
 export const SIGN_IN_FLOW: "web" | "device" = IN_BROWSER ? "web" : "device";

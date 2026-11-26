@@ -9,6 +9,8 @@ import { PROTOCOL_VERSION, type ChangedEvent, type Reply } from "../src/protocol
 import { startGateway, type GatewayOptions } from "../src/server.mts";
 
 export const TEST_ORIGIN = "http://127.0.0.1:8811";
+/** 装网关的站点（后台服务记在 config.json 的 site）。 */
+export const TEST_SITE = "https://pairdown.example";
 
 /** 1×1 的 PNG。 */
 export const PNG = Buffer.from(
@@ -66,13 +68,13 @@ export function rawClient(t: TestContext, port: number, origin: string | undefin
   return { ws, closed, events, signals, request };
 }
 
-/** 新建一个临时文库，起网关（随机端口），白名单只有 TEST_ORIGIN 和线上来源。 */
+/** 新建一个临时文库，起网关（随机端口），白名单只有 TEST_SITE 和 TEST_ORIGIN。 */
 export async function setup(t: TestContext, more: Partial<GatewayOptions> = {}) {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "pairdown-lib-")));
   const outside = await realpath(await mkdtemp(join(tmpdir(), "pairdown-outside-")));
   const logs: string[] = [];
   const library = await Library.open(dir, (s) => logs.push(s));
-  const gw = await startGateway({ library, port: 0, origins: allowedOrigins([TEST_ORIGIN]), log: (s) => logs.push(s), ...more });
+  const gw = await startGateway({ library, port: 0, origins: allowedOrigins(TEST_SITE, [TEST_ORIGIN]), log: (s) => logs.push(s), ...more });
   t.after(async () => {
     await gw.close();
     await rm(dir, { recursive: true, force: true });

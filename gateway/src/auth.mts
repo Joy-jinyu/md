@@ -1,5 +1,3 @@
-import { OFFICIAL_ORIGIN } from "./protocol.ts";
-
 /** 是不是浏览器 Origin 头的写法：http(s)://host[:port]，不带路径，默认端口不写。 */
 export function isOrigin(s: string): boolean {
   try {
@@ -10,9 +8,9 @@ export function isOrigin(s: string): boolean {
   }
 }
 
-/** 允许连 WebSocket 的页面来源：线上页面，加上启动参数 --origin 显式给的。没有「开发时全放开」。 */
-export function allowedOrigins(extra: readonly string[] = []): string[] {
-  return [OFFICIAL_ORIGIN, ...extra];
+/** 允许连 WebSocket 的页面来源：装网关的站点（后台服务记在 config.json 的 `site`，从源码跑时没有），加上启动参数 --origin 显式给的。没有「开发时全放开」。 */
+export function allowedOrigins(site: string | undefined, extra: readonly string[] = []): string[] {
+  return [...(site ? [site] : []), ...extra];
 }
 
 /** 升级请求的 Origin 是否在白名单里。浏览器一定会带 Origin，没带的一律拒绝。 */

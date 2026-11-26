@@ -84,11 +84,11 @@ test("a blip in the network while waiting is tolerated a couple of times; three 
 });
 
 test("the authorize page asks for gist with the state, the redirect back to the page, and a PKCE S256 challenge", async () => {
-  const url = new URL(authorizeUrl("cid", "s123", "https://markdown.pairwise.site/", "chal"));
+  const url = new URL(authorizeUrl("cid", "s123", "https://pairdown.example/", "chal"));
   expect(url.origin + url.pathname).toBe("https://github.com/login/oauth/authorize");
   expect(url.searchParams.get("scope")).toBe("gist");
   expect(url.searchParams.get("state")).toBe("s123");
-  expect(url.searchParams.get("redirect_uri")).toBe("https://markdown.pairwise.site/");
+  expect(url.searchParams.get("redirect_uri")).toBe("https://pairdown.example/");
   expect([url.searchParams.get("code_challenge"), url.searchParams.get("code_challenge_method")]).toEqual(["chal", "S256"]);
   // 期望值用 Node 算的：createHash("sha256").update(verifier).digest("base64url")
   expect(await codeChallenge("dBjftJeZ4CVP-mJ92K1jfgbLlFx4pX8kDiiw7AEdcGQ")).toBe("cRAim_xfzVmwJDtwPH1tGUwvpRYIhFPAkgKjWD-siNY");
@@ -119,17 +119,17 @@ test("the state must have been saved here, be fresh, and match", () => {
 
 test("the code is exchanged at the worker with the PKCE verifier and the redirect; a refusal says why without leaking anything", async () => {
   let sent: unknown = null;
-  const x = { code: "c", state: "s", verifier: "v".repeat(43), redirectUri: "https://markdown.pairwise.site/" };
-  const token = await exchangeCode("https://auth.example", x, async (url, init) => {
+  const x = { code: "c", state: "s", verifier: "v".repeat(43), redirectUri: "https://pairdown.example/" };
+  const token = await exchangeCode("https://auth.example/token", x, async (url, init) => {
     expect(url).toBe("https://auth.example/token");
     sent = JSON.parse(String(init?.body));
     return Response.json({ access_token: "test-token-ok" });
   });
   expect(token).toBe("test-token-ok");
-  expect(sent).toEqual({ code: "c", state: "s", code_verifier: "v".repeat(43), redirect_uri: "https://markdown.pairwise.site/" });
+  expect(sent).toEqual({ code: "c", state: "s", code_verifier: "v".repeat(43), redirect_uri: "https://pairdown.example/" });
   let error: unknown = null;
   try {
-    await exchangeCode("https://auth.example", x, async () => Response.json({ error: "bad_verification_code" }, { status: 400 }));
+    await exchangeCode("https://auth.example/token", x, async () => Response.json({ error: "bad_verification_code" }, { status: 400 }));
   } catch (e) {
     error = e;
   }

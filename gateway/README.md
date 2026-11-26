@@ -1,28 +1,30 @@
 # Pairdown 本机网关
 
-让线上页面（https://markdown.pairwise.site/）读写本机一个文件夹（文库）里的 `.md` 文档和图片。网关是一个 Node 进程，只听 `127.0.0.1`，页面用 WebSocket 连它。方案见实施计划第 10 节。
+让线上页面（部署配置 `PAIRDOWN_SITE` 的站点）读写本机一个文件夹（文库）里的 `.md` 文档和图片。网关是一个 Node 进程，只听 `127.0.0.1`，页面用 WebSocket 连它。方案见实施计划第 10 节。
 
 ## 一条命令装好
 
 ```bash
-curl -fsSL https://markdown.pairwise.site/gateway.sh | sh
+curl -fsSL <站点>/gateway.sh | sh
 # 第一次装时就换文库文件夹：
-curl -fsSL https://markdown.pairwise.site/gateway.sh | sh -s -- --library ~/notes
+curl -fsSL <站点>/gateway.sh | sh -s -- --library ~/notes
 ```
 
-脚本是本目录的 `install.sh`（`make build-web` 时放到站点根目录）。它把网关装到 `~/.pairdown`，在 macOS 上注册成 launchd 后台服务（`~/Library/LaunchAgents/site.pairwise.md.gateway.plist`，登录后自动启动、退出后自动拉起），并装上 `pairdown` 命令（链到 `/usr/local/bin`、`/opt/homebrew/bin`、`~/.local/bin` 里第一个能写的）。已经装过再跑，只提示已安装并显示状态。别的系统没有后台服务，脚本在前台启动。
+脚本是本目录的 `install.sh`（`make build-web` 时放到站点根目录，并把里面的 `__PAIRDOWN_SITE__`、`__PAIRDOWN_REPO__` 换成部署配置；仓库里这份没换，直接跑会提示）。装的时候把站点和源码仓库记进配置的 `site`、`repo`：网关只放行 `site` 的页面，自动更新从 `site` 取版本号、从 `repo` 的 `main` 分支下载。它把网关装到 `~/.pairdown`，在 macOS 上注册成 launchd 后台服务（`~/Library/LaunchAgents/site.pairwise.md.gateway.plist`，登录后自动启动、退出后自动拉起），并装上 `pairdown` 命令（链到 `/usr/local/bin`、`/opt/homebrew/bin`、`~/.local/bin` 里第一个能写的）。已经装过再跑，只提示已安装并显示状态。别的系统没有后台服务，脚本在前台启动。
 
 ```bash
 pairdown                          # 状态和配置
 pairdown config library ~/notes   # 换文库文件夹（自动重启）
 pairdown config origins http://127.0.0.1:8811   # 额外放行的页面来源，none 清空
 pairdown config autoUpdate off    # 关掉自动更新
+pairdown config site https://…    # 换站点（装的时候已记下；放行它的页面、从它取版本号）
+pairdown config repo 用户/仓库     # 换源码仓库（装的时候已记下）
 pairdown start | stop | restart | logs | update | uninstall
 ```
 
 配置在 `~/.pairdown/config.json`，日志在 `~/.pairdown/gateway.log`。
 
-**自动更新**（`src/update.mts`，只有装成后台服务才有）：有页面连上来时（最多 10 分钟一次）取 `https://markdown.pairwise.site/gateway.version`（`make build-web` 写的，是 `gateway/` 目录的 git 树哈希），和装的时候记下的不一样就在后台重新下载 `main` 分支的 `gateway/`，等没有页面连着了退出，由 launchd 拉起新版。也就是说：这个仓库 `main` 分支上的网关代码会在装了的机器上自动运行，和第一次 `curl | sh` 是同一份信任。
+**自动更新**（`src/update.mts`，只有装成后台服务才有）：有页面连上来时（最多 10 分钟一次）取 `<site>/gateway.version`（`make build-web` 写的，是 `gateway/` 目录的 git 树哈希），和装的时候记下的不一样就在后台重新下载 `main` 分支的 `gateway/`，等没有页面连着了退出，由 launchd 拉起新版；配置里没有 `site` 或 `repo` 就不更新，日志里说明。也就是说：这个仓库 `main` 分支上的网关代码会在装了的机器上自动运行，和第一次 `curl | sh` 是同一份信任。
 
 ## 图床
 
@@ -64,16 +66,15 @@ npm install
 ## 启动
 
 ```bash
-node gateway/src/main.mts --library ~/Documents/Pairdown
-# 本地开发页面（make dev-web）也要连时，显式加它的来源：
-node gateway/src/main.mts --library ~/Documents/Pairdown --origin http://127.0.0.1:8811
+# 从源码跑不读安装配置，要放行哪些页面都用 --origin 给：线上站点、本地开发页面（make dev-web）
+node gateway/src/main.mts --library ~/Documents/Pairdown --origin https://<站点> --origin http://127.0.0.1:8811
 ```
 
 | 参数 | 说明 |
 |------|------|
 | `--library <文件夹>` | 必填。文库文件夹，必须已存在。所有读写都限制在它里面 |
 | `--port <端口>` | 默认 `7341`（`src/protocol.ts` 的 `DEFAULT_PORT`）。**页面固定连 7341**，改了端口页面就连不上；这个参数只用于开发、测试 |
-| `--origin <来源>` | 额外放行的页面来源，写成 `http(s)://主机[:端口]`，可以写多次 |
+| `--origin <来源>` | 放行的页面来源，写成 `http(s)://主机[:端口]`，可以写多次。一个都不给时网关照常启动，但谁也连不上（启动时提示） |
 | `-h`, `--help` | 打印说明 |
 
 没有改监听地址的参数：`--host`、`--listen`、`--bind` 都会报错退出。按 Ctrl+C 停止。
@@ -125,7 +126,7 @@ npm test        # node:test：起真网关、连真 WebSocket 跑
 | 规则 | 做法 | 测试 |
 |------|------|------|
 | 只听回环地址 | 监听地址写死 `127.0.0.1`（`LISTEN_HOST`），没有参数能改 | `test/cli.test.mts`、`test/gateway.test.mts`「只听 127.0.0.1」 |
-| 只接受白名单页面 | WebSocket 升级时查 Origin：只放行 `https://markdown.pairwise.site` 和 `--origin` 显式加的；没有 Origin 也拒绝。拒绝时先握手再用 4003 关，页面能看到原因。没有「开发时全放开」 | `test/gateway.test.mts`「Origin」 |
+| 只接受白名单页面 | WebSocket 升级时查 Origin：只放行安装时记下的站点（config.json 的 `site`，后台服务才有）和 `--origin` 显式加的；没有 Origin 也拒绝。拒绝时先握手再用 4003 关，页面能看到原因。没有「开发时全放开」 | `test/gateway.test.mts`「Origin」 |
 | 防 DNS rebinding | Host 头只认 `127.0.0.1:<端口>`、`localhost:<端口>`，否则回 421 不握手 | 「Host 头」 |
 | 路径不出文库 | 所有读、写、建、改名、删、取图片都过 `src/paths.mts` 的 `resolveInLibrary`：拒绝 `..`、绝对路径、隐藏文件、扩展名不对；按 `realpath` 解开符号链接后再查一遍，跳出文库、指向隐藏文件或别的类型都拒绝。目录名比较先 NFKC 再转小写（macOS 上 `aſsets` 就是 `assets`） | 「路径穿越」「符号链接」，`test/library-edge.test.mts` |
 | 不覆盖、不留半个文件 | 写临时文件并 fsync，再改名；新建和存图片用硬链接，目标已存在就失败；写失败删掉临时文件，启动时清残留。`rename` 的目标是源的硬链接也算已存在 | 「读写」「create / rename」，`test/library-edge.test.mts` |

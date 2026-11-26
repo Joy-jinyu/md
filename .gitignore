@@ -7,3 +7,5 @@ worker/.dev.vars
 gateway/node_modules/
 worker/node_modules/
 worker/.wrangler/
+.env
+src/app-config.gen.ts

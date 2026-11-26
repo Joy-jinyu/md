@@ -40,6 +40,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+      # 根目录的应用要 import 部署配置生成的 src/app-config.gen.ts（不提交）；探针不看配置，生成空值即可
+      - run: node scripts/app-config.mjs
       - name: 检查债务
         env:
           NSH_CHANNEL: ${{ matrix.channel }}

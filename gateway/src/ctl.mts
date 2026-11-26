@@ -7,8 +7,10 @@ import { isOrigin } from "./auth.mts";
 import { GatewayError } from "./errors.mts";
 import { parseImageHost, type ImageHost } from "./image-host.mts";
 import { DEFAULT_PORT, LISTEN_HOST } from "./protocol.ts";
+import { isRepo } from "./update.mts";
 
-type Config = { library: string; port: number; origins: string[]; autoUpdate: boolean; imageHost?: ImageHost };
+/** `site`、`repo` 由 install.sh 装的时候写进来（站点上的 gateway.sh 已按部署配置填好）。 */
+type Config = { library: string; port: number; origins: string[]; autoUpdate: boolean; site?: string; repo?: string; imageHost?: ImageHost };
 
 const ROOT = process.env.PAIRDOWN_HOME ?? join(homedir(), ".pairdown");
 const LABEL = process.env.PAIRDOWN_LABEL ?? "site.pairwise.md.gateway";
@@ -26,6 +28,8 @@ const HELP = [
   "  config library <文件夹>     换文库文件夹（没有就建），改完自动重启",
   "  config origins <来源,来源>  额外放行的页面来源（比如 http://127.0.0.1:8811）；写 none 清空",
   "  config port <端口>          换端口（线上页面只连 7341，一般不用改）",
+  "  config site <站点>          从哪个站点装的：放行它的页面、从它取版本号（装的时候已记下）",
+  "  config repo <用户/仓库>     自动更新从哪个 GitHub 仓库下载网关（装的时候已记下）",
   "  config autoUpdate on|off    有新版时要不要自动更新",
   "  config imageHost <上传地址>   用上传接口当图床（收 multipart 上传的接口）；写 none 不再用图床",
   "  config imageHostField <名字>  放图片的表单字段名（默认 file）",
@@ -102,6 +106,8 @@ function status() {
 function showConfig(c: Config) {
   console.log(`文库文件夹（library）：${c.library}`);
   console.log(`端口（port）：${c.port}`);
+  console.log(`站点（site）：${c.site ?? "没有——线上页面连不上，pairdown config site <站点地址>"}`);
+  console.log(`源码仓库（repo）：${c.repo ?? "没有——不能自动更新，pairdown config repo <用户/仓库>"}`);
   console.log(`额外放行的页面（origins）：${c.origins.length > 0 ? c.origins.join(",") : "无"}`);
   console.log(`自动更新（autoUpdate）：${c.autoUpdate ? "on" : "off"}`);
   const h = c.imageHost;
@@ -161,6 +167,14 @@ function changed(c: Config, key: string, value: string): Config {
     if (bad.length > 0) throw new Refusal(`来源不合法：${bad.join(",")}（要写成 http(s)://主机[:端口]）`);
     return { ...c, origins };
   }
+  if (key === "site") {
+    if (!isOrigin(value)) throw new Refusal(`站点不合法：${value}（要写成 http(s)://主机[:端口]）`);
+    return { ...c, site: value };
+  }
+  if (key === "repo") {
+    if (!isRepo(value)) throw new Refusal(`仓库不合法：${value}（要写成 用户/仓库）`);
+    return { ...c, repo: value };
+  }
   if (key === "autoUpdate" && (value === "on" || value === "off")) return { ...c, autoUpdate: value === "on" };
   throw new Refusal(`不认识的配置：${key} ${value}\n\n${HELP}`);
 }
@@ -169,14 +183,16 @@ function config(key?: string, value?: string) {
   if (key === undefined) return showConfig(readConfig());
   if (value === undefined) throw new Refusal(`缺少要改成的值\n\n${HELP}`);
   writeConfig(changed(readConfig(), key, value));
-  // autoUpdate、图床，网关每次用时现读，不用重启
-  if (key !== "autoUpdate" && !key.startsWith("imageHost")) start();
+  // autoUpdate、repo、图床，网关每次用时现读，不用重启
+  if (key !== "autoUpdate" && key !== "repo" && !key.startsWith("imageHost")) start();
   showConfig(readConfig());
 }
 
-/** install.sh 第一次装完调：参数和网关的一样（--library、--origin），写成配置后启动。 */
+/** install.sh 第一次装完调：参数和网关的一样（--library、--origin），连同环境变量 PAIRDOWN_SITE、PAIRDOWN_REPO 写成配置后启动。 */
 function setup(args: string[]) {
   let c = readConfig();
+  if (process.env.PAIRDOWN_SITE) c = changed(c, "site", process.env.PAIRDOWN_SITE);
+  if (process.env.PAIRDOWN_REPO) c = changed(c, "repo", process.env.PAIRDOWN_REPO);
   for (let i = 0; i < args.length; i += 2) {
     if (args[i] === "--library") c = changed(c, "library", args[i + 1] ?? "");
     else if (args[i] === "--origin") c = changed(c, "origins", [...c.origins, args[i + 1] ?? ""].join(","));
@@ -190,7 +206,9 @@ function setup(args: string[]) {
 }
 
 function update() {
-  execFileSync("sh", [join(ROOT, "gateway", "install.sh"), "fetch"], { stdio: "inherit", env: { ...process.env, PAIRDOWN_HOME: ROOT } });
+  const { site, repo } = readConfig();
+  if (!site || !repo) throw new Refusal("配置里没有站点或源码仓库，不知道从哪更新：pairdown config site <站点地址>、pairdown config repo <用户/仓库>");
+  execFileSync("sh", [join(ROOT, "gateway", "install.sh"), "fetch"], { stdio: "inherit", env: { ...process.env, PAIRDOWN_HOME: ROOT, PAIRDOWN_SITE: site, PAIRDOWN_REPO: repo } });
   start();
   console.log("已更新并重启。");
 }

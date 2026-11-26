@@ -66,18 +66,27 @@ test("web: the edit keys in a dialog's input reach neither the editor nor the ap
   expect(app.storage()[LEGACY_DOC_KEY]).toContain("x");
 });
 
-test("settings, gateway page: the gateway's one-line start command copies with one press", async () => {
-  const app = await open("../App.tsx", { ...WEB, storage: { [LEGACY_DOC_KEY]: "# T\n\nbody\n" } });
+test("settings, gateway page: the gateway's one-line start command (from the configured site) copies with one press", async () => {
+  const app = await open(SYNCED_APP, { ...WEB, storage: { [LEGACY_DOC_KEY]: "# T\n\nbody\n" } });
   await app.waitFor("text:body");
   await app.press("id:open-settings");
   await app.press("id:settings-tab-gateway");
   await app.press("label:复制启动命令");
-  expect(app.clipboard()).toBe("curl -fsSL https://markdown.pairwise.site/gateway.sh | sh");
+  expect(app.clipboard()).toBe("curl -fsSL https://pairdown.example/gateway.sh | sh");
   await app.waitFor("text:已复制");
 });
 
+test("settings, gateway page: a build without a configured site points to running the gateway from source instead of a command", async () => {
+  const app = await open("./fixtures/sync-unconfigured-app.tsx", { ...WEB, storage: { [LEGACY_DOC_KEY]: "# T\n\nbody\n" } });
+  await app.waitFor("text:body");
+  await app.press("id:open-settings");
+  await app.press("id:settings-tab-gateway");
+  await app.waitFor("text:这个页面打包时没配置站点地址（PAIRDOWN_SITE），没有一行安装命令：从源码运行网关，见仓库的 gateway/README.md。");
+  expect(app.shows("label:复制启动命令")).toBe(false);
+});
+
 test("a copy button the system refuses says it did not copy", async () => {
-  const app = await open("../App.tsx", { ...WEB, storage: { [LEGACY_DOC_KEY]: "# T\n\nbody\n" }, modules: { nsh: { "Clipboard.writeText": () => "failed" } } });
+  const app = await open(SYNCED_APP, { ...WEB, storage: { [LEGACY_DOC_KEY]: "# T\n\nbody\n" }, modules: { nsh: { "Clipboard.writeText": () => "failed" } } });
   await app.waitFor("text:body");
   await app.press("id:open-settings");
   await app.press("id:settings-tab-gateway");
@@ -92,7 +101,7 @@ test("an error receipt at the top can be copied as it reads", async () => {
   await app.press("id:open-settings");
   await app.press("id:settings-tab-sync");
   await app.press("id:sign-in");
-  const reason = "网页登录只在 markdown.pairwise.site 可用：GitHub 只把登录送回那里登记的地址。";
+  const reason = "网页登录只在 pairdown.example 可用：GitHub 只把登录送回那里登记的地址。";
   await app.waitFor(`text:${reason}`);
   await app.press("id:settings-done");
   await app.press("id:receipt-copy");

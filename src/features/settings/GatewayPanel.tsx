@@ -2,11 +2,12 @@
 import { t } from "../../i18n";
 import { Text, View } from "nsh";
 import { gatewayRefusal, storageKind } from "../../store/backend";
-import { DEFAULT_PORT, OFFICIAL_ORIGIN } from "../../store/gateway-store";
+import { DEFAULT_PORT } from "../../store/gateway-store";
+import { siteOrigin } from "../../sync/config";
 import { CopyButton } from "../../ui/copy-button";
 
-/** 脚本是仓库里的 gateway/install.sh，make build-web 时放到站点根目录。 */
-const START_COMMAND = `curl -fsSL ${OFFICIAL_ORIGIN}/gateway.sh | sh`;
+/** 脚本是仓库里的 gateway/install.sh，make build-web 时放到站点根目录。没配站点（部署配置 PAIRDOWN_SITE）时是 null。 */
+const startCommand = (): string | null => (siteOrigin() === "" ? null : `curl -fsSL ${siteOrigin()}/gateway.sh | sh`);
 
 const LINE = "select-text text-xs leading-5 text-muted-foreground";
 const pairdownCommand = () => t("pairdown 命令：pairdown 看状态和配置，pairdown config library 加文件夹换文库，pairdown uninstall 卸载。", "Run pairdown to see status and settings, pairdown config library with a folder to change libraries, or pairdown uninstall to remove the gateway.");
@@ -23,10 +24,15 @@ function Code(props: { text: string; copyLabel: string; testID: string }) {
 
 /** 怎么装、怎么起网关。 */
 function GatewayHowTo() {
+  const command = startCommand();
   return (
     <View testID="gateway-howto" class="gap-2">
       <Text class={LINE}>{t("装上本机网关后，网页里的文档就存成你电脑上一个文件夹里的 .md 文件：没有浏览器的容量限制，清浏览器数据也不会丢，别的编辑器和 git 能直接用。网关只听本机（127.0.0.1），只接受这个网站的页面。要 Node 23.6 以上。在终端里运行：", "The local gateway saves web documents as .md files in a folder on your computer. Browser storage limits and clearing site data do not affect them. Other editors and Git can use the files directly. The gateway listens only on 127.0.0.1 and accepts connections from this site. It requires Node.js 23.6 or later. Run this in a terminal:")}</Text>
-      <Code testID="copy-start-command" text={START_COMMAND} copyLabel={t("复制启动命令", "Copy install command")} />
+      {command === null ? (
+        <Text class={LINE}>{t("这个页面打包时没配置站点地址（PAIRDOWN_SITE），没有一行安装命令：从源码运行网关，见仓库的 gateway/README.md。", "This build has no site address configured (PAIRDOWN_SITE), so there is no install command. Run the gateway from source; see gateway/README.md in the repository.")}</Text>
+      ) : (
+        <Code testID="copy-start-command" text={command} copyLabel={t("复制启动命令", "Copy install command")} />
+      )}
       <Text class={LINE}>
         {t(`装好后网关在后台运行，登录电脑后自动启动，有新版会自己更新（后台运行现在只支持 macOS）。文档放在 ~/Documents/Pairdown。同时装上 ${pairdownCommand()}装好以后刷新这个页面；浏览器问要不要允许访问本地网络时选允许。连不上时页面照常用浏览器本地存储，不会报错。`, `On macOS the gateway runs in the background, starts at login, and updates automatically. Documents are stored in ~/Documents/Pairdown. ${pairdownCommand()} Refresh this page after installing, and allow local network access if prompted. Pairdown uses browser storage if the gateway is unavailable.`)}
       </Text>
