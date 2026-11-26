@@ -1,7 +1,7 @@
 NSH ?= nsh
 ENTRY := App.tsx
 
-.PHONY: help dev dev-web dev-landing check test test-gateway test-worker verify build-web build-mac deploy-web clean
+.PHONY: help dev dev-web dev-landing check test test-gateway test-worker verify build-web build-mac deploy-web clean nsh-debt
 
 help: ## 列出命令
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -30,6 +30,9 @@ test-worker: ## 跑登录中转 Worker 的测试（worker/）
 	cd worker && $(NPM_INSTALL) && node --test test/*.test.mts
 
 verify: check test test-gateway test-worker ## 类型检查 + 页面、网关、Worker 的测试
+
+nsh-debt: ## 检查 NSH_DEBT.md 里的 nsh 债务是否还在（用本机装的 nsh；CI 每天跑一次）
+	node .github/nsh-debt/check.mjs
 
 # 产物多套一层应用名：dist/web/Pairdown/、dist/macos/Pairdown.app
 build-web: ## 打包静态站到 dist/web/Pairdown/

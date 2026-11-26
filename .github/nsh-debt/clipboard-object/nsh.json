@@ -1,0 +1,7 @@
+{
+  "name": "Clipboard probe",
+  "id": "site.pairwise.md.probe",
+  "capabilities": {
+    "clipboard": { "read": false, "write": true }
+  }
+}
