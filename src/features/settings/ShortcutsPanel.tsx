@@ -1,22 +1,23 @@
 /** 设置里的「快捷键」一类：列出全部命令和它的键，可以改、清除、恢复默认。布局见 DESIGN.md「屏幕：设置」。 */
+import { type Phrase, phrase, t } from "../../i18n";
 import { keymap, signal, Text, View } from "nsh";
 import { Input } from "nsh/base";
 import { IN_BROWSER, SYSTEM_KEYS } from "../../platform";
 import type { ShortcutOverrides } from "../../store/settings";
 import { Button } from "../../ui/button";
-import { type AppCommand, COMMANDS, isViewCommand } from "../editor/commands";
+import { type AppCommand, COMMANDS, commandGroupLabel, isViewCommand, type CommandGroup } from "../editor/commands";
 import { browserMayTake, canonical, conflictOf, currentOverrides, fromKeymapName, keyOf, recordableKeystrokes, rejectReason } from "../editor/keybindings";
 import { toKeymapName } from "../editor/keys";
 
 /** 行下面的一条话：拒绝的原因、提醒，或者撞键时等用户选。 */
 interface RowNote {
   id: string;
-  text: string;
+  text: Phrase;
   /** 撞键时：要设的键，和现在用着它的那条命令。 */
   swap?: { key: string; other: AppCommand };
 }
 
-type Row = { kind: "group"; name: string } | { kind: "command"; command: AppCommand };
+type Row = { kind: "group"; name: CommandGroup } | { kind: "command"; command: AppCommand };
 
 const label = (key: string) => keymap.label(toKeymapName(key));
 
@@ -32,7 +33,7 @@ function rowsFor(query: string, draft: ShortcutOverrides): Row[] {
   const hit = (c: AppCommand) => {
     if (q === "") return true;
     const key = keyOf(c, draft);
-    return c.label.toLowerCase().includes(q) || c.keywords.some((w) => w.includes(q)) || (key !== undefined && label(key).toLowerCase().includes(q));
+    return c.label.toLowerCase().includes(q) || c.keywords.some((w) => w.includes(q)) || commandGroupLabel(c.group).toLowerCase().includes(q) || (key !== undefined && label(key).toLowerCase().includes(q));
   };
   const rows: Row[] = [];
   for (const c of COMMANDS.filter(hit)) {
@@ -59,11 +60,11 @@ export function createShortcutEditor() {
   /** 录键时按下了一个组合键。 */
   const pressed = (c: AppCommand, key: string) => {
     const reason = rejectReason(key, !isViewCommand(c));
-    if (reason) return note.set({ id: c.id, text: `${label(key)}：${reason}` });
+    if (reason) return note.set({ id: c.id, text: () => t(`${label(key)}：${rejectReason(key, !isViewCommand(c))}`, `${label(key)}: ${rejectReason(key, !isViewCommand(c))}`) });
     const other = conflictOf(key, c.id, draft());
-    if (other) return note.set({ id: c.id, text: `${label(key)} 已被「${other.label}」使用`, swap: { key, other } });
+    if (other) return note.set({ id: c.id, text: () => t(`${label(key)} 已被「${other.label}」使用`, `${label(key)} is already used by “${other.label}”.`), swap: { key, other } });
     set(c, key);
-    note.set(IN_BROWSER && browserMayTake(key) ? { id: c.id, text: `${label(key)}：在浏览器里可能被浏览器先处理，按了没反应就换一个` } : null);
+    note.set(IN_BROWSER && browserMayTake(key) ? { id: c.id, text: () => t(`${label(key)}：在浏览器里可能被浏览器先处理，按了没反应就换一个`, `The browser may intercept ${label(key)}. Choose another shortcut if this one doesn’t work.`) } : null);
   };
   const swap = (c: AppCommand) => {
     const pending = note()?.swap;
@@ -96,7 +97,8 @@ export function createShortcutEditor() {
     restore: (c: AppCommand) => {
       const { [c.id]: _dropped, ...rest } = draft();
       const other = c.key === undefined ? undefined : conflictOf(c.key, c.id, rest);
-      if (c.key !== undefined && other) return note.set({ id: c.id, text: `默认键 ${label(c.key)} 现在被「${other.label}」用着`, swap: { key: c.key, other } });
+      const key = c.key;
+      if (key !== undefined && other) return note.set({ id: c.id, text: () => t(`默认键 ${label(key)} 现在被「${other.label}」用着`, `The default shortcut ${label(key)} is now used by “${other.label}”.`), swap: { key, other } });
       note.set(null);
       draft.set(rest);
     },
@@ -158,19 +160,19 @@ function RowActions(props: { command: AppCommand; editor: Editor }) {
     <>
       <View class="flex-row items-center gap-2">
         <If when={changed()}>
-          <Text class="text-[11px] text-primary">已改</Text>
+          <Text class="text-[11px] text-primary">{t("已改", "Customized")}</Text>
         </If>
-        <If when={key()} else={<Text class="text-[11px] text-muted-foreground">未设置</Text>}>
+        <If when={key()} else={<Text class="text-[11px] text-muted-foreground">{t("未设置", "None")}</Text>}>
           {(k) => <KeyCap text={label(k())} />}
         </If>
       </View>
       <View class={`${ACTIONS} flex-row items-center gap-1`}>
-        <Button testID={`shortcut-edit-${c.id}`} label="修改" accessibilityLabel={`修改「${c.label}」的快捷键`} onPress={() => ed.begin(c)} />
+        <Button testID={`shortcut-edit-${c.id}`} label={t("修改", "Change")} accessibilityLabel={t(`修改「${c.label}」的快捷键`, `Change the shortcut for “${c.label}”`)} onPress={() => ed.begin(c)} />
         <If when={key()}>
-          <Button testID={`shortcut-clear-${c.id}`} label="清除" accessibilityLabel={`清除「${c.label}」的快捷键`} onPress={() => ed.clear(c)} />
+          <Button testID={`shortcut-clear-${c.id}`} label={t("清除", "Clear")} accessibilityLabel={t(`清除「${c.label}」的快捷键`, `Clear the shortcut for “${c.label}”`)} onPress={() => ed.clear(c)} />
         </If>
         <If when={changed()}>
-          <Button testID={`shortcut-restore-${c.id}`} label="恢复" accessibilityLabel={`「${c.label}」恢复默认键`} onPress={() => ed.restore(c)} />
+          <Button testID={`shortcut-restore-${c.id}`} label={t("恢复", "Reset")} accessibilityLabel={t(`「${c.label}」恢复默认键`, `Reset the shortcut for “${c.label}”`)} onPress={() => ed.restore(c)} />
         </If>
       </View>
     </>
@@ -196,18 +198,18 @@ function CommandRow(props: { command: AppCommand; editor: Editor }) {
         >
           <KeyRecorder onKey={(key) => ed.pressed(c, key)} onCancel={ed.cancel} />
           <View testID="shortcut-capture" role="alert">
-            <Text class="text-xs text-primary">请按下新的组合键（Esc 取消）</Text>
+            <Text class="text-xs text-primary">{t("请按下新的组合键（Esc 取消）", "Press a new key combination (Esc to cancel)")}</Text>
           </View>
-          <Button label="取消" onPress={ed.cancel} />
+          <Button label={t("取消", "Cancel")} onPress={ed.cancel} />
         </If>
       </View>
       <If when={mine()}>
         {(n) => (
           <View testID="shortcut-note" role="alert" class="mb-1 flex-row items-center gap-2 rounded-(--radius-sm) bg-warn-tint px-2 py-1">
-            <Text class="min-w-0 flex-1 select-text text-xs leading-5 text-warn">{n().text}</Text>
+            <Text class="min-w-0 flex-1 select-text text-xs leading-5 text-warn">{phrase(n().text)}</Text>
             <If when={n().swap}>
-              <Button testID="shortcut-swap" label="换给这条" onPress={() => ed.swap(c)} />
-              <Button label="取消" onPress={ed.cancel} />
+              <Button testID="shortcut-swap" label={t("换给这条", "Assign to this command")} onPress={() => ed.swap(c)} />
+              <Button label={t("取消", "Cancel")} onPress={ed.cancel} />
             </If>
           </View>
         )}
@@ -219,7 +221,7 @@ function CommandRow(props: { command: AppCommand; editor: Editor }) {
 function SystemKeys() {
   return (
     <View testID="system-keys">
-      <Text class="px-2 pb-1 pt-3 text-[11px] text-faint">系统键（不能改）</Text>
+      <Text class="px-2 pb-1 pt-3 text-[11px] text-faint">{t("系统键（不能改）", "System shortcuts")}</Text>
       <Each of={SYSTEM_KEYS} key={(k) => k.label}>
         {(k) => (
           <View class="min-h-9 flex-row items-center gap-2 rounded-(--radius-sm) px-2 hover:bg-hover">
@@ -246,15 +248,15 @@ export function ShortcutsPanel(props: { editor: ShortcutEditor; autoFocus: boole
           autoFocus={props.autoFocus}
           value={ed.query()}
           onChange={({ value }) => ed.query.set(value)}
-          placeholder="搜索命令或按键"
-          accessibilityLabel="搜索命令或按键"
+          placeholder={t("搜索命令或按键", "Search commands or shortcuts")}
+          accessibilityLabel={t("搜索命令或按键", "Search commands or shortcuts")}
           autoCapitalize="none"
           autoCorrect={false}
           class="h-8 w-[240px] min-w-0 max-w-[480px] shrink grow rounded-(--radius-sm) border border-input bg-background px-2 text-[13px] text-foreground placeholder:text-faint focus:border-primary"
         />
         <Button
           testID="shortcut-reset-all"
-          label={ed.confirmReset() ? "再点一次确认" : "全部恢复默认"}
+          label={ed.confirmReset() ? t("再点一次确认", "Click again to confirm") : t("全部恢复默认", "Reset all to defaults")}
           labelClass={ed.confirmReset() ? "text-destructive" : ""}
           disabled={Object.keys(ed.draft()).length === 0}
           onPress={ed.resetAll}
@@ -264,7 +266,7 @@ export function ShortcutsPanel(props: { editor: ShortcutEditor; autoFocus: boole
         <Each of={rowsFor(ed.query(), ed.draft())} key={(r) => (r.kind === "group" ? `group:${r.name}` : r.command.id)}>
           {(r) => {
             const row = r();
-            return row.kind === "group" ? <Text class="px-2 pb-1 pt-3 text-[11px] text-faint">{row.name}</Text> : <CommandRow command={row.command} editor={ed} />;
+            return row.kind === "group" ? <Text class="px-2 pb-1 pt-3 text-[11px] text-faint">{commandGroupLabel(row.name)}</Text> : <CommandRow command={row.command} editor={ed} />;
           }}
         </Each>
         <If when={ed.query().trim() === ""}>

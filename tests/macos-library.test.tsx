@@ -1,4 +1,5 @@
-import { expect, open, test } from "nsh/test";
+import { expect, test } from "nsh/test";
+import { open } from "./fixtures/chinese-open";
 import { checkId } from "../src/platform/macos/file-store";
 import { LAST_OPENED_KEY } from "../src/store/library";
 import { bodyKey, metaKey } from "../src/store/local-store";
@@ -251,7 +252,7 @@ test("a dropped file from the library opens in place; one from elsewhere is copi
 
 test("document paths that could leave the library or touch hidden files are refused", () => {
   for (const bad of ["../x.md", "/etc/x.md", "a/../../x.md", ".hidden.md", "a/.git/x.md", "a\\b.md", "x.txt", "a//b.md", ""]) {
-    expect(() => checkId(bad)).toThrow("文档路径不对");
+    expect(() => checkId(bad)).toThrow("Invalid document path");
   }
   expect(() => checkId("notes/Trip v2.md")).not.toThrow();
 });

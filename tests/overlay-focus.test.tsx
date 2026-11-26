@@ -1,4 +1,5 @@
-import { expect, open, test } from "nsh/test";
+import { expect, test } from "nsh/test";
+import { chineseStorage, open } from "./fixtures/chinese-open";
 import { LAST_OPENED_KEY } from "../src/store/library";
 import { bodyKey, metaKey } from "../src/store/local-store";
 import { RED_PNG } from "./fixtures/images";
@@ -80,7 +81,7 @@ test("the settings dialog takes the keyboard as it opens: what is typed goes int
 
 /** 应用读写 `data`：测试改它就像另一个标签页改了存储。 */
 async function openShared() {
-  const shared = sharedStorage(LIBRARY);
+  const shared = sharedStorage(chineseStorage(LIBRARY));
   const app = await open("../App.tsx", { ...WEB, modules: shared.modules });
   await app.waitFor("text:first doc");
   return { app, data: shared.data };

@@ -1,4 +1,5 @@
-import { expect, open, test } from "nsh/test";
+import { expect, test } from "nsh/test";
+import { open } from "./fixtures/chinese-open";
 import { LAST_OPENED_KEY } from "../src/store/library";
 import { LEGACY_DOC_KEY } from "../src/store/kv";
 import { seedLibrary } from "./fixtures/library";

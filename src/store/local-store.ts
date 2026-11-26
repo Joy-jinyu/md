@@ -3,6 +3,7 @@
  * 版本放在说明里，每写一次加一；写之前先比对，对不上就不写（另一个标签页改过）。
  * 写完在 Storage 里记一笔哪篇变了（`CHANGED_KEY`），别的标签页不用等回到窗口就能跟上（`watch`）。
  */
+import { t } from "../i18n";
 import { Storage } from "nsh";
 import { markdownTitle } from "../doc/title";
 import type { DocMeta, DocumentStore, ReadResult, StoreChange, Version, WriteResult } from "./document-store";
@@ -76,7 +77,7 @@ const newId = () => `d${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
 function cleanName(name: string): string {
   const clean = name.trim();
-  if (clean === "") throw new Error("名字不能是空的");
+  if (clean === "") throw new Error(t("名字不能是空的", "Enter a name."));
   return clean;
 }
 
@@ -121,7 +122,7 @@ async function rename(kv: Kv, id: string, name: string): Promise<DocMeta> {
   return kv.update([metaKey(id), bodyKey(id)], ([raw, body]) => {
     const meta = parseMeta(id, raw) ?? (typeof body === "string" ? describe(id, clean, body, 0) : null);
     // 别处删掉了：不能为了改名凭空建出一篇空的
-    if (!meta) throw new Error("这篇文档已经不在了（可能在别的标签页里删掉了）");
+    if (!meta) throw new Error(t("这篇文档已经不在了（可能在别的标签页里删掉了）", "This document is no longer available. It may have been deleted in another tab."));
     const next = { ...meta, name: clean };
     return { puts: { [metaKey(id)]: encodeMeta(next) }, result: next };
   });
@@ -176,7 +177,7 @@ async function putAssetBytes(kv: Kv, key: string, bytes: Uint8Array) {
   } catch (e) {
     if (!isQuotaError(e)) throw e;
     console.warn("image not stored: storage full", e);
-    throw new AssetRejected("浏览器存储满了，图片没存进去。删掉用不着的文档（它的图片会一起删掉），或者连上本机网关把文档存成文件");
+    throw new AssetRejected(t("浏览器存储满了，图片没存进去。删掉用不着的文档（它的图片会一起删掉），或者连上本机网关把文档存成文件", "Browser storage is full, so the image was not saved. Delete unused documents and their images, or connect to the local gateway to save documents as files."));
   }
 }
 
@@ -239,7 +240,7 @@ export function createLocalStore(open: () => Promise<Kv> = localKv): DocumentSto
     async putAsset(docId, bytes) {
       const name = assetName(bytes, checkImage(bytes, MAX_LOCAL_ASSET_BYTES));
       const kv = await ready();
-      if (!kv.binary) throw new Error("这里的本机存储只能存文字，存不了图片（浏览器的 IndexedDB 没能用上）");
+      if (!kv.binary) throw new Error(t("这里的本机存储只能存文字，存不了图片（浏览器的 IndexedDB 没能用上）", "This browser storage only supports text because IndexedDB is unavailable."));
       await putAssetBytes(kv, assetKey(docId, name), bytes);
       return assetSrc(name);
     },

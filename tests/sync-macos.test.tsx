@@ -1,4 +1,5 @@
-import { expect, open, test } from "nsh/test";
+import { expect, test } from "nsh/test";
+import { open } from "./fixtures/chinese-open";
 import { syncRecordKey } from "../src/store/sync-store";
 import { memoryFs } from "./fixtures/memory-fs";
 

@@ -1,4 +1,5 @@
 import { expect, test } from "nsh/test";
+import { phrase } from "../src/i18n";
 import { markdownToHtml, markdownToHtmlWithImages } from "../src/features/files/export-html";
 
 const body = (html: string) => html.slice(html.indexOf('<main class="doc">'), html.indexOf("</main>"));
@@ -92,7 +93,7 @@ test("headings get anchors the table of contents links to; lists, tasks, tables,
   expect(main).toContain('<td style="text-align:center"><strong>2</strong></td><td style="text-align:right"><code>3</code></td>');
   expect(main).toContain('<pre><code class="language-js">if (a &lt; b) {}</code></pre>');
   expect(main).toContain("<blockquote><p>quoted</p></blockquote>");
-  expect(main).toContain('<div class="alert alert-warning"><p class="alert-title">警告</p><p>careful</p></div>');
+  expect(main).toContain('<div class="alert alert-warning"><p class="alert-title">Warning</p><p>careful</p></div>');
 });
 
 test("formulas keep their TeX, Mermaid keeps its source, footnotes gather at the end with links both ways", () => {
@@ -100,11 +101,11 @@ test("formulas keep their TeX, Mermaid keeps its source, footnotes gather at the
   const main = body(markdownToHtml(md));
   expect(main).toContain("$E=mc^2$");
   expect(main).toContain("\\int_0^1 x\\,dx &lt; 1");
-  expect(main).toContain("公式（TeX 源码）");
+  expect(main).toContain("Formula (TeX source)");
   expect(main).toContain("graph TD; A--&gt;B");
-  expect(main).toContain("Mermaid 图");
+  expect(main).toContain("Mermaid diagram");
   expect(main).toContain('<sup class="fnref"><a href="#fn:n" id="fnref:n">n</a></sup>');
-  expect(main).toContain('<li id="fn:n"><span class="fnlabel">n</span> The note <em>x</em>. <a class="fnback" href="#fnref:n" aria-label="回到正文">↩</a></li>');
+  expect(main).toContain('<li id="fn:n"><span class="fnlabel">n</span> The note <em>x</em>. <a class="fnback" href="#fnref:n" aria-label="Return to text">↩</a></li>');
 });
 
 test("a run of HTML comments followed by text exports quickly as source; comments alone are dropped", () => {
@@ -135,7 +136,7 @@ test("footnote ids cannot collide with heading ids, and a footnote's own Markdow
 test("diagrams that could not be drawn are exported as source and the receipt says how many", async () => {
   const doc = "# 图\n\n```mermaid\ngraph TD; A-->B\n```\n\n```mermaid\ngraph TD; A-->B\n```\n\n```mermaid\nsequenceDiagram\n  A->>B: hi\n```\n";
   const out = await markdownToHtmlWithImages(doc, null);
-  expect(out.note).toBe("3 张 Mermaid 图没画出来，导出的是源码。");
+  expect(phrase(out.note)).toBe("Could not render 3 Mermaid diagrams. Exported the source text instead.");
   expect(body(out.html)).toContain("graph TD; A--&gt;B");
   expect(out.html.includes("<img")).toBe(false);
 });

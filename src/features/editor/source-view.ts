@@ -1,6 +1,7 @@
 /** 所见即所得文档的源码视图（Cmd+Alt+/）：同一个会话，切过去是把它写成 Markdown，切回来是把改过的 Markdown 读回去。 */
 import { signal } from "nsh";
 import { chain, type EditorRef, scrollIntoView, setTextSelection } from "nsh/base";
+import { type Phrase, t } from "../../i18n";
 import { messageOf } from "../../doc/message";
 import { joinEndings, splitEndings } from "../../doc/line-endings";
 import { isEmptyParagraph } from "../../doc/to-markdown";
@@ -21,7 +22,7 @@ export function createSourceView(doc: RichOpened, find: SourceFind, tooBig: (mar
   const { session } = doc;
   /** 开着时是交给源码编辑框的初始文字。 */
   const view = signal<{ text: string } | null>(null);
-  const notice = signal("");
+  const notice = signal<Phrase>("");
   let endings = splitEndings("");
   let base = "";
   let current = "";
@@ -44,14 +45,14 @@ export function createSourceView(doc: RichOpened, find: SourceFind, tooBig: (mar
     if (current === base) return true;
     const markdown = joinEndings(current, endings);
     if (tooBig(markdown)) {
-      notice.set("改完以后超过了所见即所得能流畅打开的上限，先留在源码视图。");
+      notice.set(() => t("改完以后超过了所见即所得能流畅打开的上限，先留在源码视图。", "The changes made this document too large for smooth rich-text editing. It will stay in source view."));
       return false;
     }
     try {
       doc.load(markdown);
     } catch (e) {
       console.error("load from source failed", e);
-      notice.set(`这份源码没能读进所见即所得（${messageOf(e)}），先留在源码视图，内容没有丢。`);
+      notice.set(() => t(`这份源码没能读进所见即所得（${messageOf(e)}），先留在源码视图，内容没有丢。`, `Could not open in rich-text mode (${messageOf(e)}). Your content is still in source view.`));
       return false;
     }
     markChanged(doc.dump);

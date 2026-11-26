@@ -1,4 +1,5 @@
 /** 「设置图床」对话框：连着网关、还没设置图床时插图先问（editor/image-host.ts 的 `hostAsk`）。布局见 DESIGN.md「M3：图片」的「设置图床对话框」。 */
+import { t } from "../../i18n";
 import { keymap, Text, View } from "nsh";
 import { Dialog } from "nsh/base";
 import { Button } from "../../ui/button";
@@ -24,7 +25,7 @@ export function ImageHostDialog() {
       testID="image-host-ask"
       open={hostAsk() !== null}
       animation="fade"
-      accessibilityLabel="设置图床"
+      accessibilityLabel={t("设置图床", "Set up image hosting")}
       closeOnEscape
       closeOnBackdropPress
       onOpenChange={({ open }) => !open && answer("local")}
@@ -33,13 +34,11 @@ export function ImageHostDialog() {
     >
       <EscapeCloses onEscape={() => answer("local")} />
       <View class="gap-3 rounded-(--radius) border border-border bg-popover p-4">
-        <Text class="text-sm font-medium text-strong">设置图床</Text>
-        <Text class="select-text text-xs leading-5 text-muted-foreground">
-          图片会经本机网关传到你设置的图床（自己的上传接口，或者一个 GitHub 仓库），正文里写图床给的外链地址。请求头、令牌这类密钥存在本机网关的配置里，页面读不回它们的值。
-        </Text>
-        <ImageHostForm current={null} saveLabel="保存并上传" onSaved={() => answer("saved")}>
-          <Button testID="image-host-never" label="不用图床" onPress={() => answer("never")} />
-          <Button testID="image-host-local" label="这次存本地" onPress={() => answer("local")} />
+        <Text class="text-sm font-medium text-strong">{t("设置图床", "Set up image hosting")}</Text>
+        <Text class="select-text text-xs leading-5 text-muted-foreground">{t("图片会经本机网关传到你设置的图床（自己的上传接口，或者一个 GitHub 仓库），正文里写图床给的外链地址。请求头、令牌这类密钥存在本机网关的配置里，页面读不回它们的值。", "The local gateway uploads images to your endpoint or GitHub repository. The document stores their public URLs. The gateway keeps request headers and tokens in its local configuration.")}</Text>
+        <ImageHostForm current={null} saveLabel={t("保存并上传", "Save and upload")} onSaved={() => answer("saved")}>
+          <Button testID="image-host-never" label={t("不用图床", "Don’t use image hosting")} onPress={() => answer("never")} />
+          <Button testID="image-host-local" label={t("这次存本地", "Save locally this time")} onPress={() => answer("local")} />
         </ImageHostForm>
       </View>
     </Dialog>

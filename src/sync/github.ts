@@ -3,6 +3,7 @@
  * token 由调用方（account.ts）从 store 读出来传进来，只放在请求头里；日志只记方法、路径和状态码，错误提示里不带 token。
  * 接口字段以 docs.github.com 的 Gist REST 文档为准（2026-11-25 读）。
  */
+import { t } from "../i18n";
 import { cleanFileStem } from "../doc/file-name";
 import { GITHUB_API } from "./config";
 
@@ -62,19 +63,19 @@ const two = (n: number) => String(n).padStart(2, "0");
 
 function rateMessage(res: Response): string {
   const reset = Number(res.headers.get("x-ratelimit-reset"));
-  if (!Number.isFinite(reset) || reset <= 0) return "GitHub 接口的调用次数到上限了，过一会儿再同步。";
+  if (!Number.isFinite(reset) || reset <= 0) return t("GitHub 接口的调用次数到上限了，过一会儿再同步。", "GitHub’s rate limit was reached. Try syncing later.");
   const at = new Date(reset * 1000);
-  return `GitHub 接口的调用次数到上限了，${two(at.getHours())}:${two(at.getMinutes())} 以后再同步。`;
+  return t(`GitHub 接口的调用次数到上限了，${two(at.getHours())}:${two(at.getMinutes())} 以后再同步。`, `GitHub’s rate limit was reached. Try syncing after ${two(at.getHours())}:${two(at.getMinutes())}.`);
 }
 
 function errorFor(res: Response, what: string): SyncError {
   const s = res.status;
-  if (s === 401) return new SyncError("auth", "GitHub 登录过期了（也可能是在 GitHub 上撤销了授权），已退出登录。请重新登录后再同步：文档和同步记录都还在，登录后接着同步。", s);
+  if (s === 401) return new SyncError("auth", t("GitHub 登录过期了（也可能是在 GitHub 上撤销了授权），已退出登录。请重新登录后再同步：文档和同步记录都还在，登录后接着同步。", "Your GitHub session expired or its authorization was revoked. Sign in again to resume syncing. Your documents and sync records are still here."), s);
   if (s === 429 || (s === 403 && (res.headers.get("x-ratelimit-remaining") === "0" || res.headers.has("retry-after")))) return new SyncError("rate", rateMessage(res), s);
-  if (s === 403) return new SyncError("forbidden", `GitHub 拒绝了${what}（403）。可能是登录时没给 Gist 权限，退出登录后重新登录试试。`, s);
-  if (s === 404) return new SyncError("not-found", `GitHub 上找不到${what}的对象（404）。`, s);
-  if (s === 422) return new SyncError("http", `GitHub 不收这次的内容（422）。`, s);
-  return new SyncError("http", `GitHub 出错了（${s}），过一会儿再试。`, s);
+  if (s === 403) return new SyncError("forbidden", t(`GitHub 拒绝了${what}（403）。可能是登录时没给 Gist 权限，退出登录后重新登录试试。`, `GitHub denied access to ${what} (403). Make sure Pairdown has Gist permission, then sign out and sign in again.`), s);
+  if (s === 404) return new SyncError("not-found", t(`GitHub 上找不到${what}的对象（404）。`, `GitHub could not find ${what} (404).`), s);
+  if (s === 422) return new SyncError("http", t("GitHub 不收这次的内容（422）。", "GitHub rejected these changes (422)."), s);
+  return new SyncError("http", t(`GitHub 出错了（${s}），过一会儿再试。`, `GitHub returned an error (${s}). Try again shortly.`), s);
 }
 
 /** Gist 的版本号：`history[0].version`（每次改动的提交号）；没有时用 `updated_at`。history 里每项的字段文档没写全（待求证），所以兜底。 */
@@ -151,7 +152,7 @@ export function createGitHub(token: string, fetchFn: Fetch, onUnauthorized: () =
       });
     } catch (e) {
       console.warn("github request failed", method, path, e instanceof Error ? e.message : String(e));
-      throw new SyncError("network", "连不上 GitHub，检查网络后再同步。");
+      throw new SyncError("network", t("连不上 GitHub，检查网络后再同步。", "Could not reach GitHub. Check your connection and try syncing again."));
     }
     if (res.ok) return res;
     console.warn("github request failed", method, path, res.status);
@@ -164,7 +165,7 @@ export function createGitHub(token: string, fetchFn: Fetch, onUnauthorized: () =
       return (await res.json()) as unknown;
     } catch (e) {
       console.warn("github response unreadable", e);
-      throw new SyncError("invalid", "GitHub 回的内容读不懂，过一会儿再试。");
+      throw new SyncError("invalid", t("GitHub 回的内容读不懂，过一会儿再试。", "GitHub returned an unreadable response. Try again shortly."));
     }
   }
 
@@ -172,17 +173,17 @@ export function createGitHub(token: string, fetchFn: Fetch, onUnauthorized: () =
   async function fullText(file: RawFile): Promise<string> {
     const content = typeof file.content === "string" ? file.content : "";
     if (file.truncated !== true) return content;
-    if (typeof file.raw_url !== "string" || !isRawUrl(file.raw_url)) throw new SyncError("invalid", "GitHub 上这篇太大，没给能用的全文地址，没法同步。");
+    if (typeof file.raw_url !== "string" || !isRawUrl(file.raw_url)) throw new SyncError("invalid", t("GitHub 上这篇太大，没给能用的全文地址，没法同步。", "This GitHub document is too large and has no usable link to its full text. It cannot be synced."));
     let res: Response;
     try {
       res = await fetchFn(file.raw_url, NO_STORE);
     } catch (e) {
       console.warn("gist raw download failed", e instanceof Error ? e.message : String(e));
-      throw new SyncError("network", "连不上 GitHub，检查网络后再同步。");
+      throw new SyncError("network", t("连不上 GitHub，检查网络后再同步。", "Could not reach GitHub. Check your connection and try syncing again."));
     }
     if (!res.ok) {
       console.warn("gist raw download failed", res.status);
-      throw errorFor(res, "这篇的全文");
+      throw errorFor(res, t("这篇的全文", "the full text of this document"));
     }
     return res.text();
   }
@@ -190,10 +191,10 @@ export function createGitHub(token: string, fetchFn: Fetch, onUnauthorized: () =
   async function toGist(raw: unknown, prefer?: string): Promise<Gist> {
     const g = asObject(raw);
     const picked = pickFile(g.files, prefer);
-    if (typeof g.id !== "string") throw new SyncError("invalid", "GitHub 回的 Gist 读不懂，过一会儿再试。");
+    if (typeof g.id !== "string") throw new SyncError("invalid", t("GitHub 回的 Gist 读不懂，过一会儿再试。", "GitHub returned an unreadable Gist. Try again shortly."));
     if (!picked) {
       const many = fileEntries(g.files).length > 1;
-      throw new SyncError("invalid", many ? "GitHub 上这个 Gist 里有好几个文件，认不出哪个是这篇，没有同步（GitHub 上的没动）。" : "GitHub 上这个 Gist 里没有文件，没法同步。");
+      throw new SyncError("invalid", many ? t("GitHub 上这个 Gist 里有好几个文件，认不出哪个是这篇，没有同步（GitHub 上的没动）。", "This Gist has multiple files and Pairdown could not identify this document. The GitHub copy is unchanged.") : t("GitHub 上这个 Gist 里没有文件，没法同步。", "This Gist has no files and cannot be synced."));
     }
     return { id: g.id, description: typeof g.description === "string" ? g.description : "", fileName: picked[0], text: await fullText(picked[1]), version: versionOf(g) };
   }
@@ -201,8 +202,8 @@ export function createGitHub(token: string, fetchFn: Fetch, onUnauthorized: () =
   return {
     /** 登录的账号名。 */
     async user(): Promise<string> {
-      const login = asObject(await json(await call("GET", "/user", "读取账号"))).login;
-      if (typeof login !== "string") throw new SyncError("invalid", "GitHub 没告诉我们账号名，过一会儿再试。");
+      const login = asObject(await json(await call("GET", "/user", t("读取账号", "the account")))).login;
+      if (typeof login !== "string") throw new SyncError("invalid", t("GitHub 没告诉我们账号名，过一会儿再试。", "GitHub did not return an account name. Try again shortly."));
       return login;
     },
 
@@ -210,8 +211,8 @@ export function createGitHub(token: string, fetchFn: Fetch, onUnauthorized: () =
     async listPairdownGists(): Promise<GistSummary[]> {
       const found: GistSummary[] = [];
       for (let page = 1; page <= MAX_PAGES; page++) {
-        const list = await json(await call("GET", `/gists?per_page=${PER_PAGE}&page=${page}`, "列出 Gist"));
-        if (!Array.isArray(list)) throw new SyncError("invalid", "GitHub 回的 Gist 列表读不懂，过一会儿再试。");
+        const list = await json(await call("GET", `/gists?per_page=${PER_PAGE}&page=${page}`, t("列出 Gist", "the Gist list")));
+        if (!Array.isArray(list)) throw new SyncError("invalid", t("GitHub 回的 Gist 列表读不懂，过一会儿再试。", "GitHub returned an unreadable Gist list. Try again shortly."));
         for (const item of list) {
           const g = asObject(item);
           // 列表只拿来显示名字和按文件名找：认不出是哪个文件时用第一个
@@ -228,7 +229,7 @@ export function createGitHub(token: string, fetchFn: Fetch, onUnauthorized: () =
     /** 读一个 Gist；GitHub 上没有了（删了）是 null。`fileName`：同步记录里的文件名，Gist 里有好几个文件时认它。 */
     async getGist(id: string, fileName?: string): Promise<Gist | null> {
       try {
-        return await toGist(await json(await call("GET", `/gists/${encodeURIComponent(id)}`, "这篇的 Gist")), fileName);
+        return await toGist(await json(await call("GET", `/gists/${encodeURIComponent(id)}`, t("这篇的 Gist", "the Gist for this document"))), fileName);
       } catch (e) {
         if (e instanceof SyncError && e.kind === "not-found") return null;
         throw e;
@@ -239,7 +240,7 @@ export function createGitHub(token: string, fetchFn: Fetch, onUnauthorized: () =
     async createGist(name: string, title: string, text: string): Promise<Gist> {
       const fileName = gistFileName(name);
       const body = { description: gistDescription(title), public: false, files: { [fileName]: { content: text } } };
-      return toGist(await json(await call("POST", "/gists", "新建 Gist", body)), fileName);
+      return toGist(await json(await call("POST", "/gists", t("新建 Gist", "the new Gist"), body)), fileName);
     },
 
     /**
@@ -253,7 +254,7 @@ export function createGitHub(token: string, fetchFn: Fetch, onUnauthorized: () =
       const file = fileName === remoteFileName ? { content: text } : { filename: fileName, content: text };
       const body = { description: gistDescription(title), files: { [remoteFileName]: file } };
       try {
-        return await toGist(await json(await call("PATCH", `/gists/${encodeURIComponent(id)}`, "这篇的 Gist", body)), fileName);
+        return await toGist(await json(await call("PATCH", `/gists/${encodeURIComponent(id)}`, t("这篇的 Gist", "the Gist for this document"), body)), fileName);
       } catch (e) {
         if (e instanceof SyncError && e.kind === "not-found") return null;
         throw e;

@@ -2,6 +2,7 @@
  * 存储那边来的变化：网关推来的文件改动、和网关断开 / 重连。
  * 开着的这篇被外面改了走和回焦时同一套比对（store/document.ts 的 checkExternal）：这里没改过直接载入，改过出冲突条。
  */
+import { t } from "../../i18n";
 import { backendLabel, beginSwitch, documentStore, gatewayLink, gatewayRefusal, probeGatewayAgain, useGateway } from "../../store/backend";
 import { checkExternal, closeDocument, flush, followRename } from "../../store/document";
 import type { DocProblem, StoreChange } from "../../store/document-store";
@@ -44,20 +45,20 @@ export function storageNotice(): string | null {
   const link = gatewayLink();
   if (!link || link.state === "connected") return null;
   if (link.state === "reconnecting") {
-    const why = link.reason ? `（${link.reason}）` : "";
-    return `和本机网关断开了${why}，正在重连。这里的修改没有丢：留在编辑器里，也记进了浏览器的应急存储，连上后接着保存。`;
+    const why = link.reason ? t(`（${link.reason}）`, ` (${link.reason})`) : "";
+    return t(`和本机网关断开了${why}，正在重连。这里的修改没有丢：留在编辑器里，也记进了浏览器的应急存储，连上后接着保存。`, `Lost the connection to the local gateway${why}. Reconnecting… Your edits are in the editor and backed up in this browser. Saving will resume when the connection returns.`);
   }
-  return `本机网关不再连接：${link.reason}。这里的修改留在编辑器里，可以先用「另存为」存成文件。`;
+  return t(`本机网关不再连接：${link.reason}。这里的修改留在编辑器里，可以先用「另存为」存成文件。`, `The local gateway disconnected: ${link.reason}. Your edits are still in the editor. Use Save As to keep a file copy.`);
 }
 
 /** 打不开的文档，说明原因。 */
 export function problemText(problem: DocProblem): string {
-  return problem === "not-utf8" ? "不是 UTF-8 编码的文本，打不开" : "文件太大，打不开";
+  return problem === "not-utf8" ? t("不是 UTF-8 编码的文本，打不开", "Cannot open this file because it is not UTF-8 text") : t("文件太大，打不开", "Cannot open this file because it is too large");
 }
 
 /** 属于别的存储、还没补回去的修改：说一句在哪、什么时候补。 */
 export function elsewhereText(tags: string[]): string {
-  return `有没存上的修改属于${tags.map(backendLabel).join("、")}，用回那边时会补回去。`;
+  return t(`有没存上的修改属于${tags.map(backendLabel).join("、")}，用回那边时会补回去。`, `Unsaved edits belong to ${tags.map(backendLabel).join(", ")}. They will be restored when you switch back.`);
 }
 
 /**
@@ -66,7 +67,7 @@ export function elsewhereText(tags: string[]): string {
  */
 export async function reconnectGateway(): Promise<void> {
   const done = beginSwitch();
-  if (!done) return say("正在同步，等同步完再重新连接本机网关。", "warn");
+  if (!done) return say(() => t("正在同步，等同步完再重新连接本机网关。", "Wait for sync to finish before reconnecting to the local gateway."), "warn");
   try {
     await switchToGateway();
   } finally {
@@ -78,15 +79,15 @@ async function switchToGateway(): Promise<void> {
   const gateway = await probeGatewayAgain();
   if (!gateway) {
     const refused = gatewayRefusal();
-    return say(refused ? `网关拒绝了这个页面：${refused}。` : "还是没连上本机网关。确认网关在运行，再试一次。", "warn");
+    return say(() => refused ? t(`网关拒绝了这个页面：${refused}。`, `The gateway refused this page: ${refused}.`) : t("还是没连上本机网关。确认网关在运行，再试一次。", "Could not connect to the local gateway. Make sure it is running and try again."), "warn");
   }
   const closed = await closeDocument();
   if (!closed.ok) {
     gateway.close();
-    return say(`这里的文档还有修改没存上，先不换到网关（${closed.error.detail}）。`, "warn");
+    return say(() => t(`这里的文档还有修改没存上，先不换到网关（${closed.error.detail}）。`, `Could not switch to the gateway because this document has unsaved changes (${closed.error.detail}).`), "warn");
   }
   await useGateway(gateway);
   const note = await recoverUnsaved();
   requestLibrary({ kind: "open", id: await startLibrary() });
-  say(note?.text ?? `已连上本机网关的文库「${gateway.library()}」。`, note?.tone ?? "info");
+  say(note?.text ?? (() => t(`已连上本机网关的文库「${gateway.library()}」。`, `Connected to the local gateway library “${gateway.library()}”.`)), note?.tone ?? "info");
 }

@@ -27,6 +27,7 @@ try {
   stage.parentElement.classList.add("fallback-mode");
   transcript.classList.remove("sr-only");
   renderTranscript(transcript, spreads);
+  document.dispatchEvent(new Event("pairdown:ready"));
 }
 
 function randomGenerator(seed) {
@@ -248,7 +249,6 @@ if (renderer) {
     reducedMotion,
     paperWidth,
   );
-  writer.start(0);
   const projectedTip = new THREE.Vector3();
 
   function positionQuill() {
@@ -444,7 +444,9 @@ if (renderer) {
   new ResizeObserver(resize).observe(stage);
   resize();
 
+  let firstFrame = true;
   renderer.setAnimationLoop((now) => {
+    if (firstFrame) writer.start(0);
     if (state.turn?.animation) {
       const { from, to, at, duration } = state.turn.animation;
       const t = Math.min(1, (now - at) / duration);
@@ -471,5 +473,9 @@ if (renderer) {
     camera.position.z = cameraDistance + lift * 2.15;
     renderer.render(scene, camera);
     positionQuill();
+    if (firstFrame) {
+      firstFrame = false;
+      document.dispatchEvent(new Event("pairdown:ready"));
+    }
   });
 }

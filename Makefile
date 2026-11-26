@@ -43,6 +43,7 @@ build-web: ## 打包静态站到 dist/web/Pairdown/
 	mkdir -p dist/web/Pairdown/lp
 	cp -R landing/. dist/web/Pairdown/lp/
 	cp assets/icon/icon.png dist/web/Pairdown/lp/pairdown.png
+	node scripts/web-loading.mjs dist/web/Pairdown
 
 dev-landing: build-web ## 本机预览落地页：http://127.0.0.1:8813/lp/
 	python3 -m http.server 8813 --bind 127.0.0.1 --directory dist/web/Pairdown

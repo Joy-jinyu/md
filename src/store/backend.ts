@@ -2,6 +2,7 @@
  * 这次用的文档库存储，只在这里定（实施计划 10.2）：macOS 是文库文件夹；网页里连得上本机网关就用网关，连不上用浏览器本地。
  * 启动时由编辑页调一次 `chooseBackend`；之后只有「重新连网关」（`useGateway`）会换。在那之前（和测试里）是浏览器本地。
  */
+import { t } from "../i18n";
 import { signal, Storage } from "nsh";
 import { type DocumentStore, type ImageHostApi, NameTaken, type StoreChange } from "./document-store";
 import { type Connect, type GatewayBackend, type GatewayLink, GatewayRefused, openGateway } from "./gateway-store";
@@ -70,7 +71,7 @@ export const documentStore: DocumentStore = {
   getAsset: (docId, src) => active.getAsset(docId, src),
   sweepAssets: (docId, text) => active.sweepAssets?.(docId, text) ?? Promise.resolve(),
   /** 只有本机网关能转存（`canTransfer`）：浏览器本地跨不了域，macOS 应用要放行任意域名才下得了。 */
-  transfer: (docId, url) => (active.transfer ? active.transfer(docId, url) : Promise.reject(new Error("现在的存储不能转存外链图片（要连着本机网关）"))),
+  transfer: (docId, url) => (active.transfer ? active.transfer(docId, url) : Promise.reject(new Error(t("现在的存储不能转存外链图片（要连着本机网关）", "Copying remote images into library storage requires the local gateway.")))),
   /** 跟着存储走：换了后端（重新连上网关）以后照样收到。 */
   watch(onChange: (change: StoreChange) => void) {
     watchers.add(onChange);
@@ -87,8 +88,8 @@ export const storageKind = () => chosen();
  */
 export function elsewhereWords(): { changed: string; deleted: string } {
   return chosen().kind === "local"
-    ? { changed: "这篇在另一个标签页里改过", deleted: "这篇已经在另一个标签页里删除了" }
-    : { changed: "文库里的文件被别的程序改了", deleted: "文库里的这个文件被别的程序删除或挪走了" };
+    ? { changed: t("这篇在另一个标签页里改过", "This document was edited in another tab"), deleted: t("这篇已经在另一个标签页里删除了", "This document was deleted in another tab") }
+    : { changed: t("文库里的文件被别的程序改了", "The library file was edited by another app"), deleted: t("文库里的这个文件被别的程序删除或挪走了", "The library file was deleted or moved by another app") };
 }
 
 /** 现在的存储能不能把外链图片转存到本地（随换后端变）。 */
@@ -154,8 +155,8 @@ export function backendTag(): string {
 
 /** 别的后端的标签 → 给人看的名字。 */
 export function backendLabel(tag: string): string {
-  if (tag.startsWith(GATEWAY_TAG)) return `本机网关的文库「${tag.slice(GATEWAY_TAG.length)}」`;
-  return tag === "files" ? "文库文件夹" : "浏览器本地";
+  if (tag.startsWith(GATEWAY_TAG)) return t(`本机网关的文库「${tag.slice(GATEWAY_TAG.length)}」`, `the local gateway library “${tag.slice(GATEWAY_TAG.length)}”`);
+  return tag === "files" ? t("文库文件夹", "the library folder") : t("浏览器本地", "browser storage");
 }
 
 /** 文档正文和 Storage 里的小键挤在同一个 5MB 里（浏览器本地、IndexedDB 没用上）：这时应急键不一定放得下。 */
@@ -196,7 +197,7 @@ async function copyOne(target: DocumentStore, id: string, label: string, text: s
       return { kind: "same", id: e.id };
     }
   }
-  throw new Error(`「${label}」重名太多`);
+  throw new Error(t(`「${label}」重名太多`, `Too many copies named “${label}”`));
 }
 
 /**
@@ -220,7 +221,7 @@ async function copyImages(source: DocumentStore, target: DocumentStore, fromId: 
   if (next !== text) {
     const now = await target.read(toId);
     const written = now ? await target.write(toId, next, now.version) : { ok: false };
-    if (!written.ok) throw new Error("图片复制过去了，但没能改正文里的地址");
+    if (!written.ok) throw new Error(t("图片复制过去了，但没能改正文里的地址", "The images were copied, but the document’s image links could not be updated"));
   }
   return failed;
 }
@@ -243,8 +244,8 @@ export async function copyLocalDocs(target: DocumentStore, move: boolean, source
       else report.same.push(label);
       const missing = await copyImages(source, target, meta.id, outcome.id, text);
       // 图片没复制全时本地那篇不删（删文档会连图片一起删），下次再复制：正文一样算已经在了，只补图片
-      if (missing > 0 && move) throw new Error(`${missing} 张图片没能复制`);
-      if (missing > 0) report.imagesFailed.push(`${label}（${missing} 张）`);
+      if (missing > 0 && move) throw new Error(t(`${missing} 张图片没能复制`, `Could not copy ${missing} ${missing === 1 ? "image" : "images"}`));
+      if (missing > 0) report.imagesFailed.push(t(`${label}（${missing} 张）`, `${label} (${missing} ${missing === 1 ? "image" : "images"})`));
       if (move) await source.remove(meta.id);
     } catch (e) {
       console.error("document not copied", meta.id, e);
@@ -256,7 +257,7 @@ export async function copyLocalDocs(target: DocumentStore, move: boolean, source
 
 /** 用着网关时，把浏览器本地的文档复制进网关的文库（设置页的按钮）：逐篇建，重名加序号，本地的不删（连着 Gist 的改成「不同步」）。 */
 export function copyBrowserDocsToLibrary(): Promise<CopyReport> {
-  if (chosen().kind !== "gateway") return Promise.reject(new Error("现在没有连着本机网关"));
+  if (chosen().kind !== "gateway") return Promise.reject(new Error(t("现在没有连着本机网关", "The local gateway is not connected")));
   return copyLocalDocs(active, false);
 }
 

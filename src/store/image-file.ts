@@ -2,6 +2,7 @@
  * 存进文档库的图片：按文件头认类型、按内容取文件名、把正文里的地址换成文库里的路径。三种后端共用，规则和网关一致
  * （gateway/src/image.mts 的 sniffImage、gateway/src/paths.mts 的 assetPathFromSrc）。
  */
+import { t } from "../i18n";
 import { ASSET_DIR, IMAGE_TYPES, type ImageExt } from "../../gateway/src/protocol";
 
 /** 认得的图片类型（扩展名 → MIME）：features 经这里拿，不直接引 gateway/。 */
@@ -35,9 +36,9 @@ const MIB = 1024 * 1024;
 
 /** 查一张要存的图：认得的类型、不超过 `maxBytes`。不合格抛 AssetRejected（给人看的话）。返回扩展名。 */
 export function checkImage(bytes: Uint8Array, maxBytes: number): ImageExt {
-  if (bytes.length > maxBytes) throw new AssetRejected(`图片超过 ${Math.round(maxBytes / MIB)} MB，先压缩一下再放进来`);
+  if (bytes.length > maxBytes) throw new AssetRejected(t(`图片超过 ${Math.round(maxBytes / MIB)} MB，先压缩一下再放进来`, `Compress the image to ${Math.round(maxBytes / MIB)} MB or less before inserting it.`));
   const ext = sniffImage(bytes);
-  if (!ext) throw new AssetRejected("不是认得的图片格式（只收 png、jpg、gif、webp、avif；SVG 不收）");
+  if (!ext) throw new AssetRejected(t("不是认得的图片格式（只收 png、jpg、gif、webp、avif；SVG 不收）", "Unsupported image format. Use PNG, JPEG, GIF, WebP, or AVIF."));
   return ext;
 }
 

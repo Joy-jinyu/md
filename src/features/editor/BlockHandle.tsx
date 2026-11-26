@@ -1,6 +1,7 @@
 /** 块把手：鼠标停在哪个顶层块上，它左边就出一个把手。拖动换位置，点一下出「转成 / 复制一份 / 删除」。 */
 import { signal, Text, View } from "nsh";
 import { chain, deleteRange, insertContentAt, type RichEditorSession, setTextSelection } from "nsh/base";
+import { t } from "../../i18n";
 import { tip } from "../../ui/tooltip";
 import { commandById } from "./commands";
 import { blockIndexAt, type Node, type TopBlock, topBlocks } from "./outline";
@@ -152,8 +153,8 @@ export function BlockHandle(props: { handle: BlockHandleState }) {
           <View
             testID="block-handle"
             role="button"
-            accessibilityLabel="块操作，可拖动"
-            tooltip={tip("拖动换位置，点击出菜单")}
+            accessibilityLabel={t("块操作，可拖动", "Block actions, draggable")}
+            tooltip={tip(t("拖动换位置，点击出菜单", "Drag to move or click for actions"))}
             style={{ left: hover().rect.x - HANDLE_GAP, top: hover().rect.y + 3, width: HANDLE_WIDTH, height: HANDLE_HEIGHT }}
             class="absolute items-center justify-center rounded-(--radius-sm) hover:bg-hover active:bg-pressed"
             {...drag}
@@ -163,18 +164,18 @@ export function BlockHandle(props: { handle: BlockHandleState }) {
           <If when={h.menuOpen()}>
             <View
               testID="block-menu"
-              accessibilityLabel="块操作"
+              accessibilityLabel={t("块操作", "Block actions")}
               style={{ left: hover().rect.x - HANDLE_GAP, top: hover().rect.y + 3 + HANDLE_HEIGHT + 4 }}
               class="absolute w-[140px] rounded-(--radius) border border-border bg-popover p-1"
             >
               <If when={CONVERTIBLE.has(hover().block.node.type)}>
                 <Each of={CONVERT_TO} key={(id) => id}>
-                  {(id) => <MenuItem testID={`block-menu-${id()}`} label={`转成${commandById(id()).label}`} onPress={() => h.convert(id())} />}
+                  {(id) => <MenuItem testID={`block-menu-${id()}`} label={t(`转成${commandById(id()).label}`, `Turn into ${commandById(id()).label}`)} onPress={() => h.convert(id())} />}
                 </Each>
                 <View class="my-1 h-px bg-border" />
               </If>
-              <MenuItem testID="block-menu-duplicate" label="复制一份" onPress={h.duplicate} />
-              <MenuItem testID="block-menu-delete" label="删除" danger onPress={h.remove} />
+              <MenuItem testID="block-menu-duplicate" label={t("复制一份", "Duplicate")} onPress={h.duplicate} />
+              <MenuItem testID="block-menu-delete" label={t("删除", "Delete")} danger onPress={h.remove} />
             </View>
           </If>
         </>

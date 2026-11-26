@@ -5,6 +5,7 @@
  * nsh 0.6.0 没有监听文件的接口，外面改了靠窗口重新获得焦点时比对（编辑页的 checkExternal）。
  * 要 nsh.json 的 `capabilities.fs` 给这个文件夹读写、`capabilities.homeDir` 给出用户目录。
  */
+import { t } from "../../i18n";
 import { cleanFileStem, dirOf, stemOf as stemWith } from "../../doc/file-name";
 import { ASSET_DIR } from "../../../gateway/src/protocol";
 import { type DocMeta, type DocProblem, type DocumentStore, NameTaken, type ReadResult, type WriteResult } from "../../store/document-store";
@@ -40,7 +41,7 @@ const TEMP_FILE = /^\.pairdown-[0-9a-f-]+\.tmp$/;
 export function checkId(id: string): void {
   const parts = id.split("/");
   const bad = id === "" || id.includes("\\") || id.includes("\u0000") || !DOC_EXT.test(id) || parts.some((p) => p === "" || p === "." || p === ".." || p.startsWith("."));
-  if (bad) throw new Error(`文档路径不对：${id}`);
+  if (bad) throw new Error(t(`文档路径不对：${id}`, `Invalid document path: ${id}`));
 }
 
 const baseOf = (id: string) => id.slice(id.lastIndexOf("/") + 1);
@@ -118,9 +119,9 @@ async function readText(fs: Fs, root: string, id: string): Promise<string | null
   const path = `${root}/${id}`;
   if (!(await fs.exists(path))) return null;
   try {
-    if ((await fs.stat(path)).size > MAX_FILE_BYTES) throw new Error(`「${id}」超过 8 MB，应用存不回去，所以不打开`);
+    if ((await fs.stat(path)).size > MAX_FILE_BYTES) throw new Error(t(`「${id}」超过 8 MB，应用存不回去，所以不打开`, `“${id}” exceeds 8 MB. Pairdown cannot save it back, so it was not opened.`));
     const text = decode(await fs.readFile(path));
-    if (text === null) throw new Error(`「${id}」不是 UTF-8 编码的文本，打不开（先用别的工具转成 UTF-8）`);
+    if (text === null) throw new Error(t(`「${id}」不是 UTF-8 编码的文本，打不开（先用别的工具转成 UTF-8）`, `“${id}” is not UTF-8 text. Convert it to UTF-8 before opening it.`));
     return text;
   } catch (e) {
     if (codeOf(e) === "ENOENT") return null;
@@ -133,7 +134,7 @@ async function readText(fs: Fs, root: string, id: string): Promise<string | null
  * `before`：改名前最后再查一次（新建时查目标还空着）。nsh 的 fs 没有独占创建（`wx`）和硬链接，只能把查和改名挨得尽量近。
  */
 async function writeAtomic(fs: Fs, path: string, data: string | Uint8Array, before?: () => Promise<void>) {
-  if ((typeof data === "string" ? bytesOf(data) : data.length) > MAX_FILE_BYTES) throw new Error("这篇超过 8 MB，应用一次写不进去。拆成几篇再存");
+  if ((typeof data === "string" ? bytesOf(data) : data.length) > MAX_FILE_BYTES) throw new Error(t("这篇超过 8 MB，应用一次写不进去。拆成几篇再存", "This document exceeds 8 MB. Split it into smaller documents to save it."));
   const temp = `${dirOf(path)}.pairdown-${crypto.randomUUID()}.tmp`;
   try {
     await fs.writeFile(temp, data);
@@ -155,7 +156,7 @@ async function written(fs: Fs, root: string, id: string, text: string): Promise<
  * nsh 的 stat 不给 inode，改看文件夹里有没有一个名字一字不差的别的文件。
  */
 async function freeTarget(fs: Fs, root: string, id: string, from?: string) {
-  const taken = () => new NameTaken(`文库里已经有「${id}」了`, id);
+  const taken = () => new NameTaken(t(`文库里已经有「${id}」了`, `The library already contains “${id}”`), id);
   if (from === undefined || from.toLowerCase() !== id.toLowerCase()) {
     if (await fs.exists(`${root}/${id}`)) throw taken();
     return;
@@ -211,7 +212,7 @@ export function createFileStore(): DocumentStore {
       checkId(id);
       const { fs, root } = await ready();
       const to = fileName(dirOf(id), name, extOf(id));
-      if (!(await fs.exists(`${root}/${id}`))) throw new Error("这篇文档已经不在了（可能在别处删掉了）");
+      if (!(await fs.exists(`${root}/${id}`))) throw new Error(t("这篇文档已经不在了（可能在别处删掉了）", "This document is no longer available. It may have been deleted elsewhere."));
       if (to !== id) {
         await freeTarget(fs, root, to, id);
         await fs.rename(`${root}/${id}`, `${root}/${to}`);
@@ -247,7 +248,7 @@ export function createFileStore(): DocumentStore {
       const { fs, root } = await ready();
       const path = `${root}/${rel}`;
       if (!(await fs.exists(path))) return null;
-      if ((await fs.stat(path)).size > MAX_FILE_BYTES) throw new Error(`图片「${rel}」超过 8 MB，不显示`);
+      if ((await fs.stat(path)).size > MAX_FILE_BYTES) throw new Error(t(`图片「${rel}」超过 8 MB，不显示`, `“${rel}” exceeds the 8 MB image limit`));
       const raw = await fs.readFile(path);
       const bytes = raw instanceof Uint8Array ? raw : Uint8Array.from(raw);
       const ext = sniffImage(bytes);
@@ -276,14 +277,14 @@ export async function locateFile(path: string): Promise<{ kind: "library"; id: s
     return { kind: "outside", name, text: null };
   }
   const text = decode(bytes);
-  if (text === null) throw new Error(`「${name}」不是 UTF-8 编码的文本，打不开`);
+  if (text === null) throw new Error(t(`「${name}」不是 UTF-8 编码的文本，打不开`, `“${name}” cannot be opened because it is not UTF-8 text`));
   return { kind: "outside", name, text };
 }
 
 /** 系统交来的一个本地文件（拖进窗口的图片）的字节；应用只能读文库和「下载」，别处抛 ERR_ACCESS_DENIED。超过 8 MiB 不读，抛 AssetRejected。 */
 export async function readFileBytes(path: string): Promise<Uint8Array> {
   const fs = await fsModule();
-  if ((await fs.stat(path)).size > MAX_FILE_BYTES) throw new AssetRejected("图片超过 8 MB，先压缩一下再放进来");
+  if ((await fs.stat(path)).size > MAX_FILE_BYTES) throw new AssetRejected(t("图片超过 8 MB，先压缩一下再放进来", "Compress the image to 8 MB or less before inserting it"));
   const raw = await fs.readFile(path);
   return raw instanceof Uint8Array ? raw : Uint8Array.from(raw);
 }

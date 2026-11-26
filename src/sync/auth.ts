@@ -6,6 +6,7 @@
  *   github.com 的 token 接口不支持浏览器跨域（OAuth 文档：不支持 CORS 预检），换 token 又要 client secret，所以经 Worker。
  * 流程细节以 docs.github.com「Authorizing OAuth apps」为准（2026-11-25 读）。
  */
+import { type Phrase, t } from "../i18n";
 import { ACCESS_TOKEN_URL, AUTHORIZE_URL, DEVICE_CODE_URL, OAUTH_SCOPE } from "./config";
 import { type Fetch, SyncError } from "./github";
 
@@ -20,7 +21,7 @@ export interface DeviceCode {
 }
 
 /** 轮询的结果：拿到了 token、失败了（带给人看的原因）、或者用户取消了。 */
-export type PollResult = { kind: "token"; token: string } | { kind: "failed"; message: string } | { kind: "cancelled" };
+export type PollResult = { kind: "token"; token: string } | { kind: "failed"; message: Phrase } | { kind: "cancelled" };
 
 /** GitHub 没给轮询间隔时用的秒数（文档里的默认值）。 */
 const DEFAULT_INTERVAL = 5;
@@ -29,7 +30,7 @@ const SLOW_DOWN_STEP = 5;
 /** 网页登录记下的 state 多久内有效（毫秒）：授权页一般一两分钟内就回来，放宽到 10 分钟。 */
 export const STATE_TTL = 10 * 60 * 1000;
 
-const NETWORK = "连不上 GitHub，检查网络后再试。";
+const networkMessage = () => t("连不上 GitHub，检查网络后再试。", "Could not reach GitHub. Check your connection and try again.");
 /** Device Flow 轮询时连着几次连不上才算失败：等授权的几分钟里网络晃一下很常见。 */
 const MAX_NETWORK_MISSES = 3;
 
@@ -43,14 +44,14 @@ async function postForm(fetchFn: Fetch, url: string, form: Record<string, string
     });
   } catch (e) {
     console.warn("github login request failed", url, e instanceof Error ? e.message : String(e));
-    throw new SyncError("network", NETWORK);
+    throw new SyncError("network", networkMessage());
   }
   let body: unknown;
   try {
     body = await res.json();
   } catch (e) {
     console.warn("github login response unreadable", url, res.status, e);
-    throw new SyncError("invalid", `GitHub 回的内容读不懂（${res.status}），过一会儿再试。`, res.status);
+    throw new SyncError("invalid", t(`GitHub 回的内容读不懂（${res.status}），过一会儿再试。`, `GitHub returned an unreadable response (${res.status}). Try again shortly.`), res.status);
   }
   return typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
 }
@@ -59,7 +60,7 @@ async function postForm(fetchFn: Fetch, url: string, form: Record<string, string
 export async function requestDeviceCode(clientId: string, fetchFn: Fetch): Promise<DeviceCode> {
   const r = await postForm(fetchFn, DEVICE_CODE_URL, { client_id: clientId, scope: OAUTH_SCOPE });
   if (typeof r.device_code !== "string" || typeof r.user_code !== "string" || typeof r.verification_uri !== "string") {
-    throw new SyncError("invalid", r.error === "device_flow_disabled" ? DEVICE_FLOW_DISABLED : "GitHub 没给登录用的验证码，过一会儿再试。");
+    throw new SyncError("invalid", r.error === "device_flow_disabled" ? deviceFlowDisabled() : t("GitHub 没给登录用的验证码，过一会儿再试。", "GitHub did not provide a verification code. Try again shortly."));
   }
   return {
     deviceCode: r.device_code,
@@ -70,16 +71,16 @@ export async function requestDeviceCode(clientId: string, fetchFn: Fetch): Promi
   };
 }
 
-const DEVICE_FLOW_DISABLED = "这个 GitHub OAuth App 没有开 Device Flow（在 App 的设置里勾上「Enable Device Flow」）。";
+const deviceFlowDisabled = () => t("这个 GitHub OAuth App 没有开 Device Flow（在 App 的设置里勾上「Enable Device Flow」）。", "Enable Device Flow in the GitHub OAuth App settings before signing in.");
 
 /** 轮询里遇到的错误码 → 给人看的原因；null 是接着等。 */
-const FAILURES: Record<string, string> = {
-  expired_token: "验证码过期了，重新点「用 GitHub 登录」拿一个新的。",
-  access_denied: "在 GitHub 上取消了授权，没有登录。",
-  device_flow_disabled: DEVICE_FLOW_DISABLED,
-  incorrect_device_code: "验证码不对，重新点「用 GitHub 登录」。",
-  incorrect_client_credentials: "应用的 client id 不对，检查 src/sync/config.ts。",
-  unsupported_grant_type: "登录请求的写法不对（unsupported_grant_type）。",
+const FAILURES: Record<string, () => string> = {
+  expired_token: () => t("验证码过期了，重新点「用 GitHub 登录」拿一个新的。", "The verification code expired. Select “Sign in with GitHub” to request another one."),
+  access_denied: () => t("在 GitHub 上取消了授权，没有登录。", "Authorization was canceled on GitHub. You weren’t signed in."),
+  device_flow_disabled: deviceFlowDisabled,
+  incorrect_device_code: () => t("验证码不对，重新点「用 GitHub 登录」。", "The verification code is invalid. Select “Sign in with GitHub” again."),
+  incorrect_client_credentials: () => t("应用的 client id 不对，检查 src/sync/config.ts。", "The client ID is invalid. Check src/sync/config.ts."),
+  unsupported_grant_type: () => t("登录请求的写法不对（unsupported_grant_type）。", "GitHub did not accept the sign-in request (unsupported_grant_type)."),
 };
 
 export interface PollOptions {
@@ -105,7 +106,7 @@ export async function pollDeviceToken(clientId: string, code: DeviceCode, o: Pol
       r = await postForm(o.fetchFn, ACCESS_TOKEN_URL, { client_id: clientId, device_code: code.deviceCode, grant_type: "urn:ietf:params:oauth:grant-type:device_code" });
     } catch (e) {
       if (e instanceof SyncError && e.kind === "network" && ++misses < MAX_NETWORK_MISSES) continue;
-      return { kind: "failed", message: e instanceof Error ? e.message : NETWORK };
+      return { kind: "failed", message: e instanceof Error ? e.message : networkMessage };
     }
     misses = 0;
     if (o.cancelled()) return { kind: "cancelled" };
@@ -116,7 +117,7 @@ export async function pollDeviceToken(clientId: string, code: DeviceCode, o: Pol
       interval = typeof r.interval === "number" ? r.interval : interval + SLOW_DOWN_STEP;
       continue;
     }
-    return { kind: "failed", message: FAILURES[error] ?? `GitHub 没让登录${error ? `（${error}）` : ""}，过一会儿再试。` };
+    return { kind: "failed", message: FAILURES[error] ?? (() => t(`GitHub 没让登录${error ? `（${error}）` : ""}，过一会儿再试。`, `GitHub rejected sign-in${error ? ` (${error})` : ""}. Try again shortly.`)) };
   }
 }
 
@@ -184,9 +185,9 @@ export function withoutCallback(pageUrl: string): string {
 
 /** state 对不对：没记过、过期、对不上都不行，返回给人看的原因；对上了是 null。 */
 export function checkState(saved: { state: string; at: number } | null, got: string, now: number): string | null {
-  if (!saved || got === "") return "这次登录不是从这个页面发起的（或者已经用过了），没有登录。重新点「用 GitHub 登录」。";
-  if (now - saved.at > STATE_TTL) return "登录等得太久已经过期，没有登录。重新点「用 GitHub 登录」。";
-  if (saved.state !== got) return "登录回来的校验码对不上，没有登录。重新点「用 GitHub 登录」。";
+  if (!saved || got === "") return t("这次登录不是从这个页面发起的（或者已经用过了），没有登录。重新点「用 GitHub 登录」。", "This sign-in was started on another page or has already been used. Select “Sign in with GitHub” again.");
+  if (now - saved.at > STATE_TTL) return t("登录等得太久已经过期，没有登录。重新点「用 GitHub 登录」。", "This sign-in request expired. Select “Sign in with GitHub” again.");
+  if (saved.state !== got) return t("登录回来的校验码对不上，没有登录。重新点「用 GitHub 登录」。", "The verification value returned by GitHub did not match. Select “Sign in with GitHub” again.");
   return null;
 }
 
@@ -206,7 +207,7 @@ export async function exchangeCode(workerUrl: string, x: Exchange, fetchFn: Fetc
     res = await fetchFn(`${workerUrl}/token`, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: payload });
   } catch (e) {
     console.warn("code exchange failed", e instanceof Error ? e.message : String(e));
-    throw new SyncError("network", "连不上登录中转服务，检查网络后再试。");
+    throw new SyncError("network", t("连不上登录中转服务，检查网络后再试。", "Could not reach the sign-in service. Check your connection and try again."));
   }
   let body: Record<string, unknown> = {};
   try {
@@ -216,5 +217,5 @@ export async function exchangeCode(workerUrl: string, x: Exchange, fetchFn: Fetc
   }
   if (res.ok && typeof body.access_token === "string" && body.access_token !== "") return body.access_token;
   console.warn("code exchange refused", res.status, typeof body.error === "string" ? body.error : "");
-  throw new SyncError("auth", `没能换到 GitHub 的登录（${typeof body.error === "string" ? body.error : res.status}），重新点「用 GitHub 登录」。`, res.status);
+  throw new SyncError("auth", t(`没能换到 GitHub 的登录（${typeof body.error === "string" ? body.error : res.status}），重新点「用 GitHub 登录」。`, `Could not complete GitHub sign-in (${typeof body.error === "string" ? body.error : res.status}). Select “Sign in with GitHub” again.`), res.status);
 }

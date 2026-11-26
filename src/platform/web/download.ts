@@ -1,6 +1,8 @@
 /** 浏览器里把一段文字存成文件：造一个临时链接点一下，浏览器按它自己的下载设置存。 */
 
 /** 用到的那一小部分页面接口：项目的 TypeScript 配置里没有浏览器的类型库。 */
+import { t } from "../../i18n";
+
 interface Anchor {
   href: string;
   download: string;
@@ -18,7 +20,7 @@ const REVOKE_AFTER = 10_000;
 /** 触发下载；不在浏览器页面里（没有 document）时抛错。 */
 export function downloadText(name: string, text: string, type = "text/markdown;charset=utf-8") {
   const page = (globalThis as { document?: Page }).document;
-  if (!page) throw new Error("这里不是浏览器页面，没法下载");
+  if (!page) throw new Error(t("这里不是浏览器页面，没法下载", "Downloads are available only in a browser"));
   const url = URL.createObjectURL(new Blob([text], { type }));
   const link = page.createElement("a");
   link.href = url;

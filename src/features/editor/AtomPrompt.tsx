@@ -1,17 +1,18 @@
 /** 公式、Mermaid、front matter、透传块（HTML 块、定义行）的源码编辑框：插入新的，或改已有的。 */
 import { signal, Text, View } from "nsh";
 import { deleteRange, Input, insertContent, type RichEditorSession, setNodeAttribute } from "nsh/base";
+import { t } from "../../i18n";
 import { Button } from "../../ui/button";
 import type { AtomKind } from "./commands";
 import { MATH_FENCE_LINE } from "./node-views";
 
 /** `dropWhenEmpty`：改成空的就删掉这一块（空的 front matter、空的透传块写出来只剩分隔符或空行）。 */
 const KINDS: Record<AtomKind, { title: string; attr: string; placeholder: string; multiline: boolean; dropWhenEmpty?: boolean }> = {
-  mathBlock: { title: "公式块（LaTeX）", attr: "tex", placeholder: "E = mc^2", multiline: true },
-  mathInline: { title: "行内公式（LaTeX）", attr: "tex", placeholder: "a^2 + b^2", multiline: false },
-  diagram: { title: "Mermaid 图", attr: "code", placeholder: "graph TD\n  A --> B", multiline: true },
-  frontmatter: { title: "Front matter（YAML）", attr: "yaml", placeholder: "title: 标题", multiline: true, dropWhenEmpty: true },
-  rawBlock: { title: "原文（HTML 块、定义行）", attr: "src", placeholder: "<div>…</div>", multiline: true, dropWhenEmpty: true },
+  mathBlock: { get title() { return t("公式块（LaTeX）", "Math Block (LaTeX)"); }, attr: "tex", placeholder: "E = mc^2", multiline: true },
+  mathInline: { get title() { return t("行内公式（LaTeX）", "Inline Math (LaTeX)"); }, attr: "tex", placeholder: "a^2 + b^2", multiline: false },
+  diagram: { get title() { return t("Mermaid 图", "Mermaid Diagram"); }, attr: "code", placeholder: "graph TD\n  A --> B", multiline: true },
+  frontmatter: { get title() { return t("Front matter（YAML）", "Front Matter (YAML)"); }, attr: "yaml", get placeholder() { return t("title: 标题", "title: Title"); }, multiline: true, dropWhenEmpty: true },
+  rawBlock: { get title() { return t("原文（HTML 块、定义行）", "Raw Source (HTML Blocks, Definitions)"); }, attr: "src", placeholder: "<div>…</div>", multiline: true, dropWhenEmpty: true },
 };
 
 export const isAtomKind = (type: string): type is AtomKind => type in KINDS;
@@ -21,8 +22,8 @@ const YAML_END_LINE = /^(?:---|\.\.\.)[ \t]*$/m;
 
 /** 源码不能原样写回 Markdown 的原因（会把文档切开）；能写回时是 null。 */
 function rejectReason(kind: AtomKind, source: string): string | null {
-  if (kind === "frontmatter" && YAML_END_LINE.test(source)) return "Front matter 里不能有单独一行的 --- 或 ...（保存时会被当成结尾，后面的内容变成正文）";
-  if (kind === "mathBlock" && MATH_FENCE_LINE.test(source)) return "公式里不能有以 $$ 开头的行（保存时会被当成公式的结尾）";
+  if (kind === "frontmatter" && YAML_END_LINE.test(source)) return t("Front matter 里不能有单独一行的 --- 或 ...（保存时会被当成结尾，后面的内容变成正文）", "Front matter cannot contain a standalone --- or ... line. Saving would end the front matter there and turn the remaining lines into document text.");
+  if (kind === "mathBlock" && MATH_FENCE_LINE.test(source)) return t("公式里不能有以 $$ 开头的行（保存时会被当成公式的结尾）", "Math cannot contain a line starting with $$. Saving would end the math block there.");
   return null;
 }
 
@@ -111,8 +112,8 @@ export function AtomPrompt(props: { prompt: AtomPromptState; kind: AtomKind }) {
         )}
       </If>
       <View class="flex-row justify-end gap-1">
-        <Button label="取消" onPress={p.close} />
-        <Button label="应用" variant="primary" onPress={p.apply} />
+        <Button label={t("取消", "Cancel")} onPress={p.close} />
+        <Button label={t("应用", "Apply")} variant="primary" onPress={p.apply} />
       </View>
     </View>
   );

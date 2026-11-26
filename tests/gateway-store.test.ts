@@ -73,7 +73,7 @@ test("while the gateway is gone saving fails with a clear reason; once it is bac
   gw.state.up = false;
   gw.drop();
   expect(backend.link().state).toBe("reconnecting");
-  await expect(store.write("a.md", "two\n", read?.version ?? "")).rejects.toThrow("和本机网关断开了");
+  await expect(store.write("a.md", "two\n", read?.version ?? "")).rejects.toThrow("Lost the connection to the local gateway");
   gw.state.up = true;
   await sleep(1300);
   expect(backend.link().state).toBe("connected");
@@ -151,20 +151,20 @@ test("a rename the gateway did is not reported as failed when the list after it,
 test("replies of the wrong shape end the request instead of leaving it hanging, and a request with no reply counts as a lost connection", async () => {
   const { gw, store, backend } = await connected({ "a.md": "x\n" }, 600, 300);
   gw.state.raw = { list: `{"type":"reply","id":$id,"ok":false}`, read: `{"type":"reply","id":$id,"ok":true,"result":null}` };
-  await expect(store.list()).rejects.toThrow("回复看不懂");
-  await expect(store.read("a.md")).rejects.toThrow("回复看不懂");
+  await expect(store.list()).rejects.toThrow("Could not understand the gateway’s reply");
+  await expect(store.read("a.md")).rejects.toThrow("Could not understand the gateway’s reply");
   gw.state.mute = ["write"];
   const started = Date.now();
-  await expect(store.write("a.md", "y\n", "v1")).rejects.toThrow("和本机网关断开了");
+  await expect(store.write("a.md", "y\n", "v1")).rejects.toThrow("Lost the connection to the local gateway");
   expect(Date.now() - started).toBeLessThan(1000);
-  expect(backend.link()).toEqual({ state: "reconnecting", reason: "网关好一会儿没有回应" });
+  expect(backend.link()).toEqual({ state: "reconnecting", reason: "The gateway stopped responding." });
   backend.close();
 });
 
 test("a program that answers the handshake with something else is refused with a reason, and so is a page the gateway does not accept", async () => {
   const rogue = fakeGateway({});
   rogue.state.hello = {};
-  await expect(openGateway(600, rogue.connect)).rejects.toThrow("不像 Pairdown 网关");
+  await expect(openGateway(600, rogue.connect)).rejects.toThrow("did not respond like the Pairdown gateway");
   const strict = fakeGateway({});
   strict.state.closeOnHello = 4003;
   await expect(openGateway(600, strict.connect)).rejects.toThrow("--origin");
@@ -178,8 +178,8 @@ test("errors the gateway reports are explained in plain words, saving included",
     write: `{"type":"reply","id":$id,"ok":false,"error":{"code":"too-large","message":"too-large"}}`,
     putAsset: `{"type":"reply","id":$id,"ok":false,"error":{"code":"busy","message":"busy"}}`,
   };
-  await expect(store.write("a.md", "y\n", "v1")).rejects.toThrow("这篇超过 5 MB，网关存不下");
-  await expect(store.putAsset("a.md", PNG)).rejects.toThrow("网关正忙");
+  await expect(store.write("a.md", "y\n", "v1")).rejects.toThrow("exceeds the gateway’s 5 MB limit");
+  await expect(store.putAsset("a.md", PNG)).rejects.toThrow("The gateway is busy");
 });
 
 test("another tab renaming a document comes through as a rename, not as a deletion", async () => {

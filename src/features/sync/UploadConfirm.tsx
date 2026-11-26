@@ -2,6 +2,7 @@
  * 这一轮要新建 Gist 的文档（还没上传过的）：逐篇勾选，确认后才上传，没勾的标成「不同步这篇」。已经连着 Gist 的推、拉不经过这里。
  * 布局见 DESIGN.md「M5：同步」的「还没上传过的」一节。
  */
+import { t } from "../../i18n";
 import { signal, Text, View } from "nsh";
 import { Checkbox } from "nsh/base";
 import { Button } from "../../ui/button";
@@ -26,10 +27,8 @@ export function UploadConfirm(props: { issue: Upload }) {
   const count = () => chosen().size;
   return (
     <View testID="sync-upload" class="gap-2 rounded-(--radius-sm) bg-card px-3 py-2">
-      <Text class="select-text text-[13px] font-medium text-strong">{`这 ${props.issue.docs.length} 篇还没上传过`}</Text>
-      <Text class="select-text text-xs leading-5 text-muted-foreground">
-        勾上的每篇建成一个私密 Gist（不公开列出，拿到链接的人能看）。没勾的标成「不同步这篇」，以后打开那篇、在同步面板里点「恢复同步」就会同步。
-      </Text>
+      <Text class="select-text text-[13px] font-medium text-strong">{t(`这 ${props.issue.docs.length} 篇还没上传过`, `${props.issue.docs.length} ${props.issue.docs.length === 1 ? "document has" : "documents have"} never been uploaded`)}</Text>
+      <Text class="select-text text-xs leading-5 text-muted-foreground">{t("勾上的每篇建成一个私密 Gist（不公开列出，拿到链接的人能看）。没勾的标成「不同步这篇」，以后打开那篇、在同步面板里点「恢复同步」就会同步。", "Each selected document becomes a secret Gist. Anyone with the link can read it. Unselected documents are excluded from sync. You can resume syncing any of them in the sync panel.")}</Text>
       <View class="gap-1">
         <Each of={props.issue.docs} key={(d) => d.id}>
           {(doc) => (
@@ -53,10 +52,10 @@ export function UploadConfirm(props: { issue: Upload }) {
         </Each>
       </View>
       <View class="flex-row flex-wrap justify-end gap-1">
-        <Button testID="sync-upload-later" label="先不上传" disabled={busy()} onPress={() => holdUploads(props.issue)} />
+        <Button testID="sync-upload-later" label={t("先不上传", "Upload later")} disabled={busy()} onPress={() => holdUploads(props.issue)} />
         <Button
           testID="sync-upload-confirm"
-          label={count() > 0 ? `上传这 ${count()} 篇` : "这些都不同步"}
+          label={count() > 0 ? t(`上传这 ${count()} 篇`, `Upload ${count()} ${count() === 1 ? "document" : "documents"}`) : t("这些都不同步", "Exclude all from sync")}
           variant="primary"
           disabled={busy()}
           onPress={() => void uploadChosen(props.issue, chosen())}

@@ -2,6 +2,7 @@
  * 每条命令现在用哪个键：命令表里的是默认键，设置里改过的盖在上面。
  * 键一律是 ProseMirror 的写法（`Mod-Shift-p`）。这里不碰存储，改过的键由启动时和设置页交进来。
  */
+import { t } from "../../i18n";
 import { APPLE_KEYS } from "../../platform";
 import type { ShortcutOverrides } from "../../store/settings";
 import { type AppCommand, COMMANDS, isViewCommand } from "./commands";
@@ -104,12 +105,12 @@ const SOURCE_EDITOR_KEYS = new Set(["Mod-/", "Mod-]", "Mod-[", "Mod-Shift-k", "F
  */
 export function rejectReason(key: string, forEditor: boolean): string | null {
   const { mods, base } = parse(canonical(key));
-  if (!KNOWN_BASES.has(base)) return "这个键不能用作快捷键";
-  if (RESERVED.has(canonical(key))) return "这个键留给系统或基本编辑（退出、复制、撤销这些）";
+  if (!KNOWN_BASES.has(base)) return t("这个键不能用作快捷键", "This key cannot be used as a shortcut");
+  if (RESERVED.has(canonical(key))) return t("这个键留给系统或基本编辑（退出、复制、撤销这些）", "This shortcut is reserved for the system or basic editing actions, such as quit, copy, and undo");
   const command = mods.includes("Mod") || mods.includes("Ctrl");
-  if (forEditor) return command ? null : "编辑命令的键要带 ⌘ 或 Ctrl";
-  if (!command && !mods.includes("Alt") && !FUNCTION_KEY.test(base)) return "要带 ⌘ / Ctrl / Alt，或者用 F1–F12";
-  if (SOURCE_EDITOR_KEYS.has(canonical(key))) return "源码编辑器会自己用掉这个键，在源码视图里按了没用";
+  if (forEditor) return command ? null : t("编辑命令的键要带 ⌘ 或 Ctrl", "Editing shortcuts must include ⌘ or Ctrl");
+  if (!command && !mods.includes("Alt") && !FUNCTION_KEY.test(base)) return t("要带 ⌘ / Ctrl / Alt，或者用 F1–F12", "Use ⌘, Ctrl, or Alt, or choose F1–F12");
+  if (SOURCE_EDITOR_KEYS.has(canonical(key))) return t("源码编辑器会自己用掉这个键，在源码视图里按了没用", "The source editor uses this key, so the shortcut does not work in source view");
   return null;
 }
 

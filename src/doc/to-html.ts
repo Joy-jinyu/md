@@ -9,6 +9,8 @@ import type { PMMark, PMNode } from "./types";
 export interface HtmlOptions {
   /** 页面标题（<title>）。 */
   title: string;
+  /** 界面附加的 HTML 标签使用的语言。 */
+  language?: "en" | "zh-CN";
   /** 标题文字 → 锚点 id；和编辑器里跳锚点用同一个，导出的文档里 `[x](#标题)` 才跳得到。 */
   slug: (text: string) => string;
   /** 链接地址 → 能输出的 href；不能输出（javascript:、file: 这类）时是 null。 */
@@ -94,6 +96,10 @@ function openTag(mark: PMMark, ctx: Ctx): string {
 
 const closeTag = (mark: PMMark) => (mark.type === "link" ? "</a>" : `</${MARK_TAGS[mark.type]}>`);
 
+function copy(ctx: Ctx, zh: string, en: string): string {
+  return ctx.opts.language === "en" ? en : zh;
+}
+
 function inlineLeaf(node: PMNode, ctx: Ctx): string {
   const a = node.attrs ?? {};
   switch (node.type) {
@@ -107,7 +113,7 @@ function inlineLeaf(node: PMNode, ctx: Ctx): string {
       return src === null ? `<span class="missing">[${escapeHtml(str(a.alt))}]</span>` : `<img src="${escapeHtml(src)}" alt="${escapeHtml(str(a.alt))}"${title} loading="lazy">`;
     }
     case "mathInline":
-      return `<code class="math" title="TeX 公式（没有排版）">$${escapeHtml(str(a.tex))}$</code>`;
+      return `<code class="math" title="${copy(ctx, "TeX 公式（没有排版）", "TeX formula (source)")}">$${escapeHtml(str(a.tex))}$</code>`;
     case "htmlInline":
       return `<code class="raw">${escapeHtml(str(a.html))}</code>`;
     case "footnoteRef": {
@@ -182,7 +188,7 @@ function rawBlock(src: string, ctx: Ctx): string {
     return "";
   }
   if (onlyComments(src) || LINK_DEFS.test(src)) return "";
-  return `<figure class="source"><figcaption>原文 HTML（导出时按文字显示）</figcaption><pre><code>${escapeHtml(src)}</code></pre></figure>`;
+  return `<figure class="source"><figcaption>${copy(ctx, "原文 HTML（导出时按文字显示）", "Original HTML (shown as text)")}</figcaption><pre><code>${escapeHtml(src)}</code></pre></figure>`;
 }
 
 function listItem(item: PMNode, ctx: Ctx): string {
@@ -236,8 +242,8 @@ const SVG_DATA = /^data:image\/svg\+xml;base64,[A-Za-z0-9+/]+=*$/;
 function diagram(code: string, ctx: Ctx): string {
   const pic = ctx.opts.diagram?.(code);
   const size = (n: number) => Math.max(1, Math.round(Number.isFinite(n) ? n : 1));
-  if (!pic || !SVG_DATA.test(pic.light) || !SVG_DATA.test(pic.dark)) return codeBlock(code, "mermaid", "Mermaid 图（源码，没有渲染）");
-  const alt = escapeHtml(`Mermaid 图：${code.trim().split("\n")[0]}`);
+  if (!pic || !SVG_DATA.test(pic.light) || !SVG_DATA.test(pic.dark)) return codeBlock(code, "mermaid", copy(ctx, "Mermaid 图（源码，没有渲染）", "Mermaid diagram (source)"));
+  const alt = escapeHtml(`${copy(ctx, "Mermaid 图：", "Mermaid diagram: ")}${code.trim().split("\n")[0]}`);
   return `<figure class="diagram"><picture><source media="(prefers-color-scheme: dark)" srcset="${pic.dark}"><img src="${pic.light}" width="${size(pic.width)}" height="${size(pic.height)}" alt="${alt}"></picture></figure>`;
 }
 
@@ -253,7 +259,7 @@ function toc(doc: PMNode, ctx: Ctx): string {
   const items = (doc.content ?? [])
     .filter((n) => n.type === "heading")
     .map((h) => `<li class="toc-${Number(h.attrs?.level ?? 1)}"><a href="#${escapeHtml(ctx.headingIds.get(h) ?? "")}">${escapeHtml(textOf(h))}</a></li>`);
-  return `<nav class="toc"><p class="toc-title">目录</p><ul>${items.join("")}</ul></nav>`;
+  return `<nav class="toc"><p class="toc-title">${copy(ctx, "目录", "Table of contents")}</p><ul>${items.join("")}</ul></nav>`;
 }
 
 function block(node: PMNode, ctx: Ctx, doc?: PMNode): string {
@@ -277,7 +283,7 @@ function block(node: PMNode, ctx: Ctx, doc?: PMNode): string {
     case "diagram":
       return diagram(str(a.code), ctx);
     case "mathBlock":
-      return `<figure class="math-block" title="TeX 公式（没有排版）"><figcaption>公式（TeX 源码）</figcaption><pre><code>${escapeHtml(str(a.tex))}</code></pre></figure>`;
+      return `<figure class="math-block" title="${copy(ctx, "TeX 公式（没有排版）", "TeX formula (source)")}"><figcaption>${copy(ctx, "公式（TeX 源码）", "Formula (TeX source)")}</figcaption><pre><code>${escapeHtml(str(a.tex))}</code></pre></figure>`;
     case "horizontalRule":
       return "<hr>";
     case "table":
@@ -300,7 +306,7 @@ function blocks(nodes: PMNode[], ctx: Ctx, doc?: PMNode): string {
 function footnotes(ctx: Ctx): string {
   if (ctx.notes.length === 0) return "";
   const items = ctx.notes.map((n) => {
-    const back = ctx.refsSeen.has(n.label) ? ` <a class="fnback" href="#${escapeHtml(footRefId(n.label))}" aria-label="回到正文">↩</a>` : "";
+    const back = ctx.refsSeen.has(n.label) ? ` <a class="fnback" href="#${escapeHtml(footRefId(n.label))}" aria-label="${copy(ctx, "回到正文", "Return to text")}">↩</a>` : "";
     return `<li id="${escapeHtml(footId(n.label))}"><span class="fnlabel">${escapeHtml(n.label)}</span> ${inline(ctx.opts.footnoteInline(n.text), ctx)}${back}</li>`;
   });
   return `<section class="footnotes"><hr><ol>${items.join("")}</ol></section>`;
@@ -317,7 +323,7 @@ export function documentToHtml(doc: PMNode, opts: HtmlOptions): string {
   const body = blocks(doc.content ?? [], ctx, doc);
   return [
     "<!doctype html>",
-    '<html lang="zh-CN">',
+    `<html lang="${opts.language === "en" ? "en" : "zh-CN"}">`,
     "<head>",
     '<meta charset="utf-8">',
     `<meta http-equiv="Content-Security-Policy" content="${CSP}">`,

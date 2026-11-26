@@ -2,6 +2,7 @@
  * GitHub 账号：登没登录、登录（两种流程）、退出。token 从 store/sync-store.ts 读、只交给 github.ts 的请求头，界面只拿到账号名。
  * 退出登录（或者 GitHub 说 token 失效了）时删掉本机存的 token。
  */
+import { type Phrase, t } from "../i18n";
 import { signal } from "nsh";
 import { messageOf } from "../doc/message";
 import { clearAuth, clearOAuthState, readAuth, readOAuthState, saveAuth, saveOAuthState } from "../store/sync-store";
@@ -24,7 +25,7 @@ import { createGitHub, type GitHub, SyncError } from "./github";
 export type Account = { kind: "loading" } | { kind: "signed-out" } | { kind: "signed-in"; login: string };
 
 /** Device Flow 进行到哪了：给界面显示用户码、等待、失败原因。 */
-export type DeviceLogin = { kind: "idle" } | { kind: "starting" } | { kind: "waiting"; code: DeviceCode } | { kind: "failed"; message: string };
+export type DeviceLogin = { kind: "idle" } | { kind: "starting" } | { kind: "waiting"; code: DeviceCode } | { kind: "failed"; message: Phrase };
 
 const account = signal<Account>({ kind: "loading" });
 const device = signal<DeviceLogin>({ kind: "idle" });
@@ -71,7 +72,7 @@ export async function github(): Promise<{ api: GitHub; login: string }> {
   const saved = await readAuth();
   if (!saved) {
     account.set({ kind: "signed-out" });
-    throw new SyncError("auth", "还没登录 GitHub，先登录再同步。");
+    throw new SyncError("auth", t("还没登录 GitHub，先登录再同步。", "Sign in to GitHub before syncing."));
   }
   return { api: createGitHub(saved.token, fetch, expired), login: saved.login };
 }
@@ -100,7 +101,7 @@ export async function beginDeviceLogin() {
     device.set({ kind: "idle" });
   } catch (e) {
     console.error("sign-in not finished", e);
-    device.set({ kind: "failed", message: `没能完成登录：${messageOf(e)}` });
+    device.set({ kind: "failed", message: () => t(`没能完成登录：${messageOf(e)}`, `Could not complete sign-in: ${messageOf(e)}`) });
   }
 }
 
@@ -118,10 +119,10 @@ export async function beginWebLogin(): Promise<string> {
 }
 
 /** GitHub 授权页带回来的固定错误码（OAuth App 文档「Troubleshooting authorization request errors」）各自的说明。 */
-const CALLBACK_ERRORS = new Map<string, string>([
-  ["access_denied", "在 GitHub 上取消了授权，没有登录。"],
-  ["redirect_uri_mismatch", `GitHub 不认这个页面的回调地址（redirect_uri_mismatch），没有登录：网页登录只在 ${new URL(OAUTH_CALLBACK_ORIGIN).host} 可用。`],
-  ["application_suspended", "这个 GitHub OAuth App 被停用了（application_suspended），现在登录不了。"],
+const CALLBACK_ERRORS = new Map<string, () => string>([
+  ["access_denied", () => t("在 GitHub 上取消了授权，没有登录。", "Authorization was canceled on GitHub. You weren’t signed in.")],
+  ["redirect_uri_mismatch", () => t(`GitHub 不认这个页面的回调地址（redirect_uri_mismatch），没有登录：网页登录只在 ${new URL(OAUTH_CALLBACK_ORIGIN).host} 可用。`, `GitHub did not recognize this page’s callback URL (redirect_uri_mismatch). Web sign-in works only at ${new URL(OAUTH_CALLBACK_ORIGIN).host}.`)],
+  ["application_suspended", () => t("这个 GitHub OAuth App 被停用了（application_suspended），现在登录不了。", "This GitHub OAuth App has been suspended. Sign-in is unavailable.")],
 ]);
 
 /**
@@ -133,13 +134,13 @@ export async function finishWebLogin(callback: Callback): Promise<string> {
   const saved = await readOAuthState();
   const now = Date.now();
   const bad = checkState(saved, callback.state, now);
-  const known = callback.kind === "error" ? CALLBACK_ERRORS.get(callback.error) : undefined;
+  const known = callback.kind === "error" ? CALLBACK_ERRORS.get(callback.error)?.() : undefined;
   if (bad || !saved) {
     if (saved && now - saved.at > STATE_TTL) await clearOAuthState();
     throw new SyncError("auth", known ?? bad ?? "");
   }
   await clearOAuthState();
-  if (callback.kind === "error") throw new SyncError("auth", known ?? `GitHub 没让登录（${callback.error}）。`);
+  if (callback.kind === "error") throw new SyncError("auth", known ?? t(`GitHub 没让登录（${callback.error}）。`, `GitHub rejected sign-in (${callback.error}).`));
   const token = await exchangeCode(syncConfig().workerUrl, { code: callback.code, state: callback.state, verifier: saved.verifier, redirectUri: saved.redirectUri }, fetch);
   return finishSignIn(token);
 }

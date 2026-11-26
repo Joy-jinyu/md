@@ -4,6 +4,7 @@
  */
 import { type JSX, Text, View, type ViewRef, windowSize } from "nsh";
 import { Sheet } from "nsh/base";
+import { t } from "../../i18n";
 import { DocumentsPanel } from "../library/DocumentsPanel";
 import { SIDE_PAD, SIDE_TEXT } from "./sidebar-style";
 import { sidebar, type SidebarTab } from "./ui-state";
@@ -37,10 +38,10 @@ function TabButton(props: { tab: SidebarTab; label: string; grab: boolean }) {
 
 function Panel(props: { outline: () => JSX.Element; onPicked: () => void; overlay: boolean }) {
   return (
-    <View testID="sidebar" accessibilityLabel="侧栏" class="w-[240px] border-r border-border bg-card">
+    <View testID="sidebar" accessibilityLabel={t("侧栏", "Sidebar")} class="w-[240px] border-r border-border bg-card">
       <View role="tablist" class={`flex-row gap-1 pb-2 pt-2 ${SIDE_PAD}`}>
-        <TabButton tab="docs" label="文档" grab={props.overlay} />
-        <TabButton tab="outline" label="大纲" grab={props.overlay} />
+        <TabButton tab="docs" label={t("文档", "Documents")} grab={props.overlay} />
+        <TabButton tab="outline" label={t("大纲", "Outline")} grab={props.overlay} />
       </View>
       <If when={sidebar.tab() === "docs"} else={props.outline()}>
         <DocumentsPanel onPicked={props.onPicked} />
@@ -51,7 +52,7 @@ function Panel(props: { outline: () => JSX.Element; onPicked: () => void; overla
 
 /** 源码方式下没有大纲时，大纲页显示的一行字。 */
 export function NoOutline() {
-  return <Text class={`pt-1 ${SIDE_TEXT}`}>源码方式下没有大纲</Text>;
+  return <Text class={`pt-1 ${SIDE_TEXT}`}>{t("源码方式下没有大纲", "The outline is unavailable in source mode")}</Text>;
 }
 
 /** 正文区连同左侧栏。`outline` 给大纲页的内容（选了一项以后调 `collapseIfOverlay`）。 */
@@ -69,7 +70,7 @@ export function WithSidebar(props: { outline: () => JSX.Element; children: JSX.E
         <Sheet
           open={sidebar.open()}
           side="left"
-          accessibilityLabel="侧栏"
+          accessibilityLabel={t("侧栏", "Sidebar")}
           onOpenChange={({ open }) => !open && sidebar.open.set(false)}
           backdropClass="bg-scrim"
           popupClass="flex-row shadow-lg"

@@ -1,6 +1,7 @@
 /** Cmd+K 的链接输入：编辑器 bubbleMenu 里一个地址框，应用 / 取消，光标在链接里时多一个「打开」。 */
 import { signal, View } from "nsh";
 import { chain, extendMarkRange, Input, insertContent, type RichEditorSession, setLink, unsetLink } from "nsh/base";
+import { t } from "../../i18n";
 import { Button } from "../../ui/button";
 import { openLink } from "./links";
 
@@ -51,17 +52,17 @@ export function LinkPrompt(props: { prompt: LinkPromptState; onAnchor: (id: stri
         onSubmit={p.apply}
         submitBehavior="submit"
         placeholder="https://"
-        accessibilityLabel="链接地址"
+        accessibilityLabel={t("链接地址", "Link address")}
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="url"
         class="h-7 w-[280px] rounded-(--radius-sm) border border-input bg-background px-2 text-[13px] text-foreground placeholder:text-faint focus:border-primary"
       />
-      <Button label="应用" variant="primary" onPress={p.apply} />
+      <Button label={t("应用", "Apply")} variant="primary" onPress={p.apply} />
       <If when={p.href() !== ""}>
-        <Button label="打开" accessibilityLabel="打开链接" onPress={() => void openLink(p.href(), props.onAnchor)} />
+        <Button label={t("打开", "Open")} accessibilityLabel={t("打开链接", "Open link")} onPress={() => void openLink(p.href(), props.onAnchor)} />
       </If>
-      <Button label="取消" onPress={p.close} />
+      <Button label={t("取消", "Cancel")} onPress={p.close} />
     </View>
   );
 }

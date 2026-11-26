@@ -4,6 +4,7 @@
  */
 import { colorScheme, computed, type JSX, setColorScheme, Text, View, windowSize } from "nsh";
 import { Button as BaseButton } from "nsh/base";
+import { t } from "../../i18n";
 import { elsewhereWords } from "../../store/backend";
 import { saveState } from "../../store/document";
 import { openDisplayName } from "../../store/library";
@@ -35,8 +36,8 @@ function ModeChip(props: { testID: string; label: string; onExit: () => void }) 
       testID={props.testID}
       onPress={props.onExit}
       style={{ minWidth: CHIP_MIN_WIDTH }}
-      accessibilityLabel={`退出${props.label}`}
-      tooltip={tip(`退出${props.label}`)}
+      accessibilityLabel={t(`退出${props.label}`, `Exit ${props.label}`)}
+      tooltip={tip(t(`退出${props.label}`, `Exit ${props.label}`))}
       class="h-6 min-w-0 shrink flex-row items-center gap-1 rounded-full bg-secondary pl-2.5 pr-1.5 transition duration-180 ease-settle hover:bg-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none"
     >
       <Text style={{ numberOfLines: 1 }} class="min-w-0 shrink text-[11px] font-medium text-primary">
@@ -52,21 +53,21 @@ export function TopBar(props: { title: string; counts: string; toggles?: ViewTog
   const narrow = () => windowSize().width < NARROW;
   return (
     <View class="min-h-11 flex-row items-center border-b border-border pl-3 pr-4" classList={{ "gap-3": !narrow(), "gap-2": narrow() }}>
-      <IconButton testID="toggle-sidebar" icon="sidebar" label={sidebar.open() ? "收起侧栏" : "展开侧栏（文档、大纲）"} active={sidebar.open()} onPress={() => toggleSidebar()} />
+      <IconButton testID="toggle-sidebar" icon="sidebar" label={sidebar.open() ? t("收起侧栏", "Collapse sidebar") : t("展开侧栏（文档、大纲）", "Expand sidebar (documents and outline)")} active={sidebar.open()} onPress={() => toggleSidebar()} />
       <Text style={{ numberOfLines: 1 }} class="min-w-0 flex-1 pl-1 text-sm font-medium text-strong">
         {openDisplayName(props.title)}
       </Text>
       <If when={props.toggles}>
-        {(t) => (
+        {(toggles) => (
           <>
-            <If when={t().ui.focusOn() && !t().sourceOn}>
-              <ModeChip testID="exit-focus" label="专注模式" onExit={() => t().ui.focusOn.set(false)} />
+            <If when={toggles().ui.focusOn() && !toggles().sourceOn}>
+              <ModeChip testID="exit-focus" label={t("专注模式", "Focus Mode")} onExit={() => toggles().ui.focusOn.set(false)} />
             </If>
-            <If when={t().ui.typewriterOn() && !t().sourceOn}>
-              <ModeChip testID="exit-typewriter" label="打字机模式" onExit={() => t().ui.typewriterOn.set(false)} />
+            <If when={toggles().ui.typewriterOn() && !toggles().sourceOn}>
+              <ModeChip testID="exit-typewriter" label={t("打字机模式", "Typewriter Mode")} onExit={() => toggles().ui.typewriterOn.set(false)} />
             </If>
-            <If when={t().sourceOn}>
-              <ModeChip testID="toggle-source" label="源码模式" onExit={t().onToggleSource} />
+            <If when={toggles().sourceOn}>
+              <ModeChip testID="toggle-source" label={t("源码模式", "Source Mode")} onExit={toggles().onToggleSource} />
             </If>
           </>
         )}
@@ -80,9 +81,9 @@ export function TopBar(props: { title: string; counts: string; toggles?: ViewTog
       </If>
       <SyncButton compact={narrow()} />
       <View class="flex-row items-center gap-0.5">
-        <IconButton testID="file-open" icon="folderOpen" label="打开文件" onPress={() => requestFile("open")} />
-        <IconButton testID="file-save-as" icon="download" label="另存为" onPress={() => requestFile("saveAs")} />
-        <IconButton testID="open-settings" icon="settings" label="设置" onPress={() => settingsOpen.set(true)} />
+        <IconButton testID="file-open" icon="folderOpen" label={t("打开文件", "Open File")} onPress={() => requestFile("open")} />
+        <IconButton testID="file-save-as" icon="download" label={t("另存为", "Save As")} onPress={() => requestFile("saveAs")} />
+        <IconButton testID="open-settings" icon="settings" label={t("设置", "Settings")} onPress={() => settingsOpen.set(true)} />
       </View>
       <AppearanceToggle />
     </View>
@@ -95,13 +96,13 @@ function SaveStatus() {
     const s = saveState();
     switch (s.kind) {
       case "pending":
-        return "保存中…";
+        return t("保存中…", "Saving…");
       case "saved":
-        return "已保存";
+        return t("已保存", "Saved");
       case "error":
-        return s.error.quota ? "本机存储已满，最近的修改没存上" : `没能保存：${s.error.detail}`;
+        return s.error.quota ? t("本机存储已满，最近的修改没存上", "Local storage is full. Your latest changes were not saved.") : t(`没能保存：${s.error.detail}`, `Could not save: ${s.error.detail}`);
       case "conflict":
-        return s.deleted ? `${elsewhereWords().deleted}，没有保存` : "和别处的修改冲突，没有保存";
+        return s.deleted ? t(`${elsewhereWords().deleted}，没有保存`, `${elsewhereWords().deleted}. Your changes were not saved.`) : t("和别处的修改冲突，没有保存", "A change elsewhere conflicts with yours. Your changes were not saved.");
       default:
         return "";
     }
@@ -130,8 +131,8 @@ function AppearanceToggle() {
   return (
     <BaseButton
       testID="toggle-appearance"
-      accessibilityLabel={`切换到${dark() ? "浅色" : "深色"}外观`}
-      tooltip={tip("切换明暗主题")}
+      accessibilityLabel={t(`切换到${dark() ? "浅色" : "深色"}外观`, `Switch to ${dark() ? "light" : "dark"} appearance`)}
+      tooltip={tip(t("切换明暗主题", "Toggle light and dark appearance"))}
       onPress={() => setColorScheme(dark() ? "light" : "dark")}
       class="size-[34px] items-center justify-center rounded-full border border-border-strong bg-secondary transition duration-180 ease-settle hover:border-primary active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none motion-reduce:active:scale-100"
     >

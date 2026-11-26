@@ -24,7 +24,7 @@ test("the command filter puts prefix matches first and ignores case and spaces",
   const found = ids(filterCommands(COMMANDS, "H 2"));
   expect(found[0]).toBe("block.h2");
   expect(ids(filterCommands(COMMANDS, "bt2"))).toEqual(["block.h2"]);
-  expect(ids(filterCommands(COMMANDS, "表格")).includes("block.table")).toBe(true);
+  expect(ids(filterCommands(COMMANDS, "table")).includes("block.table")).toBe(true);
   expect(filterCommands(COMMANDS, "no such command")).toEqual([]);
   expect(filterCommands(SLASH_COMMANDS, "")).toEqual(SLASH_COMMANDS);
 });

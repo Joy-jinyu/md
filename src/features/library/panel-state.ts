@@ -2,6 +2,7 @@
  * 文档面板的状态：搜索词和结果、排序、哪一行展开了操作、要改名 / 删除的是哪篇。
  * 放在模块顶层：切文档时编辑页整个重建，面板也跟着重建，这些不该跟着清掉（点完一个搜索结果还要接着点下一个）。
  */
+import { locale, t } from "../../i18n";
 import { signal } from "nsh";
 import { latestDocument } from "../../store/document";
 import type { DocMeta } from "../../store/document-store";
@@ -55,7 +56,14 @@ export function setQuery(value: string) {
 }
 
 export function sorted(list: DocMeta[], by: SortBy): DocMeta[] {
-  return by === "time" ? [...list].sort((a, b) => b.updatedAt - a.updatedAt) : [...list].sort((a, b) => displayName(a).localeCompare(displayName(b), "zh-CN"));
+  return by === "time" ? [...list].sort((a, b) => b.updatedAt - a.updatedAt) : [...list].sort((a, b) => displayName(a).localeCompare(displayName(b), locale()));
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** 同步状态和文档时间共用的月日格式。 */
+export function monthDay(d: Date): string {
+  return t(`${d.getMonth() + 1}月${d.getDate()}日`, `${MONTHS[d.getMonth()]} ${d.getDate()}`);
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -65,13 +73,13 @@ export const hourMinute = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes(
 
 /** 改动时间分档（DESIGN.md「文档列表」）：今天、昨天写几点几分，今年更早的写月日加时分，往年写年月日；不知道（换存法前的那篇还没存过）就直说。 */
 export function timeLabel(at: number, now = Date.now()): string {
-  if (at <= 0) return "改动时间未知";
+  if (at <= 0) return t("改动时间未知", "Last edit unknown");
   const d = new Date(at);
   const today = new Date(now);
   const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
   const hm = hourMinute(d);
-  if (d.toDateString() === today.toDateString()) return `今天 ${hm}`;
-  if (d.toDateString() === yesterday.toDateString()) return `昨天 ${hm}`;
-  if (d.getFullYear() === today.getFullYear()) return `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
-  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+  if (d.toDateString() === today.toDateString()) return t(`今天 ${hm}`, `Today ${hm}`);
+  if (d.toDateString() === yesterday.toDateString()) return t(`昨天 ${hm}`, `Yesterday ${hm}`);
+  if (d.getFullYear() === today.getFullYear()) return t(`${monthDay(d)} ${hm}`, `${monthDay(d)}, ${hm}`);
+  return t(`${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`, `${monthDay(d)}, ${d.getFullYear()}`);
 }

@@ -2,6 +2,7 @@
  * 同步面板：账号和上次同步时间、这篇同步不同步、这次的结果、要你选的事、「立即同步」。冲突的对比在同一个对话框里换成 ConflictView。
  * 布局见 DESIGN.md「M5：同步」。
  */
+import { type Phrase, phrase, t } from "../../i18n";
 import { effect, Scroll, signal, Text, untracked, View } from "nsh";
 import { Dialog } from "nsh/base";
 import { messageOf } from "../../doc/message";
@@ -29,39 +30,40 @@ function IssueRow(props: { issue: Choice }) {
   const i = props.issue;
   const busy = () => resolving() !== null;
   const title = i.kind === "remote-only" ? gistTitle(i.gist) : i.name;
-  const text = {
-    conflict: "本机和 GitHub 上都改过，改得不一样。",
-    "name-match": "这篇还没同步过，GitHub 上有一篇同名的，内容不一样。",
-    "remote-deleted": "GitHub 上的那份被删了，本机这篇还在。",
-    "local-deleted": "本机删了，GitHub 上还在。",
-    "remote-only": "GitHub 上有，这台设备上没有。",
-    failed: i.kind === "failed" ? i.message : "",
-  }[i.kind];
+  const text = () =>
+    ({
+    conflict: t("本机和 GitHub 上都改过，改得不一样。", "The local and GitHub versions have different edits."),
+    "name-match": t("这篇还没同步过，GitHub 上有一篇同名的，内容不一样。", "This document has never synced. GitHub has a different document with the same name."),
+    "remote-deleted": t("GitHub 上的那份被删了，本机这篇还在。", "The GitHub copy was deleted. The local document is still available."),
+    "local-deleted": t("本机删了，GitHub 上还在。", "The local copy was deleted. The GitHub copy is still available."),
+    "remote-only": t("GitHub 上有，这台设备上没有。", "This document is on GitHub but is not on this device."),
+    failed: i.kind === "failed" ? phrase(i.message) : "",
+    })[i.kind];
   return (
     <View testID={`sync-issue-${issueKey(i)}`} class="gap-1 rounded-(--radius-sm) bg-card px-3 py-2">
-      <Text style={{ numberOfLines: 1 }} class="select-text text-[13px] font-medium text-strong">{`「${title}」`}</Text>
-      <Text class="select-text text-xs leading-5 text-muted-foreground">{text}</Text>
+      <Text style={{ numberOfLines: 1 }} class="select-text text-[13px] font-medium text-strong">{t(`「${title}」`, `“${title}”`)}</Text>
+      <Text class="select-text text-xs leading-5 text-muted-foreground">{text()}</Text>
       <View class="flex-row flex-wrap gap-1">
-        {i.kind === "conflict" && <Button testID="sync-compare" label="对比并选择" variant="primary" onPress={() => comparing.set(i.id)} />}
+        {i.kind === "conflict" && <Button testID="sync-compare" label={t("对比并选择", "Compare and choose")} variant="primary" onPress={() => comparing.set(i.id)} />}
         {i.kind === "name-match" && (
           <>
-            <Button testID="sync-link-match" label="连上并对比" disabled={busy()} onPress={() => void linkNameMatch(i).then(() => comparing.set(i.id))} />
-            <Button testID="sync-create-separate" label="另建一个" disabled={busy()} onPress={() => void createSeparate(i)} />
+            <Button testID="sync-link-match" label={t("连上并对比", "Link and compare")} disabled={busy()} onPress={() => void linkNameMatch(i).then(() => comparing.set(i.id))} />
+            <Button testID="sync-create-separate" label={t("另建一个", "Create a separate Gist")} disabled={busy()} onPress={() => void createSeparate(i)} />
           </>
         )}
         {i.kind === "remote-deleted" && (
           <>
-            <Button testID="sync-reupload" label="重新上传" disabled={busy()} onPress={() => void reupload(i)} />
-            <Button testID="sync-stop" label="不再同步这篇" disabled={busy()} onPress={() => void stopSyncing(i)} />
+            <Button testID="sync-reupload" label={t("重新上传", "Upload again")} disabled={busy()} onPress={() => void reupload(i)} />
+            <Button testID="sync-stop" label={t("不再同步这篇", "Stop syncing this document")} disabled={busy()} onPress={() => void stopSyncing(i)} />
           </>
         )}
         {i.kind === "local-deleted" && (
           <>
-            <Button testID="sync-pull-back" label="拉回本机" disabled={busy()} onPress={() => void pullBack(i)} />
-            <Button testID="sync-forget" label="不再同步" disabled={busy()} onPress={() => void forgetDeleted(i)} />
+            <Button testID="sync-pull-back" label={t("拉回本机", "Restore to this device")} disabled={busy()} onPress={() => void pullBack(i)} />
+            <Button testID="sync-forget" label={t("不再同步", "Stop syncing")} disabled={busy()} onPress={() => void forgetDeleted(i)} />
           </>
         )}
-        {i.kind === "remote-only" && <Button testID="sync-pull" label="拉到本机" disabled={busy()} onPress={() => void pullRemote(i)} />}
+        {i.kind === "remote-only" && <Button testID="sync-pull" label={t("拉到本机", "Download to this device")} disabled={busy()} onPress={() => void pullRemote(i)} />}
       </View>
     </View>
   );
@@ -77,9 +79,9 @@ function Issues() {
       <If when={choices().length > 0}>
         <View class="gap-2">
           <View class="flex-row items-center justify-between">
-            <Text class="text-[11px] text-faint">要你选的事</Text>
+            <Text class="text-[11px] text-faint">{t("要你选的事", "Needs your attention")}</Text>
             <If when={remoteOnly().length > 1}>
-              <Button testID="sync-pull-all" label="全部拉到本机" disabled={resolving() !== null} onPress={() => void pullAllRemote(remoteOnly())} />
+              <Button testID="sync-pull-all" label={t("全部拉到本机", "Download all to this device")} disabled={resolving() !== null} onPress={() => void pullAllRemote(remoteOnly())} />
             </If>
           </View>
           <Each of={choices()} key={issueKey}>
@@ -94,7 +96,7 @@ function Issues() {
 /** 这篇同步不同步。 */
 function ThisDocument() {
   const excluded = signal<boolean | null>(null);
-  const problem = signal("");
+  const problem = signal<Phrase>("");
   effect(() => {
     const id = currentDocId();
     // 处理完一件待选事项（确认上传时没勾这篇、「不再同步这篇」）可能改了这篇的设置：待选事项一变就重读
@@ -102,7 +104,7 @@ function ThisDocument() {
     if (!syncOpen() || !id) return;
     untracked(() => {
       excluded.set(null);
-      syncRecordOf(id).then((r) => excluded.set(r?.excluded === true), (e: unknown) => problem.set(`读不到这篇的同步设置：${messageOf(e)}`));
+      syncRecordOf(id).then((r) => excluded.set(r?.excluded === true), (e: unknown) => problem.set(() => t(`读不到这篇的同步设置：${messageOf(e)}`, `Could not read sync settings for this document: ${messageOf(e)}`)));
     });
   });
   const flip = async () => {
@@ -114,17 +116,17 @@ function ThisDocument() {
       excluded.set(next);
       problem.set("");
     } catch (e) {
-      problem.set(`没能改：${messageOf(e)}`);
+      problem.set(() => t(`没能改：${messageOf(e)}`, `Could not update sync settings: ${messageOf(e)}`));
     }
   };
   return (
     <View class="flex-row flex-wrap items-center gap-2">
       <Text testID="sync-this-doc" class="select-text text-xs text-muted-foreground">
-        {excluded() ? "这篇不同步" : "这篇会同步"}
+        {excluded() ? t("这篇不同步", "Sync is off for this document") : t("这篇会同步", "This document will sync")}
       </Text>
-      <Button testID="sync-toggle-doc" label={excluded() ? "恢复同步" : "不同步这篇"} disabled={excluded() === null} onPress={() => void flip()} />
+      <Button testID="sync-toggle-doc" label={excluded() ? t("恢复同步", "Resume syncing") : t("不同步这篇", "Stop syncing this document")} disabled={excluded() === null} onPress={() => void flip()} />
       <If when={problem()}>
-        <Text class="select-text text-xs text-destructive">{problem()}</Text>
+        <Text class="select-text text-xs text-destructive">{phrase(problem())}</Text>
       </If>
     </View>
   );
@@ -141,13 +143,13 @@ function RunResult() {
           </Text>
         )}
       </If>
-      <If when={run().kind === "error" ? (run() as { message: string }).message : null}>
+      <If when={run().kind === "error" ? (run() as { message: Phrase }).message : null}>
         {(message) => (
           <View class="flex-row items-start gap-2">
             <Text testID="sync-error" role="alert" class="min-w-0 flex-1 select-text text-xs leading-5 text-destructive">
-              {`没能同步：${message()}`}
+              {t(`没能同步：${phrase(message())}`, `Could not sync: ${phrase(message())}`)}
             </Text>
-            <CopyButton testID="copy-sync-error" text={message()} label="复制出错原因" />
+            <CopyButton testID="copy-sync-error" text={phrase(message())} label={t("复制出错原因", "Copy error details")} />
           </View>
         )}
       </If>
@@ -166,7 +168,7 @@ function Overview() {
           <RunResult />
         </If>
         <If when={signedIn()}>
-          <Text class="select-text text-xs text-muted-foreground">{last() ? `上次同步：${timeLabel(last() as number)}` : "这台设备还没同步过。"}</Text>
+          <Text class="select-text text-xs text-muted-foreground">{last() ? t(`上次同步：${timeLabel(last() as number)}`, `Last synced: ${timeLabel(last() as number)}`) : t("这台设备还没同步过。", "This device has not synced yet.")}</Text>
           <If when={currentDocId()}>
             <ThisDocument />
           </If>
@@ -191,7 +193,7 @@ export function SyncDialog() {
       testID="sync"
       open={syncOpen()}
       animation="fade"
-      accessibilityLabel="同步到 GitHub"
+      accessibilityLabel={t("同步到 GitHub", "Sync to GitHub")}
       closeOnEscape
       closeOnBackdropPress
       onOpenChange={({ open }) => !open && close()}
@@ -201,7 +203,7 @@ export function SyncDialog() {
       <View class="overflow-hidden rounded-(--radius) border border-border bg-popover">
         <If when={conflict() === null}>
           <View class="border-b border-border px-4 py-3">
-            <Text class="text-sm font-medium text-strong">同步到 GitHub</Text>
+            <Text class="text-sm font-medium text-strong">{t("同步到 GitHub", "Sync to GitHub")}</Text>
           </View>
         </If>
         <If when={conflict()} else={<Overview />}>
@@ -209,11 +211,11 @@ export function SyncDialog() {
         </If>
         <If when={conflict() === null}>
           <View class="flex-row items-center justify-end gap-1 border-t border-border px-4 py-2">
-            <Button testID="sync-close" label="关闭" autoFocus onPress={close} />
+            <Button testID="sync-close" label={t("关闭", "Close")} autoFocus onPress={close} />
             <If when={canSync()}>
               <Button
                 testID="sync-now"
-                label={syncRun().kind === "running" ? "同步中…" : "立即同步"}
+                label={syncRun().kind === "running" ? t("同步中…", "Syncing…") : t("立即同步", "Sync now")}
                 variant="primary"
                 disabled={syncRun().kind === "running" || resolving() !== null}
                 onPress={() => void runSync()}

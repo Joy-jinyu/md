@@ -1,6 +1,7 @@
 /** 光标旁的三种小条：选中文字时的格式条、光标在链接里时的链接卡片、选中能改源码的原子块（公式、图、front matter、HTML 块）时的操作条。 */
 import { signal, Text, View } from "nsh";
 import { chain, command, extendMarkRange, type RichEditorSession, unsetLink } from "nsh/base";
+import { t } from "../../i18n";
 import { Button } from "../../ui/button";
 import { atomSource, type AtomPromptState, isAtomKind } from "./AtomPrompt";
 import { commandById } from "./commands";
@@ -44,7 +45,7 @@ const MARKS = [
 ];
 
 const BLOCKS = [
-  { label: "正文", id: "block.paragraph", active: (s: RichEditorSession) => s.isActive("paragraph") },
+  { get label() { return t("正文", "Body"); }, id: "block.paragraph", active: (s: RichEditorSession) => s.isActive("paragraph") },
   ...[1, 2, 3].map((level) => ({ label: `H${level}`, id: `block.h${level}`, active: (s: RichEditorSession) => s.isActive("heading", { level }) })),
 ];
 
@@ -61,7 +62,7 @@ export function FormatBar(props: { session: RichEditorSession; revision: () => n
     s.focus();
   };
   return (
-    <View testID="format-bar" accessibilityLabel="格式" class={BAR}>
+    <View testID="format-bar" accessibilityLabel={t("格式", "Formatting")} class={BAR}>
       <Each of={MARKS} key={(m) => m.id}>
         {(m) => (
           <Button
@@ -74,14 +75,14 @@ export function FormatBar(props: { session: RichEditorSession; revision: () => n
           />
         )}
       </Each>
-      <Button testID="bar-link" label="链接" accessibilityLabel="链接" active={on(() => s.isActive("link"))} onPress={props.onLink} />
+      <Button testID="bar-link" label={t("链接", "Link")} accessibilityLabel={t("链接", "Link")} active={on(() => s.isActive("link"))} onPress={props.onLink} />
       <View class="mx-1 h-4 w-px bg-border" />
       <Each of={BLOCKS} key={(b) => b.id}>
         {(b) => (
           <Button
             testID={`bar-${b().id}`}
             label={b().label}
-            accessibilityLabel={`转成${commandById(b().id).label}`}
+            accessibilityLabel={t(`转成${commandById(b().id).label}`, `Turn into ${commandById(b().id).label}`)}
             active={on(() => b().active(s))}
             onPress={() => run(b().id)}
           />
@@ -98,13 +99,13 @@ export function LinkCard(props: { session: RichEditorSession; link: LinkPromptSt
     props.session.focus();
   };
   return (
-    <View testID="link-card" accessibilityLabel="链接" class={`${BAR} gap-1`}>
+    <View testID="link-card" accessibilityLabel={t("链接", "Link")} class={`${BAR} gap-1`}>
       <Text style={{ numberOfLines: 1 }} class="max-w-[240px] select-text px-2 text-xs text-muted-foreground">
         {props.link.href()}
       </Text>
-      <Button label="打开" accessibilityLabel="打开链接" onPress={() => void openLink(props.link.href(), props.onAnchor)} />
-      <Button label="编辑" accessibilityLabel="编辑链接" onPress={props.link.show} />
-      <Button label="取消链接" onPress={unlink} />
+      <Button label={t("打开", "Open")} accessibilityLabel={t("打开链接", "Open link")} onPress={() => void openLink(props.link.href(), props.onAnchor)} />
+      <Button label={t("编辑", "Edit")} accessibilityLabel={t("编辑链接", "Edit link")} onPress={props.link.show} />
+      <Button label={t("取消链接", "Remove link")} onPress={unlink} />
     </View>
   );
 }
@@ -122,9 +123,9 @@ export function AtomBar(props: { session: RichEditorSession; atom: AtomPromptSta
     s.focus();
   };
   return (
-    <View testID="atom-bar" accessibilityLabel="块操作" class={BAR}>
-      <Button label="编辑" accessibilityLabel="编辑源码" onPress={edit} />
-      <Button label="删除" onPress={remove} />
+    <View testID="atom-bar" accessibilityLabel={t("块操作", "Block actions")} class={BAR}>
+      <Button label={t("编辑", "Edit")} accessibilityLabel={t("编辑源码", "Edit source")} onPress={edit} />
+      <Button label={t("删除", "Delete")} onPress={remove} />
     </View>
   );
 }

@@ -1,4 +1,5 @@
-import { expect, open, test } from "nsh/test";
+import { expect, test } from "nsh/test";
+import { chineseStorage, open } from "./fixtures/chinese-open";
 import { historyKey } from "../src/store/history";
 import { LAST_OPENED_KEY } from "../src/store/library";
 import { bodyKey, metaKey } from "../src/store/local-store";
@@ -237,7 +238,7 @@ const findNode = (node: A11yNode | null, hit: (n: A11yNode) => boolean): boolean
 
 /** 应用读写 `shared.data`：测试改它就像另一个标签页改了存储。 */
 async function openShared(extra: Record<string, string> = {}) {
-  const shared = sharedStorage({ ...LIBRARY, ...extra });
+  const shared = sharedStorage(chineseStorage({ ...LIBRARY, ...extra }));
   const app = await open("../App.tsx", { ...WEB, modules: shared.modules });
   await app.waitFor("text:first doc");
   return { app, data: shared.data };

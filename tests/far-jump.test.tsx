@@ -1,4 +1,5 @@
-import { expect, open, test } from "nsh/test";
+import { expect, test } from "nsh/test";
+import { open } from "./fixtures/chinese-open";
 // 旧版（单篇）的正文键：存进去的那篇启动时原地成为文档库的第一篇
 import { LEGACY_DOC_KEY as DOC_KEY } from "../src/store/kv";
 

@@ -1,4 +1,5 @@
 /** 「上传到图床」确认框：设置了图床时插图先问（editor/image-host.ts 的 `uploadAsk`）。布局见 DESIGN.md「M3：图片」的「上传确认框」。 */
+import { t } from "../../i18n";
 import { keymap, Text, View } from "nsh";
 import { Dialog } from "nsh/base";
 import { Button } from "../../ui/button";
@@ -23,7 +24,7 @@ export function ImageUploadConfirm() {
       testID="image-upload-ask"
       open={uploadAsk() !== null}
       animation="fade"
-      accessibilityLabel="上传到图床"
+      accessibilityLabel={t("上传到图床", "Upload to image host")}
       closeOnEscape
       closeOnBackdropPress
       onOpenChange={({ open }) => !open && answer("local")}
@@ -32,14 +33,14 @@ export function ImageUploadConfirm() {
     >
       <EscapeCloses onEscape={() => answer("local")} />
       <View class="gap-3 rounded-(--radius) border border-border bg-popover p-4">
-        <Text class="text-sm font-medium text-strong">{`把 ${uploadAsk()?.count ?? 0} 张图片传到图床？`}</Text>
+        <Text class="text-sm font-medium text-strong">{t(`把 ${uploadAsk()?.count ?? 0} 张图片传到图床？`, `Upload ${uploadAsk()?.count ?? 0} images to the image host?`)}</Text>
         <Text testID="image-upload-where" class="select-text text-xs leading-5 text-muted-foreground">
-          {`会传到 ${uploadAsk()?.where ?? ""}，正文里写图床给的外链地址，传上去的图片是公开的。存本地的话图片放在文档旁边的 assets/ 里。`}
+          {t(`会传到 ${uploadAsk()?.where ?? ""}，正文里写图床给的外链地址，传上去的图片是公开的。存本地的话图片放在文档旁边的 assets/ 里。`, `Images uploaded to ${uploadAsk()?.where ?? ""} are public, and their URLs appear in the document. Saving locally puts them in the assets/ folder beside the document.`)}
         </Text>
         <View class="flex-row flex-wrap justify-end gap-2">
-          <Button testID="image-upload-local" label="存本地" onPress={() => answer("local")} />
-          <Button testID="image-upload-always" label="上传，以后不再问" onPress={() => answer("always")} />
-          <Button testID="image-upload-yes" label="上传" variant="primary" onPress={() => answer("upload")} />
+          <Button testID="image-upload-local" label={t("存本地", "Save locally")} onPress={() => answer("local")} />
+          <Button testID="image-upload-always" label={t("上传，以后不再问", "Upload and don’t ask again")} onPress={() => answer("always")} />
+          <Button testID="image-upload-yes" label={t("上传", "Upload")} variant="primary" onPress={() => answer("upload")} />
         </View>
       </View>
     </Dialog>

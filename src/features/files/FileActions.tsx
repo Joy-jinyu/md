@@ -1,4 +1,5 @@
 /** 「打开文件」「另存为」「导出为 HTML」：接请求、选文件、另存。打开的文件存成文档库里的一篇新文档（交给编辑页那一层去建、去切换）。 */
+import { type Phrase, phrase, t } from "../../i18n";
 import { effect, Picker, untracked } from "nsh";
 import { messageOf } from "../../doc/message";
 import { saveTextFile } from "../../platform";
@@ -30,9 +31,9 @@ const stem = (name: string) => name.replace(/\.(md|markdown|mdown|txt)$/i, "") |
 async function pickMarkdown(): Promise<{ name: string; text: string } | null> {
   const first = (await Picker.pickFiles({ filters: MARKDOWN_FILES, maxSize: MAX_OPEN_BYTES }))[0];
   if (!first) return null;
-  if (first.status === "tooLarge" || !first.file) throw new Error(`「${first.name}」太大了（超过 32 MB）`);
+  if (first.status === "tooLarge" || !first.file) throw new Error(t(`「${first.name}」太大了（超过 32 MB）`, `“${first.name}” exceeds 32 MB.`));
   const text = await first.file.text();
-  if (NOT_TEXT.test(text)) throw new Error(`「${first.name}」不是 UTF-8 编码的文本（可能是别的编码，或者不是文本文件）。先用别的工具转成 UTF-8 再打开`);
+  if (NOT_TEXT.test(text)) throw new Error(t(`「${first.name}」不是 UTF-8 编码的文本（可能是别的编码，或者不是文本文件）。先用别的工具转成 UTF-8 再打开`, `“${first.name}” is not UTF-8 text. Convert it to UTF-8 before opening it.`));
   return { name: first.name, text };
 }
 
@@ -42,7 +43,7 @@ async function openFile() {
     if (file) requestLibrary({ kind: "import", name: stem(file.name), text: file.text });
   } catch (e) {
     console.error("open file failed", e);
-    say(`没有打开：${messageOf(e)}。文档库没有变。`, "warn");
+    say(() => t(`没有打开：${messageOf(e)}。文档库没有变。`, `Could not open the file: ${messageOf(e)}. Your library is unchanged.`), "warn");
   }
 }
 
@@ -50,20 +51,23 @@ async function openFile() {
  * 另存的只有 .md 本身，正文里相对路径的图片（文档库里的）没有跟过去：说一声，免得以为图片跟着走了。
  * 浏览器本地的图片在 IndexedDB 里，文库文件夹和网关的在文库的 assets/ 里。
  */
-function imagesLeftBehind(text: string): string {
-  const where = storageKind().kind === "local" ? "存在浏览器里" : "在文库的 assets/ 里";
-  if (tooLongToConvert(text)) return `。如果这篇有文档库里的图片，没有一起存过去，图片${where}`;
+function imagesLeftBehind(text: string): Phrase {
+  const local = storageKind().kind === "local";
+  const where = () => (local ? t("存在浏览器里", "remain in browser storage") : t("在文库的 assets/ 里", "remain in the library’s assets folder"));
+  if (tooLongToConvert(text)) return () => t(`。如果这篇有文档库里的图片，没有一起存过去，图片${where()}`, `. Any library images in this document were not exported and ${where()}`);
   const n = localImageCount(loadMarkdown(text).json);
-  return n > 0 ? `。这篇有 ${n} 张图片没有一起存过去，图片${where}` : "";
+  return n > 0 ? () => t(`。这篇有 ${n} 张图片没有一起存过去，图片${where()}`, `. The ${n} embedded image(s) were not exported and ${where()}`) : "";
 }
 
 async function saveAs() {
   try {
     const text = latestDocument();
-    say(`${(await saveTextFile(fileNameFor(text, "md", openDocName()), text)).message}${imagesLeftBehind(text)}`, "info");
+    const saved = await saveTextFile(fileNameFor(text, "md", openDocName()), text);
+    const left = imagesLeftBehind(text);
+    say(() => `${phrase(saved.message)}${phrase(left)}`, "info");
   } catch (e) {
     console.error("save as failed", e);
-    say(`没能另存：${messageOf(e)}`, "warn");
+    say(() => t(`没能另存：${messageOf(e)}`, `Could not save a copy: ${messageOf(e)}`), "warn");
   }
 }
 
@@ -71,13 +75,14 @@ async function saveAs() {
 async function exportHtml() {
   try {
     const text = latestDocument();
-    if (tooLongToConvert(text)) return say("这篇太长，导出不了 HTML；可以另存为 .md。", "warn");
+    if (tooLongToConvert(text)) return say(() => t("这篇太长，导出不了 HTML；可以另存为 .md。", "This document is too long to export as HTML. You can save a Markdown copy instead."), "warn");
     const out = await markdownToHtmlWithImages(text, currentDocId());
     const saved = await saveTextFile(fileNameFor(text, "html", openDocName()), out.html, "text/html;charset=utf-8");
-    say(`${saved.message}。${out.note}用浏览器打开它，可以再打印或存成 PDF。`, out.note ? "warn" : "info");
+    const note = () => phrase(out.note);
+    say(() => t(`${phrase(saved.message)}。${note()}用浏览器打开它，可以再打印或存成 PDF。`, `${phrase(saved.message)}. ${note() ? `${note()} ` : ""}Open it in your browser to print it or save it as a PDF.`), out.note ? "warn" : "info");
   } catch (e) {
     console.error("export html failed", e);
-    say(`没能导出：${messageOf(e)}`, "warn");
+    say(() => t(`没能导出：${messageOf(e)}`, `Could not export: ${messageOf(e)}`), "warn");
   }
 }
 

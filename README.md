@@ -8,6 +8,8 @@ Pairdown is a WYSIWYG Markdown editor for the web and macOS. It keeps your docum
 
 ## Use Pairdown
 
+The editor defaults to English. To switch the interface to Simplified Chinese, open **Settings → Language**. Pairdown saves the preference on this device.
+
 Open the [web app](https://markdown.pairwise.site/). It saves documents in your browser by default. To work with a local folder of Markdown files from the web app, set up the [local gateway](gateway/README.md).
 
 To run the macOS app from this repository, follow the development setup below and use `make dev`. Use `make build-mac` to create `dist/macos/Pairdown.app`. The macOS app stores its document library in `~/Documents/Pairdown` by default.

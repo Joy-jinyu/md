@@ -1,4 +1,5 @@
 /** 「导出为 HTML」：从存着的 Markdown 读一遍（和打开文档同一个转换层），写成自包含的 HTML。源码方式打开的大文档也能导出。 */
+import { locale, type Phrase, t } from "../../i18n";
 import { documentToHtml, type HtmlOptions } from "../../doc/to-html";
 import type { PMNode } from "../../doc/types";
 import { IN_BROWSER } from "../../platform";
@@ -25,8 +26,6 @@ const MAX_EXPORT_CHARS = 1_000_000;
 /** 这篇太长，整篇读一遍会超出单次调用的时间预算：导出 HTML（和别的要整篇读一遍的事）先不做。 */
 export const tooLongToConvert = (markdown: string) => markdown.length > MAX_EXPORT_CHARS || markdown.split("\n").length > MAX_EXPORT_LINES;
 
-const ALERT_LABEL = new Map<string, string>(ALERT_KINDS.map((k) => [k.alert, k.label]));
-
 /** 导出的链接只留应用自己也肯打开的那几种（http、https、mailto、文档内锚点），别的去掉 href。 */
 function exportHref(href: string): string | null {
   return linkTarget(href).kind === "blocked" ? null : href.trim();
@@ -40,10 +39,11 @@ function footnoteInline(text: string): PMNode[] {
 }
 
 const optionsFor = (markdown: string) => ({
-  title: markdownTitle(markdown) || "未命名",
+  title: markdownTitle(markdown) || t("未命名", "Untitled"),
+  language: locale(),
   slug: slugify,
   linkHref: exportHref,
-  alertLabel: (kind: string) => ALERT_LABEL.get(kind) ?? kind,
+  alertLabel: (kind: string) => ALERT_KINDS.find((item) => item.alert === kind)?.label ?? kind,
   footnoteInline,
 });
 
@@ -112,7 +112,7 @@ async function drawDiagrams(doc: PMNode): Promise<DrawnDiagrams> {
 /** 导出的 HTML；`note` 是要补进回执的一句（图片没内联时说明原因），没有是空串。 */
 export interface ExportedHtml {
   html: string;
-  note: string;
+  note: Phrase;
 }
 
 /**
@@ -123,12 +123,12 @@ export async function markdownToHtmlWithImages(markdown: string, docId: string |
   const doc = loadMarkdown(markdown).json;
   const drawn = await drawDiagrams(doc);
   const options = { ...optionsFor(markdown), diagram: drawn.diagram };
-  const diagramNote = drawn.missing > 0 ? `${drawn.missing} 张 Mermaid 图没画出来，导出的是源码。` : "";
+  const diagramNote = (): string => (drawn.missing === 0 ? "" : t(`${drawn.missing} 张 Mermaid 图没画出来，导出的是源码。`, `Could not render ${drawn.missing} Mermaid ${drawn.missing === 1 ? "diagram" : "diagrams"}. Exported the source text instead.`));
   const inlined = docId ? await inlineImages(doc, docId) : doc;
   const html = documentToHtml(inlined, options);
-  if (inlined === doc || new TextEncoder().encode(html).length <= limit) return { html, note: diagramNote };
+  if (inlined === doc || new TextEncoder().encode(html).length <= limit) return { html, note: drawn.missing > 0 ? diagramNote : "" };
   return {
     html: documentToHtml(doc, options),
-    note: `图片合起来超过 ${Math.round(limit / MIB)} MB，应用一次写不下，这次没有内联进 HTML：HTML 里还是图片的相对地址，单独拿走看不到图。${diagramNote}`,
+    note: () => t(`图片合起来超过 ${Math.round(limit / MIB)} MB，应用一次写不下，这次没有内联进 HTML：HTML 里还是图片的相对地址，单独拿走看不到图。${diagramNote()}`, `Images exceed ${Math.round(limit / MIB)} MB in total, so they were not embedded. The HTML still uses relative image paths and needs the original image files.${drawn.missing > 0 ? ` ${diagramNote()}` : ""}`),
   };
 }

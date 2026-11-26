@@ -2,6 +2,7 @@
  * 本机的键值库：浏览器里是 IndexedDB，别处（以及 IndexedDB 从没用过且这次打不开时）是 nsh 的 Storage（上限 5MB）。
  * 文档库、版本历史都存在这里；选哪一个在第一次用的时候定下来，这次打开期间不变，免得读一处、写另一处。
  */
+import { t } from "../i18n";
 import { Storage } from "nsh";
 import { type Change, hasIndexedDb, idbGet, idbKeys, idbUpdate } from "./idb";
 
@@ -28,7 +29,7 @@ const storageKv: Kv = {
     const done: [string, string | null][] = [];
     try {
       for (const [key, value] of Object.entries(change.puts ?? {})) {
-        if (typeof value !== "string") throw new Error("这里的存储只能存文字");
+        if (typeof value !== "string") throw new Error(t("这里的存储只能存文字", "This storage only supports text"));
         const previous = await Storage.getItem(key);
         await Storage.setItem(key, value);
         done.push([key, previous]);
@@ -87,7 +88,7 @@ async function choose(): Promise<Kv> {
     return idbKv;
   } catch (e) {
     if ((await Storage.getItem(IN_IDB_KEY)) !== null) {
-      throw new Error(`浏览器的 IndexedDB 这次打不开，文档还在里面，没有丢（${e instanceof Error ? e.message : String(e)}）。关掉别的标签页或重新打开浏览器再试。`);
+      throw new Error(t(`浏览器的 IndexedDB 这次打不开，文档还在里面，没有丢（${e instanceof Error ? e.message : String(e)}）。关掉别的标签页或重新打开浏览器再试。`, `Could not open browser storage (IndexedDB). Your documents are still there. Close other tabs or restart the browser and try again. (${e instanceof Error ? e.message : String(e)})`));
     }
     console.warn("IndexedDB unavailable, using Storage for documents", e);
     return storageKv;

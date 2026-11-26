@@ -5,6 +5,7 @@
  */
 import { cleanup, effect, Image, type JSX, signal, Text, untracked, View } from "nsh";
 import type { RichNodeViewProps } from "nsh/base";
+import { t } from "../../i18n";
 import { canTransfer, documentStore } from "../../store/backend";
 import { isRelativeSrc, mimeOf, sniffImage } from "../../store/image-file";
 import { currentDocId } from "../../store/library";
@@ -20,8 +21,8 @@ type Size = { width: number; height: number };
 type Shown =
   | { kind: "loading"; size?: Size }
   | ({ kind: "ready"; url: string } & Size)
-  | { kind: "remoteFailed"; text: string }
-  | { kind: "problem"; text: string };
+  | { kind: "remoteFailed"; text: () => string }
+  | { kind: "problem"; text: () => string };
 
 /** 内嵌的 data: 图片直接给 Image 显示：只认位图类型（SVG 能带脚本，不显示）。 */
 const DATA_RASTER = /^data:image\/(?:png|jpeg|gif|webp|avif);base64,/i;
@@ -50,12 +51,12 @@ function displayWidth(width: string, natural: number): number {
 
 /** 相对路径：取字节 → 按文件头认类型 → blob 地址 → 量原图大小。 */
 async function loadAsset(docId: string | null, src: string, keep: (url: string) => void): Promise<Shown> {
-  if (!docId) return { kind: "problem", text: `找不到图片：${src}` };
+  if (!docId) return { kind: "problem", text: () => t(`找不到图片：${src}`, `Image not found: ${src}`) };
   try {
     const asset = await documentStore.getAsset(docId, src);
-    if (!asset) return { kind: "problem", text: `找不到图片：${src}` };
+    if (!asset) return { kind: "problem", text: () => t(`找不到图片：${src}`, `Image not found: ${src}`) };
     const ext = sniffImage(asset.bytes);
-    if (!ext) return { kind: "problem", text: `不是认得的图片：${src}` };
+    if (!ext) return { kind: "problem", text: () => t(`不是认得的图片：${src}`, `Unrecognized image format: ${src}`) };
     const url = URL.createObjectURL(new Blob([asset.bytes], { type: mimeOf(ext) }));
     keep(url);
     const size = await Image.getSize(url);
@@ -63,7 +64,7 @@ async function loadAsset(docId: string | null, src: string, keep: (url: string) 
     return { kind: "ready", url, width: size.width, height: size.height };
   } catch (e) {
     console.warn("image not loaded", src, e);
-    return { kind: "problem", text: `图片载入失败：${src}（${e instanceof Error ? e.message : String(e)}）` };
+    return { kind: "problem", text: () => t(`图片载入失败：${src}（${e instanceof Error ? e.message : String(e)}）`, `Could not load image: ${src} (${e instanceof Error ? e.message : String(e)})`) };
   }
 }
 
@@ -81,8 +82,8 @@ async function loadDirect(src: string, failed: () => Shown): Promise<Shown> {
 
 /** 外链载入失败的原因。https 页面里的 http 图片：浏览器先试着换成 https，换不成就拦下，应用分不出是哪种失败，只按地址和页面推断。 */
 function remoteFailure(src: string): string {
-  if (/^http:/i.test(src) && /^https:/i.test(pageUrl() ?? "")) return "外链图片没载入：这是 http 地址，https 的网页里浏览器不让载入（换成 https 地址，或在浏览器里打开）";
-  return "外链图片没载入：地址不对、对方网站不让引用，或者没有网络";
+  if (/^http:/i.test(src) && /^https:/i.test(pageUrl() ?? "")) return t("外链图片没载入：这是 http 地址，https 的网页里浏览器不让载入（换成 https 地址，或在浏览器里打开）", "The linked image could not load because the browser blocks HTTP images on HTTPS pages. Use an HTTPS URL or open the image in your browser.");
+  return t("外链图片没载入：地址不对、对方网站不让引用，或者没有网络", "The linked image could not load. Check the URL, network connection, or the site's image-linking policy.");
 }
 
 function Placeholder(props: { selected: boolean; width?: number; children: JSX.Element }) {
@@ -110,11 +111,11 @@ function RemoteFailed(props: { src: string; text: string; selected: boolean; edi
       <View class="flex-row flex-wrap gap-1">
         <If when={canTransfer()}>
           <View {...transfer.mouse}>
-            <Button testID="image-transfer" label="转存到本地" onPress={transfer.onPress} />
+            <Button testID="image-transfer" label={t("转存到本地", "Save a local copy")} onPress={transfer.onPress} />
           </View>
         </If>
         <View {...browse.mouse}>
-          <Button label="在浏览器打开" accessibilityLabel="在浏览器里打开这张图片" onPress={browse.onPress} />
+          <Button label={t("在浏览器打开", "Open in browser")} accessibilityLabel={t("在浏览器里打开这张图片", "Open this image in the browser")} onPress={browse.onPress} />
         </View>
       </View>
     </Placeholder>
@@ -143,10 +144,10 @@ export function ImageView(p: RichNodeViewProps) {
         const known = knownSizes.get(src);
         if (known) return settle({ kind: "ready", url: src, ...known });
         settle({ kind: "loading" });
-        const failed = (): Shown => (isExternalSrc(src) ? { kind: "remoteFailed", text: remoteFailure(src) } : { kind: "problem", text: "内嵌图片载入失败" });
+        const failed = (): Shown => (isExternalSrc(src) ? { kind: "remoteFailed", text: () => remoteFailure(src) } : { kind: "problem", text: () => t("内嵌图片载入失败", "Could not load the embedded image") });
         return void loadDirect(src, failed).then(settle);
       }
-      if (!isRelativeSrc(src)) return settle({ kind: "problem", text: `不支持的图片地址：${src.slice(0, 80)}。只显示文档旁边 assets/ 里的图、http(s) 外链和内嵌的位图；把图片重新插入一次（粘贴或「插入图片…」）就会存进文档库` });
+      if (!isRelativeSrc(src)) return settle({ kind: "problem", text: () => t(`不支持的图片地址：${src.slice(0, 80)}。只显示文档旁边 assets/ 里的图、http(s) 外链和内嵌的位图；把图片重新插入一次（粘贴或「插入图片…」）就会存进文档库`, `Unsupported image address: ${src.slice(0, 80)}. Use an image in the document’s assets/ folder, an HTTP(S) URL, or an embedded bitmap. Paste the image again or use Insert Image to save it to the library.`) });
       const docId = currentDocId();
       settle({ kind: "loading", size: knownSizes.get(`${docId}\n${src}`) });
       void loadAsset(docId, src, (url) => (mine === generation ? (blob = url) : URL.revokeObjectURL(url))).then(settle);
@@ -166,28 +167,28 @@ export function ImageView(p: RichNodeViewProps) {
       case "ready":
         return (
           <View class="rounded-(--radius-sm) border-2" classList={{ "border-primary": p.selected, "border-transparent": !p.selected }}>
-            <Image testID="image" src={s.url} role="image" accessibilityLabel={alt() || "图片"} style={box(s)} />
+            <Image testID="image" src={s.url} role="image" accessibilityLabel={alt() || t("图片", "Image")} style={box(s)} />
           </View>
         );
       case "remoteFailed":
-        return <RemoteFailed src={attrOf(p, "src").trim()} text={s.text} selected={p.selected} editor={p.editor} />;
+        return <RemoteFailed src={attrOf(p, "src").trim()} text={s.text()} selected={p.selected} editor={p.editor} />;
       case "loading":
         if (s.size) {
           return (
             <View class="rounded-(--radius-sm) border-2" classList={{ "border-primary": p.selected, "border-transparent": !p.selected }}>
-              <View testID="image-sized-placeholder" accessibilityLabel="正在载入图片" class="bg-muted" style={box(s.size)} />
+              <View testID="image-sized-placeholder" accessibilityLabel={t("正在载入图片", "Loading image")} class="bg-muted" style={box(s.size)} />
             </View>
           );
         }
         return (
           <Placeholder selected={p.selected} width={attrOf(p, "width") ? displayWidth(attrOf(p, "width"), 0) : undefined}>
-            <Text class="text-[12px] text-muted-foreground">正在载入图片…</Text>
+            <Text class="text-[12px] text-muted-foreground">{t("正在载入图片…", "Loading image…")}</Text>
           </Placeholder>
         );
       default:
         return (
           <Placeholder selected={p.selected}>
-            <Text class="text-[13px] text-muted-foreground">{s.text}</Text>
+            <Text class="text-[13px] text-muted-foreground">{s.text()}</Text>
           </Placeholder>
         );
     }

@@ -5,6 +5,7 @@
  */
 import { cleanup, effect, keymap, signal, Text, untracked, View } from "nsh";
 import { type RichEditorSession, Select, type SelectItem, setNodeAttribute, setTextSelection } from "nsh/base";
+import { t } from "../../i18n";
 import { writeClipboard } from "../../ui/clipboard";
 import { tip } from "../../ui/tooltip";
 import { ALERT_KINDS } from "./commands";
@@ -15,10 +16,8 @@ import { blockRect, type Rect } from "./selection";
 
 /** 选语言菜单里的「纯文本」：编辑器里语言是 null。 */
 const PLAIN = "__plain";
-const LANGUAGES: SelectItem[] = [
-  { value: PLAIN, title: "纯文本" },
-  ...["js", "ts", "json", "python", "bash", "html", "css", "markdown", "go", "rust", "java", "c", "cpp", "sql", "yaml"].map((v) => ({ value: v, title: v })),
-];
+const LANGUAGES: SelectItem[] =
+  ["js", "ts", "json", "python", "bash", "html", "css", "markdown", "go", "rust", "java", "c", "cpp", "sql", "yaml"].map((value) => ({ value, title: value }));
 
 /** 「已复制」「已选中」留多久（毫秒）。 */
 const COPIED_MS = 1500;
@@ -31,7 +30,7 @@ const ALERT_COLOR: Record<string, string> = {
   warning: "text-alert-warning",
   caution: "text-alert-caution",
 };
-const ALERT_LABEL = new Map<string, string>(ALERT_KINDS.map((k) => [k.alert, k.label]));
+const ALERT_LABEL = new Map<string, () => string>(ALERT_KINDS.map((k) => [k.alert, () => k.label]));
 
 /** 滚动停下多久后重量位置（毫秒）：滚到的块要过一两帧才挂上。 */
 const SCROLL_SETTLE = 120;
@@ -155,9 +154,9 @@ export function createBlockOverlays(session: RichEditorSession) {
 export type BlockOverlaysState = ReturnType<typeof createBlockOverlays>;
 
 function copyLabel(state: "copied" | "selected" | null): string {
-  if (state === "copied") return "已复制";
-  if (state === "selected") return `已选中，按 ${keymap.label(toKeymapName("Mod-c"))} 复制`;
-  return "复制";
+  if (state === "copied") return t("已复制", "Copied");
+  if (state === "selected") return t(`已选中，按 ${keymap.label(toKeymapName("Mod-c"))} 复制`, `Selected. Press ${keymap.label(toKeymapName("Mod-c"))} to copy`);
+  return t("复制", "Copy");
 }
 
 /** 代码块右上角那一排的宽度：放得下语言、「已选中，按 ⌘C 复制」。按钮靠右排，空着的部分不接点击。 */
@@ -167,7 +166,11 @@ const TOOL = "h-6 flex-row items-center rounded-(--radius-sm) px-2 hover:bg-hove
 
 function CodeTools(props: { o: BlockOverlaysState; at: Placed & { language: string | null } }) {
   const value = () => props.at.language ?? PLAIN;
-  const items = () => (LANGUAGES.some((l) => l.value === value()) ? LANGUAGES : [...LANGUAGES, { value: value(), title: value() }]);
+  const items = () => {
+    const language = value();
+    const options = [{ value: PLAIN, title: t("纯文本", "Plain text") }, ...LANGUAGES];
+    return options.some((option) => option.value === language) ? options : [...options, { value: language, title: language }];
+  };
   return (
     <View
       testID="code-tools"
@@ -176,27 +179,27 @@ function CodeTools(props: { o: BlockOverlaysState; at: Placed & { language: stri
     >
       <Select
         testID="code-language"
-        accessibilityLabel="代码块的语言"
+        accessibilityLabel={t("代码块的语言", "Code block language")}
         items={items()}
         value={value()}
         open={props.o.languageOpen()}
         onOpenChange={({ open }) => props.o.languageOpen.set(open)}
         onChange={({ value: v }) => props.o.setLanguage(v)}
         searchable
-        searchPlaceholder="搜语言"
-        searchAccessibilityLabel="搜语言"
+        searchPlaceholder={t("搜语言", "Search languages")}
+        searchAccessibilityLabel={t("搜语言", "Search languages")}
         searchClass="mb-1 h-7 rounded-(--radius-sm) border border-input bg-background px-2 text-[13px] text-foreground"
         popupClass="w-[180px] rounded-(--radius) border border-border bg-popover p-1 shadow-md"
         listClass="max-h-[240px]"
         itemClass="h-7 justify-center rounded-(--radius-sm) px-2 text-[13px] text-popover-foreground focus:bg-hover selected:text-primary"
         trigger={
-          <View class={`${TOOL} gap-1 bg-popover`} tooltip={tip("换代码块的语言（决定怎么上色）")}>
-            <Text class="font-mono text-[11px] text-muted-foreground">{props.at.language ?? "纯文本"}</Text>
+          <View class={`${TOOL} gap-1 bg-popover`} tooltip={tip(t("换代码块的语言（决定怎么上色）", "Change the language used for syntax highlighting"))}>
+            <Text class="font-mono text-[11px] text-muted-foreground">{props.at.language ?? t("纯文本", "Plain text")}</Text>
             <Text class="text-[9px] text-muted-foreground">▾</Text>
           </View>
         }
       />
-      <View testID="code-copy" role="button" accessibilityLabel="复制代码" tooltip={tip("复制这个代码块的代码")} onPress={props.o.copy} class={`${TOOL} bg-popover`}>
+      <View testID="code-copy" role="button" accessibilityLabel={t("复制代码", "Copy code")} tooltip={tip(t("复制这个代码块的代码", "Copy this code block"))} onPress={props.o.copy} class={`${TOOL} bg-popover`}>
         <Text class="text-[11px] text-muted-foreground">{copyLabel(props.o.copied())}</Text>
       </View>
     </View>
@@ -215,7 +218,7 @@ export function BlockOverlays(props: { overlays: BlockOverlaysState }) {
             style={{ left: a().rect.x + 19, top: a().rect.y + 6, pointerEvents: "none" }}
             class={`absolute text-[13px] font-semibold leading-[18px] ${ALERT_COLOR[a().alert]}`}
           >
-            {ALERT_LABEL.get(a().alert)}
+            {ALERT_LABEL.get(a().alert)?.()}
           </Text>
         )}
       </Each>

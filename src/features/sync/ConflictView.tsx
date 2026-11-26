@@ -2,6 +2,7 @@
  * 冲突对比：本机和 GitHub 两栏（宽屏并排，窄了上下排），按块（空行分开的段）列出原文，和另一边不一样的块标出「只在本机」/「只在 GitHub」。
  * 整篇选一边；没选的那一边存进版本历史。布局见 DESIGN.md「M5：同步」。
  */
+import { t } from "../../i18n";
 import { Scroll, Text, View, windowSize } from "nsh";
 import { type DiffBlock, diffBlocks } from "../../doc/block-diff";
 import { Button } from "../../ui/button";
@@ -20,7 +21,7 @@ function Column(props: { testID: string; title: string; onlyLabel: string; block
   const changed = () => props.blocks.filter((b) => b.only).length;
   return (
     <View testID={props.testID} class="min-w-0 flex-1 gap-1">
-      <Text class="text-[11px] text-faint">{`${props.title} · ${changed()} 块不一样`}</Text>
+      <Text class="text-[11px] text-faint">{t(`${props.title} · ${changed()} 块不一样`, `${props.title} · ${changed()} ${changed() === 1 ? "different block" : "different blocks"}`)}</Text>
       <Scroll class="max-h-[360px] rounded-(--radius-sm) border border-border bg-background">
         <View class="gap-2 p-2">
           <Each of={shown()} key="index">
@@ -36,10 +37,10 @@ function Column(props: { testID: string; title: string; onlyLabel: string; block
             )}
           </Each>
           <If when={props.blocks.length > MAX_BLOCKS}>
-            <Text class="text-[11px] text-faint">{`还有 ${props.blocks.length - MAX_BLOCKS} 块没列出来。`}</Text>
+            <Text class="text-[11px] text-faint">{t(`还有 ${props.blocks.length - MAX_BLOCKS} 块没列出来。`, `${props.blocks.length - MAX_BLOCKS} more blocks are omitted.`)}</Text>
           </If>
           <If when={props.blocks.length === 0}>
-            <Text class="text-[11px] text-faint">（空文档）</Text>
+            <Text class="text-[11px] text-faint">{t("（空文档）", "(Empty document)")}</Text>
           </If>
         </View>
       </Scroll>
@@ -53,26 +54,22 @@ export function ConflictView(props: { issue: Conflict; onBack: () => void }) {
   const pick = (choose: (issue: Conflict) => Promise<void>) => void choose(props.issue).then(props.onBack);
   return (
     <View testID="conflict-view" class="gap-3 px-4 py-3">
-      <Text class="select-text text-sm font-medium text-strong">{`「${props.issue.name}」两边都改过`}</Text>
+      <Text class="select-text text-sm font-medium text-strong">{t(`「${props.issue.name}」两边都改过`, `“${props.issue.name}” changed on both sides`)}</Text>
       <If when={diff.rough}>
-        <Text testID="conflict-rough" class="select-text text-xs leading-5 text-muted-foreground">
-          这篇太长，有一段没有逐块比较：那一段整段标成了不一样，实际可能有相同的块。
-        </Text>
+        <Text testID="conflict-rough" class="select-text text-xs leading-5 text-muted-foreground">{t("这篇太长，有一段没有逐块比较：那一段整段标成了不一样，实际可能有相同的块。", "This document is too long for a full block comparison. One section is marked as different even though some of its blocks may match.")}</Text>
       </If>
       <If when={!diff.local.some((b) => b.only) && !diff.remote.some((b) => b.only)}>
-        <Text testID="conflict-blank-only" class="select-text text-xs leading-5 text-muted-foreground">
-          两边的段落都一样，只差空行或换行符。
-        </Text>
+        <Text testID="conflict-blank-only" class="select-text text-xs leading-5 text-muted-foreground">{t("两边的段落都一样，只差空行或换行符。", "The blocks match. Only blank lines or line endings differ.")}</Text>
       </If>
       <View class="gap-3" classList={{ "flex-row": windowSize().width >= SIDE_BY_SIDE }}>
-        <Column testID="conflict-local" title="本机" onlyLabel="只在本机" blocks={diff.local} />
-        <Column testID="conflict-remote" title="GitHub" onlyLabel="只在 GitHub" blocks={diff.remote} />
+        <Column testID="conflict-local" title={t("本机", "On this device")} onlyLabel={t("只在本机", "Only on this device")} blocks={diff.local} />
+        <Column testID="conflict-remote" title="GitHub" onlyLabel={t("只在 GitHub", "Only on GitHub")} blocks={diff.remote} />
       </View>
       <View class="flex-row flex-wrap items-center justify-end gap-1">
-        <Text class="min-w-0 flex-1 text-[11px] leading-4 text-faint">没选的那一边会存进这篇的版本历史。</Text>
-        <Button testID="conflict-later" label="先不选" autoFocus onPress={props.onBack} />
-        <Button testID="conflict-take-remote" label="用 GitHub 的" disabled={busy()} onPress={() => pick(takeRemote)} />
-        <Button testID="conflict-keep-local" label="保留本机的" variant="primary" disabled={busy()} onPress={() => pick(keepLocal)} />
+        <Text class="min-w-0 flex-1 text-[11px] leading-4 text-faint">{t("没选的那一边会存进这篇的版本历史。", "The version you don’t choose will be saved in this document’s version history.")}</Text>
+        <Button testID="conflict-later" label={t("先不选", "Decide later")} autoFocus onPress={props.onBack} />
+        <Button testID="conflict-take-remote" label={t("用 GitHub 的", "Use GitHub version")} disabled={busy()} onPress={() => pick(takeRemote)} />
+        <Button testID="conflict-keep-local" label={t("保留本机的", "Keep local version")} variant="primary" disabled={busy()} onPress={() => pick(keepLocal)} />
       </View>
     </View>
   );

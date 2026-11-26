@@ -4,6 +4,7 @@
  * 别处把这篇删了也是 conflict（`deleted`），等用户选存成新文档还是放弃。
  * 写入一次只跑一个（排队），不然前一次还没写完、后一次带着旧版本去写，会被当成冲突。
  */
+import { t } from "../i18n";
 import { signal } from "nsh";
 import { documentStore, elsewhereWords } from "./backend";
 import type { DocMeta, Version, WriteResult } from "./document-store";
@@ -34,13 +35,13 @@ export type SaveState =
 export type SaveResult = { ok: true } | { ok: false; error: SaveError };
 
 const OK: SaveResult = { ok: true };
-const CONFLICT = (): SaveResult => ({ ok: false, error: { quota: false, conflict: true, deleted: false, detail: `${elsewhereWords().changed}，和这里没存的修改冲突` } });
+const CONFLICT = (): SaveResult => ({ ok: false, error: { quota: false, conflict: true, deleted: false, detail: t(`${elsewhereWords().changed}，和这里没存的修改冲突`, `${elsewhereWords().changed} and conflicts with your unsaved edits`) } });
 const DELETED = (): SaveResult => ({ ok: false, error: { quota: false, conflict: false, deleted: true, detail: elsewhereWords().deleted } });
 
 /** 冲突时选了一边，但被放弃的那一边存不进版本历史（存储满了）：这时什么都不动。 */
 const historyFull = (what: string): SaveResult => ({
   ok: false,
-  error: { quota: true, conflict: false, deleted: false, detail: `本机存储已满，${what}存不进版本历史，所以这次没有动。先用「另存为」把这里的内容存成文件，或者删掉不用的文档腾出空间，再选一次。` },
+  error: { quota: true, conflict: false, deleted: false, detail: t(`本机存储已满，${what}存不进版本历史，所以这次没有动。先用「另存为」把这里的内容存成文件，或者删掉不用的文档腾出空间，再选一次。`, `Storage is full, so ${what} could not be saved to version history. Use Save As to keep a copy or free storage and try again.`) },
 });
 
 const state = signal<SaveState>({ kind: "idle" });
@@ -265,7 +266,7 @@ export interface Expected {
 }
 
 /** 判定以后这篇又变了（又打了字、别处存过、换了一篇开着）：同步拉取不换，下次再比。 */
-export const STALE: Extract<SaveResult, { ok: false }> = { ok: false, error: { quota: false, conflict: false, deleted: false, detail: "同步时这篇又改了，没有换。再同步一次。" } };
+export const STALE: Extract<SaveResult, { ok: false }> = { ok: false, error: { quota: false, conflict: false, deleted: false, get detail() { return t("同步时这篇又改了，没有换。再同步一次。", "The document changed during sync. No replacement was made. Try syncing again."); } } };
 
 function changedSince(expected: Expected): boolean {
   if (closed || openId !== expected.id || state().kind === "conflict" || stored !== expected.text) return true;
@@ -329,7 +330,7 @@ export function keepMine(): Promise<SaveResult> {
     const mine = latestDocument();
     const theirs = await documentStore.read(id);
     if (!theirs) return conflict(true);
-    if (theirs.text !== mine && !(await addSnapshot(id, theirs.text))) return historyFull("别处那一版");
+    if (theirs.text !== mine && !(await addSnapshot(id, theirs.text))) return historyFull(t("别处那一版", "the version from elsewhere"));
     base = theirs.version;
     // 比较的是存储里现在那一版：这里的内容恰好等于当初读出的那版时，也要写回去盖掉别处的
     stored = theirs.text;
@@ -349,7 +350,7 @@ export function takeTheirs(): Promise<SaveResult> {
     if (!id) return OK;
     if ((await documentStore.read(id)) === null) return conflict(true);
     const mine = latestDocument();
-    if (mine !== stored && !(await addSnapshot(id, mine))) return historyFull("这里没存的内容");
+    if (mine !== stored && !(await addSnapshot(id, mine))) return historyFull(t("这里没存的内容", "your unsaved content"));
     stopTimer();
     dropStash(id);
     produce = null;
@@ -400,7 +401,7 @@ export function renameTracked(id: string, rename: () => Promise<DocMeta>): Promi
   return enqueue(async () => {
     const open = openId === id;
     const saved = open ? await flushNow() : OK;
-    if (!saved.ok) throw new Error(`这篇还有修改没存上，先不改名（${saved.error.detail}）`);
+    if (!saved.ok) throw new Error(t(`这篇还有修改没存上，先不改名（${saved.error.detail}）`, `Could not rename this document because there are unsaved changes (${saved.error.detail})`));
     const meta = await rename();
     if (meta.id === id) return meta;
     // 新名字上可能留着删掉的那篇的历史：先删，这篇没有历史时也不能接着它的

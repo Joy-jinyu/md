@@ -48,7 +48,7 @@ test("when the gateway used last time is not there, the browser storage is used,
 test("names count as taken when they become the same file name, whatever the letter case", async () => {
   const alpha = await createDocument("", "Alpha");
   const other = await createDocument("", "Other");
-  await expect(renameDocument(other.id, "alpha")).rejects.toThrow("已经有一篇");
+  await expect(renameDocument(other.id, "alpha")).rejects.toThrow("already exists");
   expect((await renameDocument(other.id, "Al:pha")).name).toBe("Al:pha");
   expect((await renameDocument(alpha.id, "ALPHA")).name).toBe("ALPHA");
 });
@@ -100,7 +100,7 @@ test("renaming is refused while the open document has text that cannot be saved"
   gw.state.up = false;
   gw.drop();
   markChanged(() => "four\n");
-  await expect(renameDocument("a.md", "renamed")).rejects.toThrow("还有修改没存上");
+  await expect(renameDocument("a.md", "renamed")).rejects.toThrow("unsaved changes");
   gw.state.up = true;
   await until(() => saveState().kind === "saved");
   expect([...gw.docs.keys()]).toEqual(["a.md"]);

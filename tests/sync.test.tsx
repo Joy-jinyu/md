@@ -1,6 +1,8 @@
-import { expect, open, test } from "nsh/test";
+import { expect, test } from "nsh/test";
+import { open } from "./fixtures/chinese-open";
 import { historyKey } from "../src/store/history";
 import { LAST_OPENED_KEY } from "../src/store/library";
+import { SETTINGS_KEY } from "../src/store/settings";
 import { bodyKey } from "../src/store/local-store";
 import { syncRecordKey } from "../src/store/sync-store";
 import { seedLibrary } from "./fixtures/library";
@@ -158,7 +160,7 @@ test("the settings say where the sign-in is kept and that signing out does not r
 });
 
 test("another tab switched the account: coming back clears the old account's choices, and a choice left on screen is not carried out", async () => {
-  const kept = new Map(Object.entries({ ...library(), ...linked(BASE), ...AUTH }));
+  const kept = new Map(Object.entries({ ...library(), ...linked(BASE), ...AUTH, [SETTINGS_KEY]: JSON.stringify({ locale: "zh-CN" }) }));
   const storage = {
     "Storage.getItem": (key: string) => kept.get(key) ?? null,
     "Storage.setItem": (key: string, value: string) => void kept.set(key, value),

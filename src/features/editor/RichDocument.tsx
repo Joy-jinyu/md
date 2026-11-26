@@ -1,6 +1,7 @@
 /** 所见即所得编辑：Markdown 读进编辑器会话，改动停手后写回 Markdown 交给 store。编辑页上的各个部件在这里接到一起。 */
 import { cleanup, Clipboard, effect, signal, untracked, View } from "nsh";
 import { chain, RichEditor, type RichEditorSession, scrollIntoView, setTextSelection } from "nsh/base";
+import { phrase, t } from "../../i18n";
 import { droppedPaths, PLAIN_PASTE_KEY } from "../../platform";
 import { markChanged } from "../../store/document";
 import { Notice } from "../../ui/notice";
@@ -11,7 +12,7 @@ import { CaretMarker, createCaretFollow, reachSelection } from "./caret-follow";
 import { createCodeHighlight } from "./code-highlight";
 import { CommandPalette } from "./CommandPalette";
 import { type CommandContext, runCommand } from "./commands";
-import { countChars, countWords } from "./counts";
+import { countChars, countWords, type DocumentCounts, formatCounts } from "./counts";
 import { refreshDocIndex } from "./doc-index";
 import { EDITOR_CLASSES } from "./editor-classes";
 import { ImageBar } from "./ImageBar";
@@ -46,14 +47,14 @@ const SELECTION_DELAY = 120;
 
 function readStats(session: RichEditorSession) {
   const doc = session.getJSON() as Node;
-  return { title: documentTitle(doc), counts: `${session.words()} 字词 · ${session.characters()} 字符`, headings: headingStarts(doc) };
+  return { title: documentTitle(doc), counts: { words: session.words(), chars: session.characters() }, headings: headingStarts(doc) };
 }
 
-function readSelected(session: RichEditorSession): string {
+function readSelected(session: RichEditorSession): DocumentCounts | null {
   const { from, to } = selectionRange(session);
-  if (from === to) return "";
+  if (from === to) return null;
   const text = session.textBetween(from, to, "\n");
-  return `选中 ${countWords(text)} 字词 · ${countChars(text)} 字符`;
+  return { words: countWords(text), chars: countChars(text) };
 }
 
 function jumpTo(session: RichEditorSession, heading: HeadingEntry) {
@@ -96,8 +97,8 @@ export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string
   const { session, keys, dump } = props.doc;
   const ui = createUi();
   const revision = signal(session.revision);
-  const stats = signal(readStats(session));
-  const selected = signal("");
+  const stats = signal<{ title: string; counts: DocumentCounts; headings: HeadingEntry[] }>(readStats(session));
+  const selected = signal<DocumentCounts | null>(null);
   const focused = signal(true);
 
   const link = createLinkPrompt(session, revision);
@@ -149,7 +150,7 @@ export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string
   const sourceEdited = (text: string) => {
     source.edited(text);
     if (statsTimer) clearTimeout(statsTimer);
-    statsTimer = setTimeout(() => stats.set({ ...stats(), title: markdownTitle(text), counts: `${text.length} 字符` }), STATS_DELAY);
+    statsTimer = setTimeout(() => stats.set({ ...stats(), title: markdownTitle(text), counts: { chars: text.length, words: undefined } }), STATS_DELAY);
   };
   let wasSource = false;
   effect(() => {
@@ -171,7 +172,8 @@ export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string
     if (selectedTimer) clearTimeout(selectedTimer);
     selectedTimer = setTimeout(() => {
       const next = readSelected(session);
-      if (next !== selected()) selected.set(next);
+      const previous = selected();
+      if (next?.words !== previous?.words || next?.chars !== previous?.chars) selected.set(next);
     }, SELECTION_DELAY);
   };
   // 切文档时编辑页整个重建：旧页的定时器不能晚到，把旧文档的索引写回全局（目录、脚注会显示上一篇的）
@@ -329,11 +331,16 @@ export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string
   const refocus = () => (source.isOn() ? sourceFind.ref()?.focus() : session.focus());
   provideEditorFocus(refocus);
 
+  const visibleCounts = () => {
+    const selection = source.isOn() ? null : selected();
+    return selection ? formatCounts(selection, true) : formatCounts(stats().counts);
+  };
+
   return (
     <View class="flex-1">
       <TopBar
         title={stats().title}
-        counts={(!source.isOn() && selected()) || stats().counts}
+        counts={visibleCounts()}
         toggles={{ ui, sourceOn: source.isOn(), onToggleSource: source.toggle }}
         context={
           <If when={!source.isOn()}>
@@ -342,14 +349,14 @@ export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string
         }
       />
       <FindBar ui={ui} state={findState} engine={() => (source.isOn() ? sourceFind.engine : richFind.engine)} onClose={refocus} />
-      <If when={source.notice()}>{(message) => <Notice testID="source-notice" message={message()} />}</If>
+      <If when={source.notice()}>{(message) => <Notice testID="source-notice" message={phrase(message())} />}</If>
       <WithSidebar outline={outline}>
         <View class="flex-1" classList={{ hidden: source.isOn() }} onWheel={overlays.scrolled}>
           <RichEditor
             testID="editor"
             editor={session}
-            accessibilityLabel="正文"
-            placeholder="从这里开始写…"
+            accessibilityLabel={t("正文", "Body")}
+            placeholder={t("从这里开始写…", "Start writing here…")}
             autoFocus
             editable={!source.isOn()}
             class="flex-1"

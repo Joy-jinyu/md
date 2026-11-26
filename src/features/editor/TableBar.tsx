@@ -1,6 +1,7 @@
 /** 表格工具条：光标在表格里时出现在顶栏里，加行、删行、加列、删列、删表。 */
 import { signal, View } from "nsh";
 import type { RichEditorSession } from "nsh/base";
+import { t } from "../../i18n";
 import { Button } from "../../ui/button";
 import { COMMANDS } from "./commands";
 
@@ -25,7 +26,7 @@ export type TableBarState = ReturnType<typeof createTableBar>;
 export function TableBar(props: { bar: TableBarState; session: RichEditorSession }) {
   return (
     <If when={props.bar.active()}>
-      <View testID="table-bar" accessibilityLabel="表格" class="flex-row items-center rounded-(--radius) bg-secondary">
+      <View testID="table-bar" accessibilityLabel={t("表格", "Table")} class="flex-row items-center rounded-(--radius) bg-secondary">
         <Each of={TABLE_COMMANDS} key={(c) => c.id}>
           {(c) => (
             <Button
