@@ -61,13 +61,21 @@ for (const [name, src] of Object.entries(ALL)) {
     expect(failures).toEqual([]);
   });
 
+  // 长文档读一遍在 CI 上约 0.4–0.6 s（deploy 日志的 TIMING 行），几遍挤在一次调用里会超预算（见 tick）：每遍读、写、normalize 之间都让出
   test(`${name}：③ 全部重写后再读再写不变；④ 重写前后读出的 JSON 相同`, async () => {
     const o = openDoc(src);
+    await tick();
     const once = forceRewrite(o);
     await tick();
     const again = openDoc(once);
-    expect(firstBlockDiff(normalize(o.json), normalize(again.json))).toBe(null);
-    expect(looseness(once)).toEqual(looseness(src));
+    await tick();
+    const before = normalize(o.json);
+    await tick();
+    expect(firstBlockDiff(before, normalize(again.json))).toBe(null);
+    await tick();
+    const looseOnce = looseness(once);
+    await tick();
+    expect(looseOnce).toEqual(looseness(src));
     await tick();
     expect(firstTextDiff(once, forceRewrite(again))).toBe(null);
   });
