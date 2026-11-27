@@ -21,7 +21,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: web
+          - target: verify
             runner: ubuntu-latest
           - target: macos-arm64
             runner: macos-15
@@ -54,21 +54,16 @@ jobs:
         run: |
           curl -fsSL "https://raw.githubusercontent.com/longbridge/nsh/$NSH_VERSION/website/public/install.sh" | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: 验证并打包网页版
-        if: matrix.target == 'web'
+      - name: 运行测试和类型检查
+        if: matrix.target == 'verify'
         run: |
           nsh component add web
           make verify
-          make build-web
-          test -s dist/web/Pairdown/index.html
-          cp LICENSE dist/web/Pairdown/LICENSE
-          cp "$HOME/.nsh/LICENSE-APACHE" dist/web/Pairdown/LICENSE-NSH-APACHE
-          cp assets/vendor/mermaid/LICENSE dist/web/Pairdown/LICENSE-MERMAID
-          (cd dist/web && zip -qr "../Pairdown-${RELEASE_TAG}-web.zip" Pairdown)
       - name: 打包并核对 macOS 应用
         if: matrix.target == 'macos-arm64'
         run: |
-          make build-mac
+          # 使用同版本 nsh 附带的运行时，避免重新编译原生运行时。
+          NSH_RUNTIME="$HOME/.nsh/runtime" make build-mac
           app=dist/macos/Pairdown.app
           executable="$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app/Contents/Info.plist")"
           test "$(lipo -archs "$app/Contents/MacOS/$executable")" = arm64
@@ -80,9 +75,10 @@ jobs:
           cp assets/vendor/mermaid/LICENSE dist/macos/LICENSE-MERMAID
           ditto -c -k dist/macos "dist/Pairdown-${RELEASE_TAG}-macos-arm64.zip"
       - uses: actions/upload-artifact@v4
+        if: matrix.target == 'macos-arm64'
         with:
-          name: ${{ matrix.target }}
-          path: dist/Pairdown-${{ env.RELEASE_TAG }}-${{ matrix.target }}.zip
+          name: macos-arm64
+          path: dist/Pairdown-${{ env.RELEASE_TAG }}-macos-arm64.zip
           if-no-files-found: error
 
   publish:
@@ -97,8 +93,8 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
+          name: macos-arm64
           path: dist/release
-          merge-multiple: true
       - name: 生成校验文件并发布预览版
         env:
           GH_TOKEN: ${{ github.token }}
@@ -108,7 +104,7 @@ jobs:
             found { print }
             END { if (!found) exit 1 }
           ' CHANGELOG.md > dist/release-notes.md
-          (cd dist/release && sha256sum "Pairdown-${GITHUB_REF_NAME}-web.zip" "Pairdown-${GITHUB_REF_NAME}-macos-arm64.zip" > SHA256SUMS.txt)
+          (cd dist/release && sha256sum "Pairdown-${GITHUB_REF_NAME}-macos-arm64.zip" > SHA256SUMS.txt)
           gh release create "$GITHUB_REF_NAME" dist/release/* \
             --verify-tag --prerelease --title "Pairdown $GITHUB_REF_NAME" \
             --notes-file dist/release-notes.md
