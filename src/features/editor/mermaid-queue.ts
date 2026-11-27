@@ -2,6 +2,7 @@
  * Mermaid 出图的排队、缓存和回包校验：不碰 WebView，发图、计时器、开关渲染页都由 mermaid.tsx 传进来，测试里换成假的。
  * 安全约定见 .claude/rules/security.md 的 Mermaid 一行。
  */
+import { handleError } from "../../doc/message";
 import { type Phrase, t } from "../../i18n";
 import { bytesToBase64 } from "../../store/image-file";
 
@@ -52,7 +53,7 @@ export function readReply(data: string): Reply | null {
   try {
     parsed = JSON.parse(data);
   } catch (e) {
-    console.warn("mermaid: not a message", e);
+    handleError(e, { context: "mermaid: not a message", severity: "warn" });
     return null;
   }
   if (!parsed || typeof parsed !== "object") return null;

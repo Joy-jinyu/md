@@ -5,7 +5,7 @@
  */
 import { t } from "../../i18n";
 import { effect, lifecycle, untracked } from "nsh";
-import { messageOf } from "../../doc/message";
+import { handleError, messageOf } from "../../doc/message";
 import { SIGN_IN_FLOW } from "../../platform";
 import { finishWebLogin, restoreAccount } from "../../sync/account";
 import { parseCallback, withoutCallback } from "../../sync/auth";
@@ -28,7 +28,7 @@ async function completeWebLogin() {
     syncOpen.set(true);
     await discoverRemote();
   } catch (e) {
-    console.warn("web sign-in not finished", messageOf(e));
+    handleError(e, { context: "web sign-in not finished", severity: "warn" });
     say(messageOf(e), "warn");
   }
 }

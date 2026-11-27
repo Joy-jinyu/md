@@ -1,4 +1,5 @@
 /** 「导出为 HTML」：从存着的 Markdown 读一遍（和打开文档同一个转换层），写成自包含的 HTML。源码方式打开的大文档也能导出。 */
+import { handleError } from "../../doc/message";
 import { locale, type Phrase, t } from "../../i18n";
 import { documentToHtml, type HtmlOptions } from "../../doc/to-html";
 import type { PMNode } from "../../doc/types";
@@ -63,7 +64,7 @@ async function inlineImages(doc: PMNode, docId: string): Promise<PMNode> {
   const swap = new Map<string, string>();
   for (const src of new Set(imagesIn(doc).map((i) => i.src).filter(isRelativeSrc))) {
     const asset = await documentStore.getAsset(docId, src).catch((e: unknown) => {
-      console.warn("image not inlined", src, e);
+      handleError(e, { context: "image not inlined", severity: "warn" });
       return null;
     });
     if (asset) swap.set(src, `data:${asset.mime};base64,${bytesToBase64(asset.bytes)}`);

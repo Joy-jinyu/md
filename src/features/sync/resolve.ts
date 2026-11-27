@@ -5,7 +5,7 @@
  */
 import { type Phrase, phrase, t } from "../../i18n";
 import { signal } from "nsh";
-import { messageOf } from "../../doc/message";
+import { handleError, messageOf } from "../../doc/message";
 import { pinBackend } from "../../store/backend";
 import { addSnapshot } from "../../store/history";
 import { allDocs, documentName } from "../../store/library";
@@ -30,7 +30,7 @@ async function guarded(key: string, job: () => Promise<void>) {
   try {
     await job();
   } catch (e) {
-    console.warn("sync choice failed", messageOf(e));
+    handleError(e, { context: "sync choice failed", severity: "warn" });
     say(() => t(`没能处理：${messageOf(e)}`, `Could not resolve this item: ${messageOf(e)}`), "warn");
   } finally {
     resolving.set(null);

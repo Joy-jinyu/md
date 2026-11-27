@@ -3,7 +3,7 @@
  * `show(id, find)` 由编辑页给：读出那一篇、重建编辑器；读不到（已经不在了）返回 false。
  */
 import { type Phrase, t } from "../../i18n";
-import { messageOf } from "../../doc/message";
+import { handleError, messageOf } from "../../doc/message";
 import { locateOpenedFile } from "../../platform";
 import { storageKind } from "../../store/backend";
 import { closeDocument, discardDocument, flush, holdDocument, latestDocument, replaceDocument, type SaveResult, STALE } from "../../store/document";
@@ -78,8 +78,8 @@ export function createLibraryActions(show: Show) {
       await go(meta.id, from);
       if (name) say(note ?? (() => t(`已打开「${name}」，存成了文档库里的一篇新文档。`, `Opened “${name}” as a new document in the library.`)), "info");
     } catch (e) {
-      console.error("create document failed", e);
-      say(() => t(`没能${name ? `打开「${name}」` : "新建文档"}：${messageOf(e)}`, `${name ? `Could not open “${name}”` : "Could not create a document"}: ${messageOf(e)}`), "warn");
+      const msg = handleError(e, { context: "create document failed", severity: "error" });
+      say(() => t(`没能${name ? `打开「${name}」` : "新建文档"}：${msg}`, `${name ? `Could not open "${name}"` : "Could not create a document"}: ${msg}`), "warn");
       if (from) await show(from);
     }
   };
@@ -107,8 +107,8 @@ export function createLibraryActions(show: Show) {
     try {
       await removeDocument(id);
     } catch (e) {
-      console.error("remove document failed", e);
-      say(() => t(`没能删除「${name()}」：${messageOf(e)}`, `Could not delete “${name()}”: ${messageOf(e)}`), "warn");
+      const msg = handleError(e, { context: "remove document failed", severity: "error" });
+      say(() => t(`没能删除「${name()}」：${msg}`, `Could not delete "${name()}": ${msg}`), "warn");
       resume?.();
       return;
     }
@@ -144,8 +144,8 @@ export function createLibraryActions(show: Show) {
     try {
       meta = await createDocument(latestDocument(), openDocName() || undefined);
     } catch (e) {
-      console.error("rescue document failed", e);
-      return say(() => t(`没能存成新文档：${messageOf(e)}。内容还在这里，可以先用「另存为」存成文件。`, `Could not save a new document: ${messageOf(e)}. Your content is still here. Use Save As to keep a file copy.`), "warn");
+      const msg = handleError(e, { context: "rescue document failed", severity: "error" });
+      return say(() => t(`没能存成新文档：${msg}。内容还在这里，可以先用「另存为」存成文件。`, `Could not save a new document: ${msg}. Your content is still here. Use Save As to keep a file copy.`), "warn");
     }
     discardDocument();
     if (!(await show(meta.id))) await openFallback(show);
@@ -182,8 +182,8 @@ export function createLibraryActions(show: Show) {
       }
     };
     return run().catch((e: unknown) => {
-      console.error("library request failed", request.kind, e);
-      say(() => t(`出错了：${messageOf(e)}`, `Something went wrong: ${messageOf(e)}`), "warn");
+      const msg = handleError(e, { context: `library request failed: ${request.kind}`, severity: "error" });
+      say(() => t(`出错了：${msg}`, `Something went wrong: ${msg}`), "warn");
     });
   };
 }

@@ -1,5 +1,6 @@
 /** 命令表里的键怎么接到应用上：编辑器里由插件截，编辑器外由 keymap 绑；两条路走同一个出口。 */
 import { keymap } from "nsh";
+import { handleError } from "../../doc/message";
 import { showWindow } from "../../platform";
 import { installAppMenu } from "./app-menu";
 import { type AppCommand, COMMANDS, isViewCommand } from "./commands";
@@ -57,7 +58,7 @@ export function bindViewKeys(run: (c: AppCommand) => void) {
       );
     } catch (e) {
       // 平台不让绑的键（或设置里混进来的坏键名）只丢这一条，不能让整个编辑页渲染不出来
-      console.error("shortcut not bound", c.id, keyOf(c), e);
+      handleError(e, { context: `shortcut not bound: ${c.id} ${keyOf(c)}`, severity: "error" });
     }
   }
 }

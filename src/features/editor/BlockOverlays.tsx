@@ -6,6 +6,7 @@
 import { cleanup, effect, keymap, signal, Text, untracked, View } from "nsh";
 import { type RichEditorSession, Select, type SelectItem, setNodeAttribute, setTextSelection } from "nsh/base";
 import { t } from "../../i18n";
+import { handleError } from "../../doc/message";
 import { writeClipboard } from "../../ui/clipboard";
 import { tip } from "../../ui/tooltip";
 import { ALERT_KINDS } from "./commands";
@@ -127,7 +128,7 @@ export function createBlockOverlays(session: RichEditorSession) {
     writeClipboard(target.text).then(
       () => flash("copied"),
       (e: unknown) => {
-        console.warn("copy code failed, selecting it instead", e);
+        handleError(e, { context: "copy code failed, selecting it instead", severity: "warn" });
         session.run(setTextSelection(target.pos + 1, target.pos + 1 + target.text.length));
         session.focus();
         flash("selected");

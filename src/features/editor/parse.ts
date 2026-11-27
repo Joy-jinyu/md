@@ -1,4 +1,5 @@
 import { TextView } from "nsh/base";
+import { handleError } from "../../doc/message";
 import { splitEndings } from "../../doc/line-endings";
 import { defLabelOf, defLinesIn, scanLabels } from "../../doc/save";
 import type { MdBlock, ParsedSource, SourceSlice } from "../../doc/types";
@@ -463,7 +464,7 @@ export function parseMarkdown(src: string): ParsedSource {
     return { bom, crlf, ...sliceText(text, Date.now() + SLICE_BUDGET_MS) };
   } catch (error) {
     // 解析器本身出错时整篇当一个原样块，保证不丢内容；错误留在 console 方便排查
-    console.warn("parseMarkdown: fell back to one raw slice", error);
+    handleError(error, { context: "parseMarkdown: fell back to one raw slice", severity: "debug" });
     const lead = /^(?:[ \t]*\n)*/.exec(text)?.[0] ?? "";
     const rest = text.slice(lead.length);
     const trail = /\n[ \t\n]*$/.exec(rest)?.[0] ?? "";

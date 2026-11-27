@@ -2,6 +2,7 @@
  * 页面最上面关于存储的提示：网关断开 / 不再连接；上次用的网关这次没连上（显示的是浏览器里的文档）；
  * 有属于别的存储的没存上的修改；搬进 macOS 文库时没搬走的文档。布局见 DESIGN.md「存在哪」。
  */
+import { handleError } from "../../doc/message";
 import { t } from "../../i18n";
 import { signal, Text, View } from "nsh";
 import { documentsLeftBehind, forgetMissedGateway, missedGatewayLibrary } from "../../store/backend";
@@ -18,7 +19,7 @@ function MissedGateway(props: { library: string }) {
     try {
       await reconnectGateway();
     } catch (e) {
-      console.error("gateway reconnect failed", e);
+      handleError(e, { context: "gateway reconnect failed", severity: "error" });
     } finally {
       trying.set(false);
     }

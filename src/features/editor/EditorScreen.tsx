@@ -4,7 +4,7 @@
  */
 import { type Phrase, phrase, t } from "../../i18n";
 import { effect, lifecycle, signal, untracked, View } from "nsh";
-import { messageOf } from "../../doc/message";
+import { handleError, messageOf } from "../../doc/message";
 import { droppedPaths, fileLibrary, keepWindowOnClose, onOpenFiles, PROBE_GATEWAY, saveBeforeLeaving } from "../../platform";
 import { chooseBackend, elsewhereWords } from "../../store/backend";
 import { checkExternal, flush, openDocument, saveState, stashUnsaved } from "../../store/document";
@@ -81,8 +81,8 @@ function choose(markdown: string): Opened {
   try {
     return { kind: "rich", doc: openRich(markdown) };
   } catch (e) {
-    console.error("openRich failed", e);
-    return { kind: "source", markdown, notice: () => t(`没能按所见即所得方式打开（${messageOf(e)}），先用源码方式打开，原文没有改动。`, `Could not open in rich-text mode (${messageOf(e)}). The document opened in source mode without changes.`) };
+    const msg = handleError(e, { context: "openRich failed", severity: "error" });
+    return { kind: "source", markdown, notice: () => t(`没能按所见即所得方式打开（${msg}），先用源码方式打开，原文没有改动。`, `Could not open in rich-text mode (${msg}). The document opened in source mode without changes.`) };
   }
 }
 
