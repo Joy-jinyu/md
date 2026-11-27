@@ -1,0 +1,61 @@
+name: changelog
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - CHANGELOG.md
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/configure-pages@v5
+      - name: 生成更新日志页面
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist/pages
+          {
+            cat <<'HTML'
+          <!doctype html>
+          <html lang="en">
+          <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Pairdown changelog</title>
+          </head>
+          <body>
+          <main style="max-inline-size: 64ch; margin: 3rem auto; padding-inline: 1rem; font: 1rem/1.6 system-ui">
+          HTML
+            gh api markdown --raw-field mode=gfm --raw-field context="$GITHUB_REPOSITORY" --field text=@CHANGELOG.md
+            printf '\n</main>\n</body>\n</html>\n'
+          } > dist/pages/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/pages
+      - uses: actions/deploy-pages@v4
+        id: deployment

@@ -8,6 +8,10 @@ Pairdown is a WYSIWYG Markdown editor for the web and macOS. It keeps your docum
 
 ## Use Pairdown
 
+[Download the preview from GitHub Releases](https://github.com/Joy-jinyu/md/releases) or read the [changelog](https://joy-jinyu.github.io/md/).
+
+The macOS preview runs on Macs with Apple silicon. It uses an ad hoc signature and has no Apple notarization. Verify the ZIP against the published `SHA256SUMS.txt`, unzip it, and open Pairdown. If macOS blocks that first launch, go to **System Settings → Privacy & Security → Open Anyway**. [Apple describes how this confirmation works](https://support.apple.com/en-us/102445).
+
 The editor defaults to English. To switch the interface to Simplified Chinese, open **Settings → Language**. Pairdown saves the preference on this device.
 
 Open the deployed web app, or run it locally with `make dev-web`. It saves documents in your browser by default. To work with a local folder of Markdown files from the web app, set up the [local gateway](gateway/README.md).
