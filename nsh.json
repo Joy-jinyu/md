@@ -1,7 +1,7 @@
 {
   "name": "Pairdown",
   "id": "site.pairwise.md",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "build": 1,
   "icon": {
     "macos": "assets/icon/icon-macos.png",

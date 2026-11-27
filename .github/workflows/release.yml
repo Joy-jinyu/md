@@ -1,0 +1,114 @@
+name: release
+
+on:
+  pull_request:
+    paths:
+      - CHANGELOG.md
+      - nsh.json
+      - .github/workflows/release.yml
+  push:
+    tags: ['v*']
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: web
+            runner: ubuntu-latest
+          - target: macos-arm64
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    env:
+      NSH_VERSION: v0.7.0
+      PAIRDOWN_SITE: ${{ secrets.PAIRDOWN_SITE }}
+      PAIRDOWN_GITHUB_CLIENT_ID: ${{ secrets.PAIRDOWN_GITHUB_CLIENT_ID }}
+      PAIRDOWN_REPO: ${{ github.repository }}
+      PAIRDOWN_AUTHOR_NAME: ${{ secrets.PAIRDOWN_AUTHOR_NAME }}
+      PAIRDOWN_AUTHOR_URL: ${{ secrets.PAIRDOWN_AUTHOR_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: 核对发布版本
+        run: |
+          version="$(node -p 'require("./nsh.json").version')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          if [[ "$GITHUB_EVENT_NAME" == push ]]; then
+            git merge-base --is-ancestor HEAD origin/main
+            test "$GITHUB_REF_NAME" = "v$version"
+          fi
+          echo "RELEASE_TAG=v$version" >> "$GITHUB_ENV"
+      - name: 安装 nsh
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/longbridge/nsh/$NSH_VERSION/website/public/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: 验证并打包网页版
+        if: matrix.target == 'web'
+        run: |
+          nsh component add web
+          make verify
+          make build-web
+          test -s dist/web/Pairdown/index.html
+          cp LICENSE dist/web/Pairdown/LICENSE
+          cp "$HOME/.nsh/LICENSE-APACHE" dist/web/Pairdown/LICENSE-NSH-APACHE
+          cp assets/vendor/mermaid/LICENSE dist/web/Pairdown/LICENSE-MERMAID
+          (cd dist/web && zip -qr "../Pairdown-${RELEASE_TAG}-web.zip" Pairdown)
+      - name: 打包并核对 macOS 应用
+        if: matrix.target == 'macos-arm64'
+        run: |
+          make build-mac
+          app=dist/macos/Pairdown.app
+          executable="$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app/Contents/Info.plist")"
+          test "$(lipo -archs "$app/Contents/MacOS/$executable")" = arm64
+          test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")" = "${RELEASE_TAG#v}"
+          codesign --verify --deep --strict "$app"
+          codesign -dv "$app" 2>&1 | grep -Fx 'Signature=adhoc'
+          cp LICENSE dist/macos/LICENSE
+          cp "$HOME/.nsh/LICENSE-APACHE" dist/macos/LICENSE-NSH-APACHE
+          cp assets/vendor/mermaid/LICENSE dist/macos/LICENSE-MERMAID
+          ditto -c -k dist/macos "dist/Pairdown-${RELEASE_TAG}-macos-arm64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/Pairdown-${{ env.RELEASE_TAG }}-${{ matrix.target }}.zip
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist/release
+          merge-multiple: true
+      - name: 生成校验文件并发布预览版
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          awk -v heading="## $GITHUB_REF_NAME" '
+            /^## / { if (found) exit; if ($0 == heading) found = 1; next }
+            found { print }
+            END { if (!found) exit 1 }
+          ' CHANGELOG.md > dist/release-notes.md
+          (cd dist/release && sha256sum "Pairdown-${GITHUB_REF_NAME}-web.zip" "Pairdown-${GITHUB_REF_NAME}-macos-arm64.zip" > SHA256SUMS.txt)
+          gh release create "$GITHUB_REF_NAME" dist/release/* \
+            --verify-tag --prerelease --title "Pairdown $GITHUB_REF_NAME" \
+            --notes-file dist/release-notes.md
