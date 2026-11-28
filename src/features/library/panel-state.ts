@@ -3,6 +3,7 @@
  * 放在模块顶层：切文档时编辑页整个重建，面板也跟着重建，这些不该跟着清掉（点完一个搜索结果还要接着点下一个）。
  */
 import { locale, t } from "../../i18n";
+import { handleError } from "../../doc/message";
 import { signal } from "nsh";
 import { latestDocument } from "../../store/document";
 import type { DocMeta } from "../../store/document-store";
@@ -34,7 +35,7 @@ async function textOf(id: string): Promise<string | null> {
   try {
     return (await readDocument(id))?.text ?? null;
   } catch (e) {
-    console.warn("search skipped a document", id, e);
+    handleError(e, { context: `search skipped a document: ${id}`, severity: "warn" });
     return null;
   }
 }

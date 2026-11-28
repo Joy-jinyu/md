@@ -2,7 +2,7 @@
 import { signal } from "nsh";
 import { chain, type EditorRef, scrollIntoView, setTextSelection } from "nsh/base";
 import { type Phrase, t } from "../../i18n";
-import { messageOf } from "../../doc/message";
+import { handleError } from "../../doc/message";
 import { joinEndings, splitEndings } from "../../doc/line-endings";
 import { isEmptyParagraph } from "../../doc/to-markdown";
 import { markChanged } from "../../store/document";
@@ -51,8 +51,8 @@ export function createSourceView(doc: RichOpened, find: SourceFind, tooBig: (mar
     try {
       doc.load(markdown);
     } catch (e) {
-      console.error("load from source failed", e);
-      notice.set(() => t(`这份源码没能读进所见即所得（${messageOf(e)}），先留在源码视图，内容没有丢。`, `Could not open in rich-text mode (${messageOf(e)}). Your content is still in source view.`));
+      const msg = handleError(e, { context: "load from source failed", severity: "error" });
+      notice.set(() => t(`这份源码没能读进所见即所得（${msg}），先留在源码视图，内容没有丢。`, `Could not open in rich-text mode (${msg}). Your content is still in source view.`));
       return false;
     }
     markChanged(doc.dump);

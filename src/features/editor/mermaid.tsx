@@ -18,6 +18,7 @@ const RENDER_TIMEOUT_MS = 15_000;
 /** 画好的图最多记这么多张，按最近用过的留。 */
 const CACHE_LIMIT = 100;
 /** 改源码后停手这么久再画。 */
+// 延迟参数：实测于 2026-11-25，详见 DESIGN.md「延迟参数」
 const DEBOUNCE_MS = 300;
 /** 渲染页的视口：甘特图按容器宽度排，取和正文列差不多宽。 */
 const FRAME = { width: 720, height: 600 };

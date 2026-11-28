@@ -3,6 +3,7 @@
  * 或者这篇在别处删掉了，让用户选存成新文档还是放弃。都不静默覆盖、不静默丢。
  */
 import { Text, View } from "nsh";
+import { handleError } from "../../doc/message";
 import { t } from "../../i18n";
 import { elsewhereWords } from "../../store/backend";
 import { keepMine, type SaveResult, saveState, takeTheirs } from "../../store/document";
@@ -19,8 +20,8 @@ function choose(pick: () => Promise<SaveResult>, done?: () => void) {
       if (!result.error.deleted && saveState().kind === "conflict") say(result.error.detail, "warn");
     },
     (e: unknown) => {
-      console.error("conflict choice failed", e);
-      say(() => t(`出错了：${e instanceof Error ? e.message : String(e)}`, `Something went wrong: ${e instanceof Error ? e.message : String(e)}`), "warn");
+      const msg = handleError(e, { context: "conflict choice failed", severity: "error" });
+      say(() => t(`出错了：${msg}`, `Something went wrong: ${msg}`), "warn");
     },
   );
 }

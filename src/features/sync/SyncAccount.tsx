@@ -4,7 +4,7 @@
  */
 import { type Phrase, phrase, t } from "../../i18n";
 import { cleanup, Text, View } from "nsh";
-import { messageOf } from "../../doc/message";
+import { handleError, messageOf } from "../../doc/message";
 import { SIGN_IN_FLOW } from "../../platform";
 import { beginDeviceLogin, beginWebLogin, cancelDeviceLogin, currentAccount, deviceLogin, signOut } from "../../sync/account";
 import { siteOrigin, syncConfigured } from "../../sync/config";
@@ -53,7 +53,7 @@ function originOf(url: string): string | null {
   try {
     return new URL(url).origin;
   } catch (e) {
-    console.warn("page address unreadable", e);
+    handleError(e, { context: "page address unreadable", severity: "warn" });
     return null;
   }
 }
@@ -67,7 +67,7 @@ async function startWebLogin() {
     if (!(await openLink(url, () => false))) say(() => t("浏览器没让打开 GitHub 的授权页（可能拦了弹出窗口），允许本站打开新窗口后再试。", "Could not open GitHub’s authorization page. Allow this site to open a new window and try again."), "warn");
     else say(() => t("已在新标签页打开 GitHub 授权页。授权后那一页会完成登录，回到这里就能同步。", "Opened GitHub authorization in a new tab. After you finish signing in there, return here to sync."), "info");
   } catch (e) {
-    console.error("web sign-in not started", e);
+    handleError(e, { context: "web sign-in not started", severity: "error" });
     say(() => t(`没能开始登录：${messageOf(e)}`, `Could not start sign-in: ${messageOf(e)}`), "warn");
   }
 }
@@ -86,7 +86,7 @@ async function copyAndOpen(userCode: string, uri: string) {
   const copied = await writeClipboard(userCode).then(
     () => true,
     (e: unknown) => {
-      console.warn("user code not copied", e);
+      handleError(e, { context: "user code not copied", severity: "warn" });
       return false;
     },
   );
@@ -164,7 +164,7 @@ function SignedIn(props: { login: string }) {
       resetSyncView();
       say(() => t("已退出 GitHub 登录。本机的文档没有动。", "Signed out of GitHub. The documents on this device are unchanged."), "info");
     } catch (e) {
-      console.error("sign-out failed", e);
+      handleError(e, { context: "sign-out failed", severity: "error" });
       say(() => t(`没能退出登录：${messageOf(e)}`, `Could not sign out: ${messageOf(e)}`), "warn");
     }
   };

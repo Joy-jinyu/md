@@ -6,6 +6,7 @@
  */
 import { cleanup, type MouseEvent as PointerEvent, signal, View, type ViewRef, windowSize } from "nsh";
 import type { RichEditorSession } from "nsh/base";
+import { handleError } from "../../doc/message";
 import { type Rect, selectionRange } from "./selection";
 
 /** 平时打字时光标下面至少留多少空白（pt）：大约四行正文，打到窗口底部时下面还看得见几行。 */
@@ -44,7 +45,7 @@ function createPointer(session: RichEditorSession) {
       const r = session.pageCoordsAtPos(head) as Rect | null;
       return !!r && Math.abs(r.y + r.height / 2 - at.y) < r.height / 2;
     } catch (e) {
-      console.warn("pointer position unavailable", e);
+      handleError(e, { context: "pointer position unavailable", severity: "warn" });
       return false;
     }
   };
@@ -96,7 +97,7 @@ export function createCaretFollow(session: RichEditorSession, reached: () => voi
       if (type === "node") return (session.nodeRect(head) ?? session.coordsAtPos(head)) as Rect | null;
       return session.coordsAtPos(head) as Rect | null;
     } catch (e) {
-      console.warn("caret position unavailable", e);
+      handleError(e, { context: "caret position unavailable", severity: "warn" });
       return null;
     }
   };
@@ -105,7 +106,7 @@ export function createCaretFollow(session: RichEditorSession, reached: () => voi
     try {
       return session.posAtCoords({ x: PROBE_X, y });
     } catch (e) {
-      console.warn("position at point unavailable", e);
+      handleError(e, { context: "position at point unavailable", severity: "warn" });
       return null;
     }
   };
@@ -124,7 +125,7 @@ export function createCaretFollow(session: RichEditorSession, reached: () => voi
       const r = session.pageCoordsAtPos(selectionRange(session).head) as Rect | null;
       return !!r && r.y >= SIGHT_TOP && r.y + r.height <= windowSize().height - SIGHT_BOTTOM;
     } catch (e) {
-      console.warn("caret page position unavailable", e);
+      handleError(e, { context: "caret page position unavailable", severity: "warn" });
       return false;
     }
   };

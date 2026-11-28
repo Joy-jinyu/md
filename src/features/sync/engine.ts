@@ -2,9 +2,9 @@
  * 手动同步一次（实施计划 4.8，MVP 不自动）：逐篇按 src/sync/plan.ts 的判定推、拉，或者记下要用户选的事。
  * 不静默丢任何一边：两边都改了、一边删了，都放进「要你选的事」；拉之前本机那版先存进版本历史。
  */
+import { handleError, messageOf } from "../../doc/message";
 import { type Phrase, t } from "../../i18n";
 import { signal } from "nsh";
-import { messageOf } from "../../doc/message";
 import { pinBackend } from "../../store/backend";
 import type { DocMeta } from "../../store/document-store";
 import { currentDocId, displayName, documentName, refreshLibrary } from "../../store/library";
@@ -215,7 +215,7 @@ async function orphans(api: GitHub, login: string, present: Set<string>, records
       if (issue) found.push(issue);
     } catch (e) {
       if (fatal(e)) throw e;
-      console.warn("deleted document not checked", gistId, e);
+      handleError(e, { context: `deleted document not checked: ${gistId}`, severity: "warn" });
       found.push({ kind: "failed", id: gistId, name: link.fileName, message: messageOf(e) });
     }
   }
@@ -269,7 +269,7 @@ async function syncDocs(r: Run, docs: DocMeta[], records: Map<string, SyncRecord
       else if (outcome !== "same") found.push(outcome);
     } catch (e) {
       if (fatal(e)) throw e;
-      console.warn("document not synced", doc.id, e);
+      handleError(e, { context: `document not synced: ${doc.id}`, severity: "warn" });
       found.push({ kind: "failed", id: doc.id, name: displayName(doc), message: messageOf(e) });
     }
   }
@@ -303,11 +303,11 @@ export async function runSync() {
     owner.set(login);
     issues.set(found);
     lastAt.set(now);
-    await saveLastSync(now).catch((e: unknown) => console.warn("last sync time not saved", e));
+    await saveLastSync(now).catch((e: unknown) => handleError(e, { context: "last sync time not saved", severity: "warn" }));
     run.set({ kind: "done", pushed, pulled, asked: found.length, uploaded: 0, excluded: 0 });
     if (currentDocId()) await refreshLibrary();
   } catch (e) {
-    console.warn("sync failed", e instanceof SyncError ? e.kind : "", messageOf(e));
+    handleError(e, { context: `sync failed: ${e instanceof SyncError ? e.kind : ""}`, severity: "warn" });
     run.set({ kind: "error", message: messageOf(e) });
   } finally {
     unpin();
@@ -325,7 +325,7 @@ export async function discoverRemote() {
     issues.update((list) => [...list.filter((i) => i.kind !== "remote-only"), ...found]);
     if (found.length > 0) run.set({ kind: "listed" });
   } catch (e) {
-    console.warn("remote documents not listed", messageOf(e));
+    handleError(e, { context: "remote documents not listed", severity: "warn" });
     run.set({ kind: "error", message: messageOf(e) });
   }
 }

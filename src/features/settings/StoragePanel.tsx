@@ -1,7 +1,7 @@
 /** 设置里的「存储」一类：现在文档、图片存在哪，以及把浏览器里的文档复制进网关的文库。布局见 DESIGN.md「屏幕：设置」。 */
 import { type Phrase, phrase, t } from "../../i18n";
 import { signal, Text, View } from "nsh";
-import { messageOf } from "../../doc/message";
+import { handleError, messageOf } from "../../doc/message";
 import { copyBrowserDocsToLibrary, type CopyReport, storageKind } from "../../store/backend";
 import type { GatewayBackend } from "../../store/gateway-store";
 import { docsInIndexedDb } from "../../store/kv";
@@ -107,7 +107,7 @@ function CopyToLibrary() {
       result.set({ text: () => reportText(report), failed: report.failed.length > 0 || report.imagesFailed.length > 0 });
       await refreshLibrary();
     } catch (e) {
-      console.error("copy to library failed", e);
+      handleError(e, { context: "copy to library failed", severity: "error" });
       result.set({ text: () => t(`没能复制：${messageOf(e)}`, `Could not copy: ${messageOf(e)}`), failed: true });
     } finally {
       running.set(false);

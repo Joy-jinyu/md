@@ -4,7 +4,7 @@
  */
 import { signal } from "nsh";
 import { type Phrase, phrase, t } from "../../i18n";
-import { messageOf } from "../../doc/message";
+import { handleError } from "../../doc/message";
 import { documentStore, imageHost } from "../../store/backend";
 import { type ImageHostApi, ImageHostUnsupported, type ImageHostView } from "../../store/document-store";
 import { loadAutoUpload, loadSkipImageHost, saveAutoUpload, saveSkipImageHost } from "../../store/settings";
@@ -37,7 +37,7 @@ async function decide(api: ImageHostApi, ask: boolean): Promise<ImageHostApi | n
   const choice = await askImageHost();
   if (choice === "never") {
     const why = await saveSkipImageHost(true);
-    if (why) console.warn("skip image host not saved", why);
+    if (why) handleError(why, { context: "skip image host not saved", severity: "warn" });
   }
   return choice === "saved" ? api : null;
 }
@@ -81,7 +81,7 @@ async function confirmed(api: ImageHostApi, host: ImageHostView, ask: boolean, c
   const choice = await confirmUpload(count, hostName(host));
   if (choice === "always") {
     const why = await saveAutoUpload(true);
-    if (why) console.warn("auto upload not saved", why);
+    if (why) handleError(why, { context: "auto upload not saved", severity: "warn" });
   }
   return choice === "local" ? null : api;
 }
@@ -98,7 +98,7 @@ export async function uploadTarget(ask: boolean, count: number): Promise<ImageHo
     // 刚在「设置图床」里点了「保存并上传」的，不再问第二遍
     return host ? await confirmed(api, host, ask, count) : await decide(api, ask);
   } catch (e) {
-    console.warn(e instanceof ImageHostUnsupported ? "gateway has no image host, storing locally" : "image host unreadable, storing locally", e);
+    handleError(e, { context: e instanceof ImageHostUnsupported ? "gateway has no image host, storing locally" : "image host unreadable, storing locally", severity: "warn" });
     return null;
   }
 }
@@ -109,8 +109,8 @@ export async function placeImage(target: ImageHostApi | null, docId: string, byt
   try {
     return { src: await target.upload(bytes) };
   } catch (e) {
-    console.warn("image not uploaded, storing locally", e);
-    return { src: await documentStore.putAsset(docId, bytes), notUploaded: messageOf(e) };
+    const msg = handleError(e, { context: "image not uploaded, storing locally", severity: "warn" });
+    return { src: await documentStore.putAsset(docId, bytes), notUploaded: msg };
   }
 }
 

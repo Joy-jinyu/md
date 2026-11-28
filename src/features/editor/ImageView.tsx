@@ -5,6 +5,7 @@
  */
 import { cleanup, effect, Image, type JSX, signal, Text, untracked, View } from "nsh";
 import type { RichNodeViewProps } from "nsh/base";
+import { handleError } from "../../doc/message";
 import { t } from "../../i18n";
 import { canTransfer, documentStore } from "../../store/backend";
 import { isRelativeSrc, mimeOf, sniffImage } from "../../store/image-file";
@@ -63,8 +64,8 @@ async function loadAsset(docId: string | null, src: string, keep: (url: string) 
     knownSizes.set(`${docId}\n${src}`, size);
     return { kind: "ready", url, width: size.width, height: size.height };
   } catch (e) {
-    console.warn("image not loaded", src, e);
-    return { kind: "problem", text: () => t(`图片载入失败：${src}（${e instanceof Error ? e.message : String(e)}）`, `Could not load image: ${src} (${e instanceof Error ? e.message : String(e)})`) };
+    const msg = handleError(e, { context: "image not loaded", severity: "warn" });
+    return { kind: "problem", text: () => t(`图片载入失败：${src}（${msg}）`, `Could not load image: ${src} (${msg})`) };
   }
 }
 
@@ -75,7 +76,7 @@ async function loadDirect(src: string, failed: () => Shown): Promise<Shown> {
     knownSizes.set(src, size);
     return { kind: "ready", url: src, width: size.width, height: size.height };
   } catch (e) {
-    console.warn("image not loaded", src.slice(0, 80), e);
+    handleError(e, { context: "image not loaded", severity: "warn" });
     return failed();
   }
 }

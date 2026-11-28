@@ -1,7 +1,7 @@
 /** 「打开文件」「另存为」「导出为 HTML」：接请求、选文件、另存。打开的文件存成文档库里的一篇新文档（交给编辑页那一层去建、去切换）。 */
 import { type Phrase, phrase, t } from "../../i18n";
 import { effect, Picker, untracked } from "nsh";
-import { messageOf } from "../../doc/message";
+import { handleError } from "../../doc/message";
 import { saveTextFile } from "../../platform";
 import { storageKind } from "../../store/backend";
 import { latestDocument } from "../../store/document";
@@ -42,8 +42,8 @@ async function openFile() {
     const file = await pickMarkdown();
     if (file) requestLibrary({ kind: "import", name: stem(file.name), text: file.text });
   } catch (e) {
-    console.error("open file failed", e);
-    say(() => t(`没有打开：${messageOf(e)}。文档库没有变。`, `Could not open the file: ${messageOf(e)}. Your library is unchanged.`), "warn");
+    const msg = handleError(e, { context: "open file failed", severity: "error" });
+    say(() => t(`没有打开：${msg}。文档库没有变。`, `Could not open the file: ${msg}. Your library is unchanged.`), "warn");
   }
 }
 
@@ -66,8 +66,8 @@ async function saveAs() {
     const left = imagesLeftBehind(text);
     say(() => `${phrase(saved.message)}${phrase(left)}`, "info");
   } catch (e) {
-    console.error("save as failed", e);
-    say(() => t(`没能另存：${messageOf(e)}`, `Could not save a copy: ${messageOf(e)}`), "warn");
+    const msg = handleError(e, { context: "save as failed", severity: "error" });
+    say(() => t(`没能另存：${msg}`, `Could not save a copy: ${msg}`), "warn");
   }
 }
 
@@ -81,8 +81,8 @@ async function exportHtml() {
     const note = () => phrase(out.note);
     say(() => t(`${phrase(saved.message)}。${note()}用浏览器打开它，可以再打印或存成 PDF。`, `${phrase(saved.message)}. ${note() ? `${note()} ` : ""}Open it in your browser to print it or save it as a PDF.`), out.note ? "warn" : "info");
   } catch (e) {
-    console.error("export html failed", e);
-    say(() => t(`没能导出：${messageOf(e)}`, `Could not export: ${messageOf(e)}`), "warn");
+    const msg = handleError(e, { context: "export html failed", severity: "error" });
+    say(() => t(`没能导出：${msg}`, `Could not export: ${msg}`), "warn");
   }
 }
 

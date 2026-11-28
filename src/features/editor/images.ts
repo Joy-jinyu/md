@@ -5,7 +5,7 @@
 import { Picker, signal } from "nsh";
 import { chain, command, type RichEditorSession, type RichNodeJSON, setMeta, setNodeAttribute } from "nsh/base";
 import { type Phrase, phrase, t } from "../../i18n";
-import { messageOf } from "../../doc/message";
+import { handleError, messageOf } from "../../doc/message";
 import { readImageFile } from "../../platform";
 import { documentStore } from "../../store/backend";
 import { AssetRejected, base64ToBytes, IMAGE_TYPES, isRelativeSrc } from "../../store/image-file";
@@ -118,8 +118,8 @@ export async function insertImageBytes(session: RichEditorSession, files: { name
       if (why) local.push(() => t(`「${f.name}」${why}`, `${f.name}: ${why}`));
       nodes.push({ type: "image", attrs: { src: placed.src, alt: "" } });
     } catch (e) {
-      console.warn("image not stored", e);
-      failed.push(() => t(`「${f.name}」${messageOf(e)}`, `${f.name}: ${messageOf(e)}`));
+      const msg = handleError(e, { context: "image not stored", severity: "warn" });
+      failed.push(() => t(`「${f.name}」${msg}`, `${f.name}: ${msg}`));
     }
   }
   if (nodes.length > 0 && !session.insertContent(nodes)) failed.push(() => t("图片存好了，但插不进光标所在的位置", "The image was saved but could not be inserted at the cursor"));
@@ -137,8 +137,8 @@ export async function pickImages(session: RichEditorSession) {
     const files = await Promise.all(picked.filter((p) => p.file).map(async (p) => ({ name: p.name, data: new Uint8Array(await p.file!.arrayBuffer()) })));
     await insertImageBytes(session, files);
   } catch (e) {
-    console.error("pick images failed", e);
-    say(() => t(`没能打开选择框：${messageOf(e)}`, `Could not open the file picker: ${messageOf(e)}`), "warn");
+    const msg = handleError(e, { context: "pick images failed", severity: "error" });
+    say(() => t(`没能打开选择框：${msg}`, `Could not open the file picker: ${msg}`), "warn");
   }
 }
 
@@ -152,9 +152,12 @@ export async function insertImageFiles(session: RichEditorSession, paths: string
     try {
       files.push({ name, data: await readImageFile(path) });
     } catch (e) {
-      console.warn("dropped image unreadable", e);
-      if (e instanceof AssetRejected) tooBig.push(() => t(`「${name}」${e.message}`, `${name}: ${e.message}`));
-      else failed.push(name);
+      if (e instanceof AssetRejected) {
+        tooBig.push(() => t(`「${name}」${e.message}`, `${name}: ${e.message}`));
+      } else {
+        handleError(e, { context: "dropped image unreadable", severity: "warn" });
+        failed.push(name);
+      }
     }
   }
   if (tooBig.length > 0) say(() => t(`没能插入图片：${tooBig.map(phrase).join("；")}`, `Could not insert images: ${tooBig.map(phrase).join("; ")}`), "warn");

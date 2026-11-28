@@ -1,5 +1,6 @@
 /** 打开链接的唯一入口：只放行 http:、https:、mailto: 和文档内锚点（.claude/rules/security.md）。 */
 import { openUrl } from "nsh";
+import { handleError } from "../../doc/message";
 
 /** 一个链接地址该怎么处理：外部打开、跳到文档内的标题，或不打开。 */
 export type LinkTarget = { kind: "external"; url: string } | { kind: "anchor"; id: string } | { kind: "blocked" };
@@ -22,7 +23,7 @@ export async function openLink(href: string, onAnchor: (id: string) => boolean):
   try {
     return (await openUrl(target.url)).opened;
   } catch (e) {
-    console.warn("openUrl refused", target.url, e);
+    handleError(e, { context: "openUrl refused", severity: "warn" });
     return false;
   }
 }

@@ -1,5 +1,6 @@
 /** 粘贴：剪贴板里是 Markdown 文本时，按 Markdown 读成节点再插入，而不是一行一段地当字面文字贴进来。 */
 import { command, type RichClipboardContent, type RichEditorSession, type RichNodeJSON, type RichSliceJSON, setTextSelection } from "nsh/base";
+import { handleError } from "../../doc/message";
 import { isRelativeSrc } from "../../store/image-file";
 import { loadMarkdown } from "./convert";
 
@@ -82,7 +83,7 @@ export function pasteMarkdown(session: RichEditorSession, clipboard: RichClipboa
   try {
     blocks = (loadMarkdown(text).json.content ?? []) as RichNodeJSON[];
   } catch (e) {
-    console.warn("paste as markdown failed, pasting as plain text", e);
+    handleError(e, { context: "paste as markdown failed, pasting as plain text", severity: "warn" });
     return false;
   }
   if (blocks.length === 0) return false;

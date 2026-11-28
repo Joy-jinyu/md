@@ -6,6 +6,7 @@ import { imageHost } from "../../store/backend";
 import { type ImageHostView, ImageHostUnsupported } from "../../store/document-store";
 import { loadAutoUpload, loadSkipImageHost, saveAutoUpload, saveSkipImageHost } from "../../store/settings";
 import { Button } from "../../ui/button";
+import { handleError } from "../../doc/message";
 import { ImageHostForm } from "./ImageHostForm";
 import { Block, Callout, Field, Group, Row, Toggle } from "./parts";
 
@@ -60,7 +61,7 @@ function createHostState() {
       skipped.set(await loadSkipImageHost());
       auto.set(await loadAutoUpload());
     } catch (e) {
-      console.warn("image host not read", e);
+      handleError(e, { context: "image host not read", severity: "warn" });
       if (e instanceof ImageHostUnsupported) loaded.set({ kind: "unsupported", reason: e.message });
       else problem.set(() => t(`没能读出图床设置：${messageOf(e)}`, `Could not read image hosting settings: ${messageOf(e)}`));
     }
@@ -71,10 +72,10 @@ function createHostState() {
     try {
       await imageHost()?.set(null);
       const why = await saveSkipImageHost(true);
-      if (why) console.warn("skip image host not saved", why);
+      if (why) handleError(why, { context: "skip image host not saved", severity: "warn" });
       await load();
     } catch (e) {
-      console.error("image host not cleared", e);
+      handleError(e, { context: "image host not cleared", severity: "error" });
       problem.set(() => t(`没能清掉图床设置：${messageOf(e)}`, `Could not clear image hosting settings: ${messageOf(e)}`));
     }
   };

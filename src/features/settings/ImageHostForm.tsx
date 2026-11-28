@@ -2,7 +2,7 @@
 import { type Phrase, phrase, t } from "../../i18n";
 import { type JSX, type Signal, signal, Text, View } from "nsh";
 import { Input } from "nsh/base";
-import { messageOf } from "../../doc/message";
+import { handleError, messageOf } from "../../doc/message";
 import { imageHost } from "../../store/backend";
 import type { ImageHostView } from "../../store/document-store";
 import { Button } from "../../ui/button";
@@ -133,7 +133,7 @@ export function ImageHostForm(props: { current: ImageHostView | null; saveLabel:
       await api.set(input);
       props.onSaved();
     } catch (e) {
-      console.error("image host not saved", e);
+      handleError(e, { context: "image host not saved", severity: "error" });
       problem.set(() => t(`没能保存：${messageOf(e)}`, `Could not save: ${messageOf(e)}`));
     } finally {
       saving.set(false);

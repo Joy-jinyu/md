@@ -10,6 +10,7 @@ import { currentDocId, markOpened, refreshLibrary, startLibrary } from "../../st
 import { recoverUnsaved } from "../../store/unsaved";
 import { say } from "./receipt";
 import { requestLibrary } from "./requests";
+import { handleError } from "../../doc/message";
 
 /** 别处把开着的这篇改了名：跟过去（不当成「已在别处删除」）。返回跟没跟。 */
 async function followIfRenamed(change: StoreChange): Promise<boolean> {
@@ -29,14 +30,14 @@ export function followStoreChanges(reload: () => void) {
   documentStore.watch?.((change) => {
     void followIfRenamed(change)
       .then(async () => {
-        await refreshLibrary().catch((e: unknown) => console.warn("library not refreshed", e));
+        await refreshLibrary().catch((e: unknown) => handleError(e, { context: "library not refreshed", severity: "warn" }));
         const id = currentDocId();
         if (!id || (!change.all && !change.ids.includes(id))) return;
         const r = await checkExternal();
         if (r === "reload") reload();
         else if (r === "same") await flush();
       })
-      .catch((e: unknown) => console.warn("external change not checked", e));
+      .catch((e: unknown) => handleError(e, { context: "external change not checked", severity: "warn" }));
   });
 }
 

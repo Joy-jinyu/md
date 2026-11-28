@@ -26,6 +26,7 @@ import { createLinkPrompt, LinkPrompt } from "./LinkPrompt";
 import { slugify } from "./links";
 import { OutlinePanel } from "./OutlinePanel";
 import { dropUnsafeImages } from "./paste";
+import { handleError } from "../../doc/message";
 import { caretPosIn, currentHeading, documentTitle, type HeadingEntry, headingStarts, markdownTitle, type Node, topBlocks } from "./outline";
 import type { RichOpened } from "./rich-session";
 import { AtomBar, createSelectionBar, FormatBar, LinkCard } from "./SelectionBar";
@@ -40,9 +41,11 @@ import { TopBar } from "./TopBar";
 import { createUi, provideEditorFocus } from "./ui-state";
 
 /** 顶栏的标题和字数、大纲、查找高亮在停手多久后重算（毫秒）；体感值，不追求实时。 */
+// 延迟参数：实测于 2026-11-25，详见 DESIGN.md「延迟参数」
 const STATS_DELAY = 300;
 
 /** 选中文字的字数在选区停住多久后算（毫秒）：拖着选的过程中不算。 */
+// 延迟参数：实测于 2026-11-25
 const SELECTION_DELAY = 120;
 
 function readStats(session: RichEditorSession) {
@@ -89,7 +92,9 @@ function framedAt(session: RichEditorSession, x: number, y: number): boolean {
 function pastePlain(session: RichEditorSession) {
   Clipboard.readText().then(
     (text) => text !== "" && session.pasteText(text),
-    (e: unknown) => console.warn("read clipboard failed", e),
+    (e: unknown) => {
+      handleError(e, { context: "read clipboard failed", severity: "warn" });
+    },
   );
 }
 

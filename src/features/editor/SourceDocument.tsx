@@ -15,6 +15,7 @@ import { TopBar } from "./TopBar";
 import { createUi, provideEditorFocus } from "./ui-state";
 
 /** 顶栏的标题和字符数在停手多久后重算（毫秒）。 */
+// 延迟参数：实测于 2026-11-25，详见 DESIGN.md「延迟参数」
 const STATS_DELAY = 300;
 
 const nothing = () => undefined;

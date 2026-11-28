@@ -2,7 +2,7 @@
 import { type Phrase, phrase, t } from "../../i18n";
 import { effect, keymap, signal, Text, untracked, View } from "nsh";
 import { Dialog, Input } from "nsh/base";
-import { messageOf } from "../../doc/message";
+import { handleError, messageOf } from "../../doc/message";
 import { displayName, renameDocument } from "../../store/library";
 import { Button } from "../../ui/button";
 import { returnFocusToEditor } from "../editor/ui-state";
@@ -43,8 +43,8 @@ function RenameDialog() {
       panel.expanded.set(null);
       close();
     } catch (e) {
-      console.error("rename failed", e);
-      problem.set(() => t(`没能改名：${messageOf(e)}`, `Could not rename: ${messageOf(e)}`));
+      const msg = handleError(e, { context: "rename failed", severity: "error" });
+      problem.set(() => t(`没能改名：${msg}`, `Could not rename: ${msg}`));
     }
   };
   return (
