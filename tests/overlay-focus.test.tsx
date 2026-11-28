@@ -147,7 +147,7 @@ test("save as from a library folder says the document's images were not saved wi
   const disk = memoryFs({ "Pic.md": "# Pic\n\n![red](assets/red.png)\n", "assets/red.png": RED_PNG });
   const app = await open("../App.tsx", { ...MAC, modules: disk.modules });
   await app.waitFor("id:toggle-sidebar");
-  await app.press("id:file-save-as");
+  await app.keyboard.press("mod+shift+s");
   await app.waitFor("id:receipt");
   expect(app.texts().some((t) => t.endsWith("这篇有 1 张图片没有一起存过去，图片在文库的 assets/ 里"))).toBe(true);
 });

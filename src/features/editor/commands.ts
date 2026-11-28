@@ -1,5 +1,5 @@
 /** 编辑页的全部命令：斜杠菜单、命令面板、快捷键都从这一张表取。 */
-import { colorScheme, setColorScheme } from "nsh";
+import { colorScheme, setColorScheme, signal } from "nsh";
 import {
   addColumnAfter,
   addColumnBefore,
@@ -9,6 +9,7 @@ import {
   deleteColumn,
   deleteRow,
   deleteTable,
+  focus,
   insertContent,
   insertTable,
   type RichCommand,
@@ -16,19 +17,30 @@ import {
   unsetAllMarks,
   wrapIn,
 } from "nsh/base";
+import { REPO, SITE_ORIGIN } from "../../app-config.gen";
+import { messageOf } from "../../doc/message";
 import { t } from "../../i18n";
-import { APPLE_KEYS, IN_BROWSER, SIGN_IN_FLOW, STRIKE_KEY } from "../../platform";
+import { APPLE_KEYS, IN_BROWSER, IS_MACOS, PLAIN_PASTE_KEY, revealInFinder, SIGN_IN_FLOW, STRIKE_KEY } from "../../platform";
+import { currentDocId } from "../../store/library";
 import { syncConfigured } from "../../sync/config";
 import { requestFile } from "../files/requests";
+import { macLibraryView, setMacLibraryView } from "../library/mac-library";
+import { openSearch } from "../library/panel-state";
+import { say } from "../library/receipt";
 import { historyOpen, quickOpenOpen, requestLibrary } from "../library/requests";
 import { settingsOpen } from "../settings/open";
 import { syncOpen } from "../sync/open";
+import { reachSelection } from "./caret-follow";
 import { copyAsMarkdown } from "./copy-markdown";
+import { openDocumentWindow } from "./DocumentWindow";
+import type { FindEngine } from "./find";
 import { runHeadingStep } from "./heading-step";
 import { altEditRequest, canResize, deleteImage, selectedImage, setImageAttr } from "./images";
+import { goToFrontMatter, insertFootnote } from "./insert-meta";
 import { insertRule } from "./insert-rule";
+import { openLink } from "./links";
 import { selectFormat, selectLine, selectWord } from "./select";
-import { toggleSidebar, type Ui } from "./ui-state";
+import { sidebar, type SidebarTab, toggleSidebar, type Ui } from "./ui-state";
 
 /** 能用编辑框改源码的原子节点。 */
 export type AtomKind = "mathBlock" | "mathInline" | "diagram" | "frontmatter" | "rawBlock";
@@ -46,9 +58,13 @@ export interface CommandContext {
   codeBlock?: { chooseLanguage(): void; copy(): void };
   /** 图片：弹选择框插图、把这篇的外链图片都转存到本地。源码视图里没有。 */
   images?: { insert(): void; transferAll(): void };
+  /** 查找条现在用的引擎（所见即所得或源码），给「查找下一个 / 上一个」。 */
+  find?: () => FindEngine;
+  /** 读剪贴板、按纯文本粘贴：只有 macOS 应用的所见即所得里有（浏览器自己会做）。 */
+  pastePlain?: () => void;
 }
 
-export type CommandGroup = "块" | "格式" | "编辑" | "表格" | "视图" | "文件";
+export type CommandGroup = "块" | "格式" | "编辑" | "表格" | "视图" | "文件" | "帮助";
 
 const GROUP_NAMES: Record<CommandGroup, string> = {
   块: "Blocks",
@@ -57,6 +73,7 @@ const GROUP_NAMES: Record<CommandGroup, string> = {
   表格: "Table",
   视图: "View",
   文件: "File",
+  帮助: "Help",
 };
 
 export const commandGroupLabel = (group: CommandGroup) => t(group, GROUP_NAMES[group]);
@@ -79,6 +96,8 @@ export interface AppCommand {
   glyph?: string;
   rich?: RichCommand;
   act?: (ctx: CommandContext) => void;
+  /** 开关类命令现在开着没有：菜单栏上打勾。 */
+  checked?: (ctx: CommandContext) => boolean;
 }
 
 const heading = (level: number): AppCommand => ({
@@ -118,13 +137,13 @@ const BLOCKS: AppCommand[] = [
   heading(3),
   { id: "block.bullet", get label() { return t("无序列表", "Bulleted List"); }, keywords: ["ul", "bullet", "list", "wxlb"], group: "块", glyph: "•", key: "Mod-Alt-u", slash: true, rich: command("toggleBulletList") },
   { id: "block.ordered", get label() { return t("有序列表", "Numbered List"); }, keywords: ["ol", "ordered", "number", "yxlb"], group: "块", glyph: "1.", key: "Mod-Alt-o", slash: true, rich: command("toggleOrderedList") },
-  { id: "block.task", get label() { return t("任务列表", "Task List"); }, keywords: ["todo", "task", "check", "rwlb"], group: "块", glyph: "☐", slash: true, rich: command("toggleTaskList") },
+  { id: "block.task", get label() { return t("任务列表", "Task List"); }, keywords: ["todo", "task", "check", "rwlb"], group: "块", glyph: "☐", key: "Mod-Alt-x", slash: true, rich: command("toggleTaskList") },
   { id: "block.quote", get label() { return t("引用", "Block Quote"); }, keywords: ["quote", "blockquote", "yy"], group: "块", glyph: "❝", key: "Mod-Alt-q", slash: true, rich: command("toggleBlockquote") },
   { id: "block.code", get label() { return t("代码块", "Code Block"); }, keywords: ["code", "pre", "dmk"], group: "块", glyph: "</>", key: "Mod-Alt-c", slash: true, rich: command("toggleCodeBlock") },
   { id: "block.codeLanguage", get label() { return t("设置代码块语言", "Set Code Block Language"); }, keywords: ["code language", "language", "szdmkyy", "yy"], group: "块", act: (ctx) => ctx.codeBlock?.chooseLanguage() },
   { id: "block.codeCopy", get label() { return t("复制代码块", "Copy Code Block"); }, keywords: ["copy code", "fzdmk"], group: "块", act: (ctx) => ctx.codeBlock?.copy() },
   { id: "block.table", get label() { return t("表格", "Table"); }, keywords: ["table", "bg"], group: "块", glyph: "▦", key: "Mod-Alt-t", slash: true, rich: insertTable({ rows: 3, cols: 3, withHeaderRow: true }) },
-  { id: "block.rule", get label() { return t("分隔线", "Horizontal Rule"); }, keywords: ["hr", "rule", "divider", "fgx"], group: "块", glyph: "—", slash: true, act: (ctx) => ctx.session && insertRule(ctx.session) },
+  { id: "block.rule", get label() { return t("分隔线", "Horizontal Rule"); }, keywords: ["hr", "rule", "divider", "fgx"], group: "块", glyph: "—", key: "Mod-Alt--", slash: true, act: (ctx) => ctx.session && insertRule(ctx.session) },
   { id: "inline.link", get label() { return t("链接", "Link"); }, keywords: ["link", "url", "lj"], group: "块", glyph: "↗", key: "Mod-k", slash: true, act: (ctx) => ctx.askLink() },
   // 插图照 Typora 用 Cmd+Ctrl+I；Mod 就是 Ctrl 的键位上没有这个组合，换成 Ctrl+Alt+I（Ctrl+Shift+I 是浏览器的开发者工具）
   { id: "insert.image", get label() { return t("插入图片…", "Insert Image…"); }, keywords: ["image", "picture", "img", "crtp", "tp"], group: "块", glyph: "▣", key: APPLE_KEYS ? "Mod-Ctrl-i" : "Ctrl-Alt-i", slash: true, act: (ctx) => ctx.images?.insert() },
@@ -132,6 +151,8 @@ const BLOCKS: AppCommand[] = [
   { id: "inline.math", get label() { return t("行内公式", "Inline Math"); }, keywords: ["inline math", "imath", "hngs"], group: "块", glyph: "x²", slash: true, act: (ctx) => ctx.askAtom("mathInline") },
   { id: "block.mermaid", get label() { return t("Mermaid 图", "Mermaid Diagram"); }, keywords: ["mermaid", "diagram", "lct", "tu"], group: "块", glyph: "◇", slash: true, act: (ctx) => ctx.askAtom("diagram") },
   ...ALERTS,
+  { id: "block.frontmatter", get label() { return t("YAML Front Matter", "YAML Front Matter"); }, keywords: ["yaml", "front matter", "frontmatter", "metadata"], group: "块", act: (ctx) => ctx.session && goToFrontMatter(ctx.session) },
+  { id: "block.footnote", get label() { return t("脚注", "Footnote"); }, keywords: ["footnote", "jz"], group: "块", key: "Mod-Alt-r", act: (ctx) => ctx.session && insertFootnote(ctx.session) },
   { id: "block.toc", get label() { return t("目录", "Table of Contents"); }, keywords: ["toc", "contents", "ml"], group: "块", glyph: "≡", slash: true, rich: insertContent({ type: "toc" }) },
   { id: "block.paragraph", get label() { return t("正文", "Paragraph"); }, keywords: ["text", "paragraph", "zw"], group: "块", glyph: "¶", key: "Mod-0", slash: true, rich: command("setParagraph") },
   heading(4),
@@ -198,6 +219,9 @@ const EDITS: AppCommand[] = [
   { id: "edit.selectLine", get label() { return t("选中当前行", "Select Current Line"); }, keywords: ["select line", "xzh"], group: "编辑", key: typoraOrWeb("Mod-l", "Ctrl-Alt-l"), act: (ctx) => ctx.session && selectLine(ctx.session) },
   { id: "edit.selectFormat", get label() { return t("选中当前格式范围", "Select Formatting Range"); }, keywords: ["select scope", "styled scope", "xzgsfw"], group: "编辑", key: typoraOrWeb("Mod-e", "Ctrl-Alt-e"), act: (ctx) => ctx.session && selectFormat(ctx.session) },
   { id: "edit.copyMarkdown", get label() { return t("复制为 Markdown", "Copy as Markdown"); }, keywords: ["copy markdown", "fzwmd"], group: "编辑", key: typoraOrWeb("Mod-Shift-c", "Ctrl-Alt-m"), act: (ctx) => ctx.session && copyAsMarkdown(ctx.session) },
+  { id: "edit.pastePlain", get label() { return t("粘贴为纯文本", "Paste as Plain Text"); }, keywords: ["paste plain", "plain text", "ztwcwb"], group: "编辑", key: PLAIN_PASTE_KEY ?? undefined, act: (ctx) => ctx.pastePlain?.() },
+  { id: "edit.jumpTop", get label() { return t("跳到文首", "Jump to Top"); }, keywords: ["top", "start", "tdws"], group: "编辑", act: (ctx) => ctx.session && jumpEnd(ctx.session, "start") },
+  { id: "edit.jumpBottom", get label() { return t("跳到文末", "Jump to Bottom"); }, keywords: ["bottom", "end", "tdwm"], group: "编辑", act: (ctx) => ctx.session && jumpEnd(ctx.session, "end") },
   { id: "image.transferAll", get label() { return t("把这篇的外链图片都转存到本地", "Save All Linked Images Locally"); }, keywords: ["transfer images", "download images", "zctp", "tp"], group: "编辑", act: (ctx) => ctx.images?.transferAll() },
   ...IMAGE_SIZE,
   ...IMAGE_EDITS,
@@ -216,6 +240,47 @@ const TABLES: AppCommand[] = [
 
 const toggle = (s: { (): boolean; set(v: boolean): void }) => s.set(!s());
 
+/** 跳到文首 / 文末。长文档没进过视口的块量不到位置，要再 `reachSelection`（CLAUDE.md 的 nsh 0.7.0 说明）。 */
+function jumpEnd(session: RichEditorSession, where: "start" | "end") {
+  session.run(focus(where));
+  reachSelection();
+}
+
+/** 查找条开着就跳到下一处 / 上一处；关着就先打开（上次找的词还在）。 */
+function findStep(ctx: CommandContext, step: "next" | "previous") {
+  if (ctx.ui.findMode() === null) ctx.ui.findMode.set("find");
+  else ctx.find?.()[step]();
+}
+
+const sidebarOn = (tab: SidebarTab) => sidebar.open() && sidebar.tab() === tab;
+
+/** 侧栏开到这一页（已经开在这一页就不动）。 */
+function showSidebar(tab: SidebarTab) {
+  if (!sidebarOn(tab)) toggleSidebar(tab);
+}
+
+const libraryViewOn = (mode: "articles" | "tree") => sidebarOn("docs") && macLibraryView() === mode;
+
+/** macOS 文库的「文章」「文件树」：已经开在这一种就收起侧栏，否则打开文档页并换过去。 */
+function toggleLibraryView(mode: "articles" | "tree") {
+  if (libraryViewOn(mode)) return toggleSidebar("docs");
+  showSidebar("docs");
+  setMacLibraryView(mode);
+}
+
+export type Appearance = "system" | "light" | "dark";
+
+/** 菜单栏「主题」选的是哪个。nsh 只给得出现在显示的明暗（`colorScheme`），给不出「跟随系统」，所以这里自己记。 */
+const appearance = signal<Appearance>("system");
+
+export function chooseAppearance(choice: Appearance) {
+  appearance.set(choice);
+  setColorScheme(choice);
+}
+
+/** 切换明暗（命令「切换深色 / 浅色」、顶栏按钮）：在现在显示的反面上定下来。 */
+export const toggleAppearance = () => chooseAppearance(colorScheme() === "dark" ? "light" : "dark");
+
 /**
  * 替换没用 Typora 的 Cmd+H：苹果系统把它留给「隐藏窗口」，应用绑不上（nsh 0.6.0 实测），改成 Cmd+Alt+F。
  * 源码视图没用 Typora 的 Cmd+/：nsh 的源码编辑器自己把它当「切换注释」吃掉，应用收不到，进去了就按不回来；
@@ -224,14 +289,24 @@ const toggle = (s: { (): boolean; set(v: boolean): void }) => s.set(!s());
 const VIEWS: AppCommand[] = [
   { id: "view.find", get label() { return t("查找", "Find"); }, keywords: ["find", "search", "cz"], group: "视图", key: "Mod-f", act: (ctx) => ctx.ui.findMode.set("find") },
   { id: "view.replace", get label() { return t("查找并替换", "Find and Replace"); }, keywords: ["replace", "th"], group: "视图", key: "Mod-Alt-f", act: (ctx) => ctx.ui.findMode.set("replace") },
-  { id: "view.outline", get label() { return t("大纲", "Outline"); }, keywords: ["outline", "dg"], group: "视图", key: "Mod-Shift-l", act: () => toggleSidebar("outline") },
-  { id: "view.documents", get label() { return t("文档列表", "Document List"); }, keywords: ["documents", "files", "library", "wdlb"], group: "视图", act: () => toggleSidebar("docs") },
-  { id: "view.focus", get label() { return t("专注模式", "Focus Mode"); }, keywords: ["focus", "zzms"], group: "视图", key: "F8", act: (ctx) => toggle(ctx.ui.focusOn) },
-  { id: "view.typewriter", get label() { return t("打字机模式", "Typewriter Mode"); }, keywords: ["typewriter", "dzjms"], group: "视图", key: "F9", act: (ctx) => toggle(ctx.ui.typewriterOn) },
-  { id: "view.source", get label() { return t("源码视图", "Source View"); }, keywords: ["source", "markdown", "ymst"], group: "视图", key: "Mod-Alt-/", act: (ctx) => ctx.toggleSource?.() },
+  { id: "view.findNext", get label() { return t("查找下一个", "Find Next"); }, keywords: ["find next", "czxyg"], group: "视图", key: "Mod-g", act: (ctx) => findStep(ctx, "next") },
+  { id: "view.findPrevious", get label() { return t("查找上一个", "Find Previous"); }, keywords: ["find previous", "czsyg"], group: "视图", key: "Mod-Shift-g", act: (ctx) => findStep(ctx, "previous") },
+  { id: "view.sidebar", get label() { return t("侧栏", "Sidebar"); }, keywords: ["sidebar", "cl"], group: "视图", act: () => toggleSidebar(), checked: () => sidebar.open() },
+  { id: "view.outline", get label() { return t("大纲", "Outline"); }, keywords: ["outline", "dg"], group: "视图", key: "Mod-Shift-l", act: () => toggleSidebar("outline"), checked: () => sidebarOn("outline") },
+  { id: "view.documents", get label() { return t("文档列表", "Document List"); }, keywords: ["documents", "files", "library", "wdlb"], group: "视图", act: () => toggleSidebar("docs"), checked: () => sidebarOn("docs") },
+  // Typora 的 Ctrl+Cmd+2 / 3；只有 macOS 应用有这两种视图，别处不给键（非苹果键位上 Ctrl 就是 Mod，会撞上标题 2 / 3）
+  { id: "view.articles", get label() { return t("文章", "Articles"); }, keywords: ["articles", "wz"], group: "视图", key: IS_MACOS ? "Ctrl-Mod-2" : undefined, act: () => toggleLibraryView("articles"), checked: () => libraryViewOn("articles") },
+  { id: "view.tree", get label() { return t("文件树", "File Tree"); }, keywords: ["file tree", "folders", "wjs"], group: "视图", key: IS_MACOS ? "Ctrl-Mod-3" : undefined, act: () => toggleLibraryView("tree"), checked: () => libraryViewOn("tree") },
+  { id: "view.search", get label() { return t("搜索全部文档", "Search All Documents"); }, keywords: ["search", "ss", "qwss"], group: "视图", key: "Mod-Shift-f", act: () => { showSidebar("docs"); openSearch(); } },
+  { id: "view.focus", get label() { return t("专注模式", "Focus Mode"); }, keywords: ["focus", "zzms"], group: "视图", key: "F8", act: (ctx) => toggle(ctx.ui.focusOn), checked: (ctx) => ctx.ui.focusOn() },
+  { id: "view.typewriter", get label() { return t("打字机模式", "Typewriter Mode"); }, keywords: ["typewriter", "dzjms"], group: "视图", key: "F9", act: (ctx) => toggle(ctx.ui.typewriterOn), checked: (ctx) => ctx.ui.typewriterOn() },
+  { id: "view.source", get label() { return t("源码视图", "Source View"); }, keywords: ["source", "markdown", "ymst"], group: "视图", key: "Mod-Alt-/", act: (ctx) => ctx.toggleSource?.(), checked: (ctx) => ctx.session === null },
   { id: "view.palette", get label() { return t("命令面板", "Command Palette"); }, keywords: ["command palette", "mlmb"], group: "视图", key: "Mod-Shift-p", act: (ctx) => ctx.ui.paletteOpen.set(true) },
-  { id: "view.settings", get label() { return t("设置（快捷键）", "Settings (Shortcuts)"); }, keywords: ["settings", "shortcuts", "keys", "sz", "kjj"], group: "视图", key: "Mod-,", act: () => settingsOpen.set(true) },
-  { id: "view.appearance", get label() { return t("切换深色 / 浅色", "Toggle Light / Dark Appearance"); }, keywords: ["dark", "light", "theme", "ss"], group: "视图", act: () => setColorScheme(colorScheme() === "dark" ? "light" : "dark") },
+  { id: "view.settings", get label() { return IS_MACOS ? t("设置…", "Settings…") : t("设置（快捷键）", "Settings (Shortcuts)"); }, keywords: ["settings", "shortcuts", "keys", "sz", "kjj"], group: "视图", key: "Mod-,", act: () => settingsOpen.set(true) },
+  { id: "view.appearance", get label() { return t("切换深色 / 浅色", "Toggle Light / Dark Appearance"); }, keywords: ["dark", "light", "theme", "ss"], group: "视图", act: toggleAppearance },
+  { id: "theme.system", get label() { return t("跟随系统", "Use System Setting"); }, keywords: ["system", "auto", "theme", "gsxt"], group: "视图", act: () => chooseAppearance("system"), checked: () => appearance() === "system" },
+  { id: "theme.light", get label() { return t("浅色", "Light"); }, keywords: ["light", "theme", "qs"], group: "视图", act: () => chooseAppearance("light"), checked: () => appearance() === "light" },
+  { id: "theme.dark", get label() { return t("深色", "Dark"); }, keywords: ["dark", "theme", "ss"], group: "视图", act: () => chooseAppearance("dark"), checked: () => appearance() === "dark" },
 ];
 
 /**
@@ -240,15 +315,50 @@ const VIEWS: AppCommand[] = [
  */
 const FILES: AppCommand[] = [
   { id: "file.new", get label() { return t("新建文档", "New Document"); }, keywords: ["new", "create", "xjwd"], group: "文件", key: "Mod-Alt-n", act: () => requestLibrary({ kind: "create" }) },
+  { id: "file.newWindow", get label() { return t("在新窗口打开当前文档", "Open Current Document in New Window"); }, keywords: ["new window", "xck"], group: "文件", act: () => withCurrentDoc(openDocumentWindow) },
+  { id: "file.reveal", get label() { return t("在访达中显示", "Show in Finder"); }, keywords: ["reveal", "finder", "zfdzxs"], group: "文件", act: () => withCurrentDoc(revealInFinder) },
   { id: "file.quickOpen", get label() { return t("快速打开…", "Quick Open…"); }, keywords: ["quick open", "switch", "ksdk"], group: "文件", key: "Mod-Shift-o", act: () => quickOpenOpen.set(true) },
   { id: "file.history", get label() { return t("版本历史…", "Version History…"); }, keywords: ["history", "versions", "restore", "bbls"], group: "文件", act: () => historyOpen.set(true) },
   { id: "file.sync", get label() { return t("同步…", "Sync…"); }, keywords: ["sync", "github", "gist", "tb"], group: "文件", act: () => syncOpen.set(true) },
   { id: "file.open", get label() { return t("打开文件…", "Open File…"); }, keywords: ["open", "import", "dkwj", "dr"], group: "文件", key: "Mod-o", act: () => requestFile("open") },
-  { id: "file.saveAs", get label() { return t("另存为…", "Save As…"); }, keywords: ["save as", "export", "download", "lcw", "dc"], group: "文件", key: "Mod-Shift-s", act: () => requestFile("saveAs") },
-  { id: "file.exportHtml", get label() { return t("导出为 HTML…", "Export as HTML…"); }, keywords: ["export html", "print", "pdf", "dcwhtml", "dc"], group: "文件", act: () => requestFile("exportHtml") },
+  { id: "file.saveAs", get label() { return IS_MACOS ? t("将副本存到下载文件夹", "Save Copy to Downloads") : t("另存为…", "Save As…"); }, keywords: ["save as", "export", "download", "另存为", "lcw", "dc"], group: "文件", key: "Mod-Shift-s", act: () => requestFile("saveAs") },
+  { id: "file.exportHtml", get label() { return IS_MACOS ? t("将 HTML 导出到下载文件夹", "Export HTML to Downloads") : t("导出为 HTML…", "Export as HTML…"); }, keywords: ["export html", "export as HTML", "导出为 HTML", "print", "pdf", "dcwhtml", "dc"], group: "文件", act: () => requestFile("exportHtml") },
 ];
 
-export const COMMANDS: AppCommand[] = [...BLOCKS, ...FORMATS, ...EDITS, ...TABLES, ...VIEWS, ...FILES];
+/** 对当前文档做一件可能失败的事（新窗口、访达），失败了在底部提示。 */
+function withCurrentDoc(action: (id: string) => Promise<void>) {
+  const id = currentDocId();
+  if (id) void action(id).catch((e: unknown) => say(() => messageOf(e), "warn"));
+}
+
+const [repoOwner = "", repoName = ""] = REPO.split("/");
+
+/** 帮助菜单的链接，一律经 `openLink`（links.ts 的 `linkTarget` 放行 https）。部署配置没给站点或仓库时是空的，菜单项灰掉。 */
+const HELP_URLS: Record<string, string> = {
+  "help.markdown": "https://docs.github.com/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax",
+  "help.website": SITE_ORIGIN === "" ? "" : `${SITE_ORIGIN}/lp/`,
+  // 更新日志在仓库的 GitHub Pages（README 链的就是它）
+  "help.changelog": REPO === "" ? "" : `https://${repoOwner.toLowerCase()}.github.io/${repoName}/`,
+  "help.feedback": REPO === "" ? "" : `https://github.com/${REPO}/issues/new`,
+};
+
+const helpLink = (id: string, label: () => string, keywords: string[]): AppCommand => ({
+  id,
+  get label() { return label(); },
+  keywords,
+  group: "帮助",
+  act: () => void openLink(HELP_URLS[id], () => false),
+});
+
+const HELP: AppCommand[] = [
+  helpLink("help.markdown", () => t("Markdown 参考", "Markdown Reference"), ["markdown", "syntax", "reference", "yfck"]),
+  helpLink("help.website", () => t("Pairdown 网站", "Pairdown Website"), ["website", "home", "wz"]),
+  helpLink("help.changelog", () => t("更新日志", "Changelog"), ["changelog", "release notes", "gxrz"]),
+  helpLink("help.feedback", () => t("反馈问题…", "Report an Issue…"), ["feedback", "issue", "bug", "fkwt"]),
+  { id: "help.shortcuts", get label() { return t("键盘快捷键", "Keyboard Shortcuts"); }, keywords: ["shortcuts", "keys", "jpkjj"], group: "帮助", act: () => settingsOpen.set(true) },
+];
+
+export const COMMANDS: AppCommand[] = [...BLOCKS, ...FORMATS, ...EDITS, ...TABLES, ...VIEWS, ...FILES, ...HELP];
 
 export const SLASH_COMMANDS = COMMANDS.filter((c) => c.slash);
 
@@ -259,7 +369,7 @@ export function commandById(id: string): AppCommand {
 }
 
 /** 不在正文里起作用、焦点在哪都该能用的命令（视图和文件两组）：键另外绑在应用级 keymap 上。 */
-export const isViewCommand = (c: AppCommand) => c.group === "视图" || c.group === "文件";
+export const isViewCommand = (c: AppCommand) => c.group === "视图" || c.group === "文件" || c.group === "帮助";
 
 /** 源码视图里也能用的命令；大纲、专注只对所见即所得有意义。 */
 const WORKS_IN_SOURCE = new Set([
@@ -276,6 +386,18 @@ const WORKS_IN_SOURCE = new Set([
   "file.quickOpen",
   "file.history",
   "file.sync",
+  "file.newWindow",
+  "file.reveal",
+  "view.findNext",
+  "view.findPrevious",
+  "view.sidebar",
+  "view.articles",
+  "view.tree",
+  "view.search",
+  "theme.system",
+  "theme.light",
+  "theme.dark",
+  ...HELP.map((c) => c.id),
 ]);
 
 const NEEDS_RESIZABLE_IMAGE = new Set(IMAGE_SIZE.map((c) => c.id));
@@ -286,9 +408,19 @@ export function available(c: AppCommand, ctx: CommandContext): boolean {
   if (c.id === "view.source") return ctx.toggleSource !== null;
   // 没配置同步（没有 client id）时不给入口；设置页的「同步」页签留着，那里说明怎么配
   if (c.id === "file.sync") return syncConfigured(SIGN_IN_FLOW === "web");
+  if (c.id === "file.newWindow" || c.id === "file.reveal") return IS_MACOS && currentDocId() !== null;
+  if (c.id === "view.articles" || c.id === "view.tree") return IS_MACOS;
+  if (c.id === "edit.pastePlain") return ctx.session !== null && ctx.pastePlain !== undefined;
+  if (c.id in HELP_URLS) return HELP_URLS[c.id] !== "";
   if (NEEDS_RESIZABLE_IMAGE.has(c.id)) return ctx.session !== null && canResize(ctx.session);
   if (NEEDS_IMAGE.has(c.id)) return ctx.session !== null && selectedImage(ctx.session) !== null;
   return ctx.session !== null || WORKS_IN_SOURCE.has(c.id);
+}
+
+/** 菜单栏上这一项亮不亮。跟着选区变的（图片）只看在不在所见即所得里：选区动了菜单不会重建，按下去不能用时 `runCommand` 什么也不做。 */
+export function menuEnabled(c: AppCommand, ctx: CommandContext): boolean {
+  if (NEEDS_RESIZABLE_IMAGE.has(c.id) || NEEDS_IMAGE.has(c.id)) return ctx.session !== null;
+  return available(c, ctx);
 }
 
 /** 执行一条命令；现在不能用就什么也不做。设置对话框开着时也不执行：那时按下的键是在录新的快捷键。 */

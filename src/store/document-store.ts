@@ -26,6 +26,8 @@ export interface DocMeta {
   version: Version;
   size: number;
   problem?: DocProblem;
+  /** 文件开头最多 512 字节的原文（`headOf`），列表卡片的摘要从它算；不知道时没有。 */
+  head?: string;
 }
 
 export interface ReadResult {

@@ -2,7 +2,7 @@
 import { type JSX, keymap, Scroll, type Signal, signal, Text, untracked, View, type ViewRef, windowSize } from "nsh";
 import { Button as BaseButton, Dialog, Sheet } from "nsh/base";
 import { t } from "../../i18n";
-import { IN_BROWSER } from "../../platform";
+import { editorTitleBarArea, IN_BROWSER, IS_MACOS } from "../../platform";
 import type { ShortcutOverrides } from "../../store/settings";
 import { Icon } from "../../ui/icon";
 import { IconButton } from "../../ui/icon-button";
@@ -206,6 +206,9 @@ function SettingsPage(props: { onApply: (next: ShortcutOverrides) => void }) {
       onOpenChange={({ open }) => !open && close()}
       class="h-full w-full bg-background"
     >
+      <If when={IS_MACOS}>
+        <View desktop={{ windowDrag: true }} style={{ height: editorTitleBarArea().height }} class="shrink-0" />
+      </If>
       <If when={ed.recording() === null}>
         {/* 只有这一个 Esc 绑定：抽屉开着先收抽屉。分成两个的话录完键这个重新挂上、成了最新的，会越过抽屉直接回编辑页 */}
         <EscapeCloses onEscape={() => (narrow() && drawer() ? drawer.set(false) : close())} />

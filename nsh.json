@@ -18,9 +18,11 @@
       "schemes": ["http", "https", "mailto"]
     },
     "application": true,
+    "windows": { "kinds": ["normal"], "levels": ["normal"] },
     "picker": true,
     "clipboard": true,
     "homeDir": true,
+    "process": { "execute": ["/usr/bin/open"] },
     "fs": {
       "read": ["${homeDir}/Downloads", "${homeDir}/Documents/Pairdown"],
       "write": ["${homeDir}/Downloads", "${homeDir}/Documents/Pairdown"]

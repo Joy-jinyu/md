@@ -4,10 +4,12 @@
  */
 import { locale, t } from "../../i18n";
 import { signal } from "nsh";
+import { IS_MACOS } from "../../platform";
 import { latestDocument } from "../../store/document";
 import type { DocMeta } from "../../store/document-store";
 import { allDocs, currentDocId, displayName, readDocument } from "../../store/library";
 import { type SearchResult, searchDocuments } from "./search";
+import { sidebar } from "../editor/ui-state";
 
 export type SortBy = "time" | "name";
 export type SearchState = { kind: "idle" } | { kind: "running" } | { kind: "done"; query: string; result: SearchResult };
@@ -20,7 +22,14 @@ export const panel = {
   expanded: signal<string | null>(null),
   renaming: signal<DocMeta | null>(null),
   deleting: signal<DocMeta | null>(null),
+  /** 侧栏顶部那一行换成了搜索框。 */
+  searchOpen: signal(false),
+  /** 鼠标在侧栏里：macOS 的「⋯」「+」只在这时出现，平时侧栏只留文档。 */
+  pointerInside: signal(false),
 };
+
+/** 侧栏里的次要按钮（搜索、「⋯」「+」）此刻该不该藏起来：macOS 上指针不在侧栏里时藏，保持侧栏干净；网页一直显示（手机没有悬停）。 */
+export const sidebarToolsHidden = () => IS_MACOS && !panel.pointerInside();
 
 /** 停止输入多久后开始搜（毫秒）：每敲一个字都把所有文档读一遍太浪费。 */
 const SEARCH_DELAY = 250;
@@ -82,4 +91,23 @@ export function timeLabel(at: number, now = Date.now()): string {
   if (d.toDateString() === yesterday.toDateString()) return t(`昨天 ${hm}`, `Yesterday ${hm}`);
   if (d.getFullYear() === today.getFullYear()) return t(`${monthDay(d)} ${hm}`, `${monthDay(d)}, ${hm}`);
   return t(`${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`, `${monthDay(d)}, ${d.getFullYear()}`);
+}
+
+/** 侧栏顶部的搜索框挂上时登记怎么给它焦点。不用 autoFocus：侧栏每次重新挂上都会抢走正文的焦点。 */
+let focusSearchField: (() => void) | null = null;
+export const registerSearchField = (focus: (() => void) | null) => {
+  focusSearchField = focus;
+};
+
+/** 打开侧栏顶部的搜索框（文库菜单「搜索」、顶部的搜索按钮）：切到文档页，焦点给搜索框（已经开着也给）。 */
+export function openSearch() {
+  sidebar.tab.set("docs");
+  panel.searchOpen.set(true);
+  setTimeout(() => focusSearchField?.(), 0);
+}
+
+/** 关掉搜索框并清空搜索词（「×」、切到大纲）。 */
+export function closeSearch() {
+  panel.searchOpen.set(false);
+  setQuery("");
 }

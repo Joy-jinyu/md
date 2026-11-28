@@ -1,7 +1,7 @@
 /** 平台差异的唯一位置：features 只引这里导出的值。 */
 import { type Phrase, t } from "../i18n";
-import { cleanup, keymap, platform } from "nsh";
-import { Application, currentWindow, Menu, type WindowRef } from "nsh/desktop";
+import { cleanup, effect, keymap, platform, type Point } from "nsh";
+import { Application, currentWindow, Menu, type MenuItem, type MenuRole, titleBar, type WindowRef } from "nsh/desktop";
 import type { FileLibrary } from "../store/backend";
 import { createFileStore, LIBRARY_FOLDER, locateFile, readFileBytes } from "./macos/file-store";
 import { saveToDownloads } from "./macos/save";
@@ -14,6 +14,8 @@ export const APPLE_KEYS = appleKeys;
 
 /** 跑在浏览器里：有些组合键浏览器自己先处理，应用拦不住。 */
 export const IN_BROWSER = platform.name === "web";
+
+export const IS_MACOS = platform.name === "macos";
 
 /** 有鼠标、能悬停（macOS、桌面浏览器）。手机和平板的浏览器没有悬停，靠悬停才出现的按钮在那里要常驻。 */
 export const CAN_HOVER = platform.desktop;
@@ -35,7 +37,7 @@ export const SYSTEM_KEYS = [
 /**
  * 源码编辑器里移动光标的键（keymap 的写法）→ 编辑器命令。nsh 0.6.0 的源码编辑器在 web host 上自己不处理这几个键
  * （2026-11-24 实测 Home、Cmd+←、Ctrl+A 都不动），由应用接过来转成它的命令。
- * 苹果键位上 Cmd+方向键、Ctrl+A / E 是行和文档的两端；别处 Ctrl+A 是全选、Ctrl+方向键是按词，不能接。
+ * 苹果键位上 Cmd+ 方向键、Ctrl+A / E 是行和文档的两端；别处 Ctrl+A 是全选、Ctrl+ 方向键是按词，不能接。
  */
 export const SOURCE_MOVE_KEYS: Record<string, string> = {
   home: "moveLineStart",
@@ -170,66 +172,100 @@ export const fileLibrary = (): FileLibrary | null => (platform.name === "macos" 
 /** 网页里启动时先试着连本机网关。 */
 export const PROBE_GATEWAY = IN_BROWSER;
 
-/** 菜单栏上的一条命令：名字、快捷键（keymap 的写法，没有是 undefined）、选中时做什么。 */
+/** 菜单栏上的一条命令：名字、快捷键（keymap 的写法，没有是 undefined）、选中时做什么。`checked` 给了就是带勾的项；`disabled` 是现在用不了（灰掉）。 */
 export interface MenuCommand {
   label: string;
   shortcut: string | undefined;
   onSelect: () => void;
+  checked?: boolean;
+  disabled?: boolean;
+  /** 别的输入框有焦点时快捷键归谁（nsh MenuItem.when）：编辑类命令给 "auto"，让查找框、链接框里的 ⌘B、⇧⌘V 留给输入框自己。 */
+  when?: "always" | "auto";
 }
 
-/** 菜单命令选中时先把收起的窗口显示出来：窗口收着时菜单栏照样能用，命令做了却看不见。 */
-const showingWindow = (commands: MenuCommand[]): MenuCommand[] =>
-  commands.map((c) => ({
-    ...c,
-    onSelect: () => {
-      showWindow();
-      c.onSelect();
-    },
-  }));
+/** 系统负责做的菜单项（关于、隐藏、撤销、最小化…），名字由这里给。 */
+export type SystemMenuRole = MenuRole;
 
-/**
- * 放好系统菜单栏（只有 macOS 应用有，别处什么都不做）：应用菜单、文件、编辑（系统自带的撤销、剪切这些）、视图、窗口。
- * 文件和视图两个菜单里放什么由编辑页给。再调一次就整个换掉。
- */
-export function setMenuBar(file: MenuCommand[], view: MenuCommand[]) {
+/** 菜单里的一项：应用的命令、分隔线、系统项、子菜单。 */
+export type MenuEntry =
+  | { kind: "command"; command: MenuCommand }
+  | { kind: "separator" }
+  | { kind: "role"; role: SystemMenuRole }
+  | { kind: "submenu"; label: string; items: MenuEntry[] };
+
+/** 菜单栏上的一个菜单。 */
+export interface AppMenu {
+  label: string;
+  items: MenuEntry[];
+}
+
+/** macOS 把标题放进工具栏，由系统绘制和处理红黄绿按钮。 */
+export function configureEditorTitleBar(showToolbar: () => boolean) {
+  if (!IS_MACOS) return;
+  const window = currentWindow();
+  effect(() => window.set({ titleBar: showToolbar() ? { style: "hidden", height: 40 } : { style: "default" } }));
+}
+
+export const editorTitleBarArea = titleBar;
+
+export function showDocumentMenu(items: readonly (MenuItem | null)[], anchor?: Point) {
+  return Menu.popup(items, anchor);
+}
+
+/** 从编辑器组件跟踪当前文档名，交给系统标题栏显示。 */
+export function bindDocumentWindowTitle(title: () => string) {
+  const window = currentWindow();
+  effect(() => window.set({ title: title() }));
+}
+
+const ROLE_LABELS: Record<SystemMenuRole, () => string> = {
+  about: () => t("关于 Pairdown", "About Pairdown"),
+  hide: () => t("隐藏 Pairdown", "Hide Pairdown"),
+  hideOthers: () => t("隐藏其他", "Hide Others"),
+  showAll: () => t("全部显示", "Show All"),
+  quit: () => t("退出 Pairdown", "Quit Pairdown"),
+  undo: () => t("撤销", "Undo"),
+  redo: () => t("重做", "Redo"),
+  cut: () => t("剪切", "Cut"),
+  copy: () => t("复制", "Copy"),
+  paste: () => t("粘贴", "Paste"),
+  selectAll: () => t("全选", "Select All"),
+  minimize: () => t("最小化", "Minimize"),
+  zoom: () => t("缩放", "Zoom"),
+  toggleFullScreen: () => t("切换全屏", "Toggle Full Screen"),
+  close: () => t("关闭窗口", "Close Window"),
+};
+
+/** 菜单命令选中时先把收起的窗口显示出来：窗口收着时菜单栏照样能用，命令做了却看不见。 */
+function toMenuItem(entry: MenuEntry): MenuItem {
+  switch (entry.kind) {
+    case "separator":
+      return { type: "separator" };
+    case "role":
+      return { role: entry.role, label: ROLE_LABELS[entry.role]() };
+    case "submenu":
+      return { label: entry.label, submenu: entry.items.map(toMenuItem) };
+    case "command": {
+      const c = entry.command;
+      return {
+        label: c.label,
+        shortcut: c.shortcut,
+        checked: c.checked,
+        disabled: c.disabled,
+        when: c.when,
+        onSelect: () => {
+          showWindow();
+          c.onSelect();
+        },
+      };
+    }
+  }
+}
+
+/** 放好系统菜单栏（只有 macOS 应用有，别处什么都不做）。菜单里放什么由编辑页给（app-menu.ts）；再调一次就整个换掉。 */
+export function setMenuBar(menus: AppMenu[]) {
   if (platform.name !== "macos") return;
-  Menu.setApplicationMenu([
-    {
-      label: "Pairdown",
-      submenu: [
-        { role: "about", label: t("关于 Pairdown", "About Pairdown") },
-        { type: "separator" },
-        { role: "hide", label: t("隐藏 Pairdown", "Hide Pairdown") },
-        { role: "hideOthers", label: t("隐藏其他", "Hide Others") },
-        { role: "showAll", label: t("全部显示", "Show All") },
-        { type: "separator" },
-        { role: "quit", label: t("退出 Pairdown", "Quit Pairdown") },
-      ],
-    },
-    { label: t("文件", "File"), submenu: showingWindow(file) },
-    {
-      label: t("编辑", "Edit"),
-      submenu: [
-        { role: "undo", label: t("撤销", "Undo") },
-        { role: "redo", label: t("重做", "Redo") },
-        { type: "separator" },
-        { role: "cut", label: t("剪切", "Cut") },
-        { role: "copy", label: t("复制", "Copy") },
-        { role: "paste", label: t("粘贴", "Paste") },
-        { role: "selectAll", label: t("全选", "Select All") },
-      ],
-    },
-    { label: t("视图", "View"), submenu: showingWindow(view) },
-    {
-      label: t("窗口", "Window"),
-      submenu: [
-        { role: "minimize", label: t("最小化", "Minimize") },
-        { role: "zoom", label: t("缩放", "Zoom") },
-        { type: "separator" },
-        { role: "toggleFullScreen", label: t("切换全屏", "Toggle Full Screen") },
-      ],
-    },
-  ]);
+  Menu.setApplicationMenu(menus.map((m) => ({ label: m.label, submenu: m.items.map(toMenuItem) })));
 }
 
 /** 系统交来的文件在哪：文库里的给 id，文库外的给读出的内容（读不了是 null）。 */
@@ -264,3 +300,6 @@ export function readImageFile(path: string): Promise<Uint8Array> {
  * 桌面应用里是 Device Flow（显示用户码，应用直接请求 github.com，不受浏览器跨域限制）。
  */
 export const SIGN_IN_FLOW: "web" | "device" = IN_BROWSER ? "web" : "device";
+
+export { createMacLibraryDocument, createMacLibraryFolder, macLibraryFolders, macLibraryInfo, macLibraryPath } from "./macos/file-store";
+export { revealInFinder } from "./macos/reveal";

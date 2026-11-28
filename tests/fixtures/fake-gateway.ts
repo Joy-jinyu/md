@@ -59,7 +59,8 @@ export function fakeGateway(seed: Record<string, string>) {
       case "hello":
         return { ok: true, result: state.hello ?? { version: PROTOCOL_VERSION, library: state.library } };
       case "list":
-        return { ok: true, result: { docs: [...docs].map(([p, t]) => ({ path: p, size: t.length, mtimeMs: 1, ...(p.startsWith("bad") ? { problem: "not-utf8" } : {}) })) } };
+        // 和新网关一样带开头一段；「bad」开头的是坏文件，「old」开头的装作旧网关（不带 head）
+        return { ok: true, result: { docs: [...docs].map(([p, t]) => ({ path: p, size: t.length, mtimeMs: 1, ...(p.startsWith("bad") ? { problem: "not-utf8" } : p.startsWith("old") ? {} : { head: t.slice(0, 512) }) })) } };
       case "read":
         return docs.has(path) ? { ok: true, result: { text: docs.get(path), version: versions.get(path) } } : fail("not-found", "找不到");
       case "write":

@@ -1,4 +1,4 @@
-/** 顶栏下面的一条提示（超大文档、读入失败、文件存到哪了）：浅底、小字，整条宽。 */
+/** 一条提示：浅底、小字。状态提示条（超大文档、读入失败）整条宽放在顶栏下；回执由 EditorScreen 包成浮在底部的卡片。 */
 import { t } from "../i18n";
 import { Text, View } from "nsh";
 import { CopyButton } from "./copy-button";

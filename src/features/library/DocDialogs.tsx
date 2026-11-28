@@ -4,9 +4,11 @@ import { effect, keymap, signal, Text, untracked, View } from "nsh";
 import { Dialog, Input } from "nsh/base";
 import { messageOf } from "../../doc/message";
 import { displayName, renameDocument } from "../../store/library";
+import { IS_MACOS } from "../../platform";
 import { Button } from "../../ui/button";
 import { returnFocusToEditor } from "../editor/ui-state";
-import { panel } from "./panel-state";
+import { addFolder, fileInfo, newFolderParent } from "./mac-library";
+import { panel, timeLabel } from "./panel-state";
 import { requestLibrary } from "./requests";
 
 const FIELD = "h-8 rounded-(--radius-sm) border border-input bg-background px-2 text-[13px] text-foreground placeholder:text-faint focus:border-primary";
@@ -50,7 +52,7 @@ function RenameDialog() {
   return (
     <Dialog
       testID="rename"
-      open={panel.renaming() !== null}
+      open={panel.renaming() !== null && !IS_MACOS}
       animation="fade"
       accessibilityLabel={t("修改文库名", "Rename in library")}
       closeOnEscape
@@ -128,11 +130,76 @@ function DeleteDialog() {
   );
 }
 
+function CreateFolderDialog(props: { parent: string }) {
+  const draft = signal("");
+  const problem = signal("");
+  const saving = signal(false);
+  const close = () => {
+    if (saving()) return;
+    newFolderParent.set(null);
+    returnFocusToEditor();
+  };
+  const submit = async () => {
+    if (saving()) return;
+    saving.set(true);
+    try {
+      await addFolder(props.parent, draft());
+      saving.set(false);
+      close();
+    } catch (error) {
+      problem.set(messageOf(error));
+    } finally {
+      saving.set(false);
+    }
+  };
+  const title = () => t("新建文件夹", "New Folder");
+  return (
+    <Dialog testID="new-folder" open animation="fade" accessibilityLabel={title()} closeOnEscape onOpenChange={({ open }) => !open && close()} backdropClass="bg-scrim" class="mx-auto mt-32 w-full max-w-[400px] px-4">
+      <EscapeCloses onEscape={close} />
+      <View class="gap-3 rounded-(--radius) border border-border bg-popover p-4">
+        <Text class="text-sm font-medium text-strong">{title()}</Text>
+        <Input testID="folder-name" accessibilityLabel={t("文件夹名称", "Folder name")} class={FIELD} autoFocus value={draft()} onChange={({ value }) => draft.set(value)} onSubmit={() => void submit()} submitBehavior="submit" />
+        <If when={problem()}><Text class="text-xs text-destructive">{problem()}</Text></If>
+        <View class="flex-row justify-end gap-1">
+          <Button label={t("取消", "Cancel")} onPress={close} />
+          <Button testID="create-folder-confirm" label={t("创建", "Create")} variant="primary" onPress={() => void submit()} />
+        </View>
+      </View>
+    </Dialog>
+  );
+}
+
+function FileInfoDialog() {
+  const close = () => {
+    fileInfo.set(null);
+    returnFocusToEditor();
+  };
+  return (
+    <Dialog testID="file-info" open={fileInfo() !== null} animation="fade" accessibilityLabel={t("文件简介", "File Info")} closeOnEscape closeOnBackdropPress onOpenChange={({ open }) => !open && close()} backdropClass="bg-scrim" class="mx-auto mt-32 w-full max-w-[480px] px-4">
+      <If when={fileInfo()}>
+        {(info) => (
+          <View class="gap-3 rounded-(--radius) border border-border bg-popover p-4">
+            <Text class="text-sm font-medium text-strong">{info().name}</Text>
+            <Text class="select-text text-xs text-muted-foreground">{info().path}</Text>
+            <Text class="text-xs text-foreground">{t(`大小：${info().size} 字节`, `Size: ${info().size} bytes`)}</Text>
+            <Text class="text-xs text-foreground">{t(`修改时间：${timeLabel(info().updatedAt)}`, `Modified: ${timeLabel(info().updatedAt)}`)}</Text>
+            <View class="flex-row justify-end"><Button testID="close-file-info" label={t("关闭", "Close")} autoFocus onPress={close} /></View>
+          </View>
+        )}
+      </If>
+    </Dialog>
+  );
+}
+
 export function DocDialogs() {
   return (
     <>
       <RenameDialog />
       <DeleteDialog />
+      <If when={newFolderParent() !== null}>
+        <CreateFolderDialog parent={newFolderParent() ?? ""} />
+      </If>
+      <FileInfoDialog />
     </>
   );
 }

@@ -53,7 +53,7 @@ test("deleting a synced document and making a new one with the same name: the ol
   await app.press("id:toggle-sidebar");
   await app.waitFor("id:documents");
   await app.press("id:doc-more-未命名.md");
-  await app.press("id:doc-delete");
+  await app.chooseMenuItem("删除…");
   await app.press("id:delete-now");
   await app.waitFor("text:已删除「未命名」。");
   await app.press("id:doc-new");
@@ -62,7 +62,7 @@ test("deleting a synced document and making a new one with the same name: the ol
   await app.waitUntil(() => String(disk.library()["未命名.md"]).includes("brand new"), { timeout: 5000 });
 
   await app.press("id:doc-more-未命名.md");
-  await app.press("id:doc-history");
+  await app.chooseMenuItem("版本历史…");
   await app.waitFor("id:history");
   expect(app.shows("id:history-empty")).toBe(true);
   expect(app.shows("text:更旧的一版")).toBe(false);

@@ -1,5 +1,5 @@
 /** 所见即所得编辑：Markdown 读进编辑器会话，改动停手后写回 Markdown 交给 store。编辑页上的各个部件在这里接到一起。 */
-import { cleanup, Clipboard, effect, signal, untracked, View } from "nsh";
+import { cleanup, Clipboard, effect, type JSX, signal, untracked, View } from "nsh";
 import { chain, RichEditor, type RichEditorSession, scrollIntoView, setTextSelection } from "nsh/base";
 import { phrase, t } from "../../i18n";
 import { droppedPaths, PLAIN_PASTE_KEY } from "../../platform";
@@ -93,7 +93,7 @@ function pastePlain(session: RichEditorSession) {
   );
 }
 
-export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string) => boolean }) {
+export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string) => boolean; notices?: () => JSX.Element }) {
   const { session, keys, dump } = props.doc;
   const ui = createUi();
   const revision = signal(session.revision);
@@ -193,6 +193,8 @@ export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string
     toggleSource: source.toggle,
     codeBlock: { chooseLanguage: overlays.chooseLanguage, copy: overlays.copy },
     images: { insert: () => void pickImages(session), transferAll: () => void transferAllImages(session) },
+    find: () => (source.isOn() ? sourceFind.engine : richFind.engine),
+    pastePlain: PLAIN_PASTE_KEY ? () => pastePlain(session) : undefined,
   };
   cleanup(attachImageTarget(() => ctx.session));
   const run = once((c) => runCommand(c, ctx));
@@ -248,14 +250,13 @@ export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string
     const on = ui.focusOn();
     untracked(() => focusMode.sync(on));
   });
-  keys.captureKeys(PLAIN_PASTE_KEY ? [...capturedKeys(), PLAIN_PASTE_KEY] : capturedKeys(), (key) => {
-    if (key === PLAIN_PASTE_KEY) return pastePlain(session);
+  keys.captureKeys(capturedKeys(), (key) => {
     const c = commandForKey(key);
     if (c) run(c);
   });
   keys.capturing = true;
   keys.transformPasted(dropUnsafeImages);
-  bindViewKeys(run);
+  bindViewKeys(run, ctx);
 
   /** 跳转时现取标题位置：`stats` 要停手 300ms 才重算，刚改过时里面的位置是旧的。 */
   const freshHeadings = () => headingStarts(session.getJSON() as Node);
@@ -342,12 +343,8 @@ export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string
         title={stats().title}
         counts={visibleCounts()}
         toggles={{ ui, sourceOn: source.isOn(), onToggleSource: source.toggle }}
-        context={
-          <If when={!source.isOn()}>
-            <TableBar bar={table} session={session} />
-          </If>
-        }
       />
+      {props.notices?.()}
       <FindBar ui={ui} state={findState} engine={() => (source.isOn() ? sourceFind.engine : richFind.engine)} onClose={refocus} />
       <If when={source.notice()}>{(message) => <Notice testID="source-notice" message={phrase(message())} />}</If>
       <WithSidebar outline={outline}>
@@ -388,6 +385,8 @@ export function RichDocument(props: { doc: RichOpened; tooBig: (markdown: string
               <>
                 <BlockHandle handle={handle} />
                 <BlockOverlays overlays={overlays} />
+                {/* 选中文字时格式条浮在选区上方，可能正落在工具条那块：先让给格式条 */}
+                <TableBar bar={table} session={session} at={bar.mode() === "selection" ? null : overlays.table()} />
                 <CaretMarker follow={follow} />
               </>
             }

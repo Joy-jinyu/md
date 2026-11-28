@@ -38,7 +38,7 @@ test("keys that type, move the caret or belong to the system are refused", () =>
 });
 
 test("stored overrides are cleaned: unknown commands, refused keys and defaults are dropped, a swap is kept", () => {
-  expect(sanitize({ "no.such": "Mod-j", "format.bold": "Mod-c", "format.italic": "Mod-i", "block.task": null })).toEqual({});
+  expect(sanitize({ "no.such": "Mod-j", "format.bold": "Mod-c", "format.italic": "Mod-i", "block.toc": null })).toEqual({});
   expect(sanitize({ "format.bold": "Mod-i", "format.italic": "Mod-b" })).toEqual({ "format.bold": "Mod-i", "format.italic": "Mod-b" });
   // 两条抢同一个键：表里靠后的那条退回默认
   expect(sanitize({ "format.bold": "Mod-j", "format.italic": "Mod-j" })).toEqual({ "format.bold": "Mod-j" });
@@ -52,7 +52,7 @@ test("stored overrides are cleaned: unknown commands, refused keys and defaults 
 test("a built-in key is blocked only when nothing else took it over", () => {
   expect(shadowedDefaults({})).toEqual([]);
   expect(shadowedDefaults({ "format.bold": "Mod-Shift-b" })).toEqual(["Mod-b"]);
-  expect(shadowedDefaults({ "format.bold": "Mod-Shift-b", "block.task": "Mod-b" })).toEqual([]);
+  expect(shadowedDefaults({ "format.bold": "Mod-Shift-b", "block.toc": "Mod-b" })).toEqual([]);
   expect(shadowedDefaults({ "block.code": "Mod-Alt-k" })).toEqual(["Mod-Alt-c"]);
   // 表格的键在表格外要落到别的绑定上，不挡
   expect(shadowedDefaults({ "table.rowAfter": "Mod-Alt-j" })).toEqual([]);

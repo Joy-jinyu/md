@@ -2,6 +2,7 @@
 import { t } from "../i18n";
 import { signal, Storage } from "nsh";
 import { cleanFileStem, dirOf } from "../doc/file-name";
+import { createMacLibraryDocument } from "../platform";
 import { markdownTitle } from "../doc/title";
 import { backendTag, documentStore, missedGatewayLibrary, releaseKeys } from "./backend";
 import { renameTracked } from "./document";
@@ -77,11 +78,11 @@ export const openDisplayName = (liveTitle: string) => displayName({ title: liveT
 const fileKey = (dir: string, name: string) => `${dir}${cleanFileStem(name) || DEFAULT_NAME}`.toLowerCase();
 
 /** 和已有的名字重了就加序号（`未命名 2`）：以后存成真实文件时名字就是文件名，不能重。新建的都在最上层。 */
-export function uniqueName(base: string, list: DocMeta[]): string {
-  const taken = new Set(list.filter((d) => dirOf(d.id) === "").map((d) => fileKey("", d.name)));
-  if (!taken.has(fileKey("", base))) return base;
+export function uniqueName(base: string, list: DocMeta[], dir = ""): string {
+  const taken = new Set(list.filter((d) => dirOf(d.id) === dir).map((d) => fileKey(dir, d.name)));
+  if (!taken.has(fileKey(dir, base))) return base;
   let n = 2;
-  while (taken.has(fileKey("", `${base} ${n}`))) n++;
+  while (taken.has(fileKey(dir, `${base} ${n}`))) n++;
   return `${base} ${n}`;
 }
 
@@ -120,8 +121,11 @@ export function noteMeta(meta: DocMeta) {
   setDocs(list.some((d) => d.id === meta.id) ? list.map((d) => (d.id === meta.id ? meta : d)) : [...list, meta]);
 }
 
-export async function createDocument(text: string, name = newDocumentName()): Promise<DocMeta> {
-  const meta = await documentStore.create(uniqueName(name, docs()), text);
+export async function createDocument(text: string, name = newDocumentName(), folder?: string, sourceId?: string): Promise<DocMeta> {
+  const next = uniqueName(name, docs(), folder ? `${folder}/` : "");
+  const meta = folder !== undefined
+    ? await createMacLibraryDocument(next, text, folder, sourceId)
+    : await documentStore.create(next, text);
   await releaseKeys(meta.id).catch((e: unknown) => console.warn("old keys not released", e));
   noteMeta(meta);
   return meta;

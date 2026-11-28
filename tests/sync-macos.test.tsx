@@ -30,7 +30,7 @@ test("macOS sign-in uses the device flow: shows the code, copies it and opens Gi
     },
   });
   await app.waitFor("text:mac doc");
-  await app.press("id:open-settings");
+  await app.keyboard.press("mod+,");
   await app.press("id:settings-tab-sync");
   await app.press("id:sign-in");
   await app.waitFor("text:WDJB-MJHT");
@@ -55,7 +55,7 @@ test("macOS device flow: when the code cannot be copied, the receipt says to typ
     },
   });
   await app.waitFor("text:mac doc");
-  await app.press("id:open-settings");
+  await app.keyboard.press("mod+,");
   await app.press("id:settings-tab-sync");
   await app.press("id:sign-in");
   await app.waitFor("text:CCCC-DDDD");
@@ -77,7 +77,7 @@ test("macOS device flow: a cancel on GitHub shows the reason and offers to sign 
     },
   });
   await app.waitFor("text:mac doc");
-  await app.press("id:open-settings");
+  await app.keyboard.press("mod+,");
   await app.press("id:settings-tab-sync");
   await app.press("id:sign-in");
   await app.waitFor("text:在 GitHub 上取消了授权，没有登录。");
@@ -101,7 +101,7 @@ test("macOS device flow: closing the settings stops asking GitHub for the token"
     },
   });
   await app.waitFor("text:mac doc");
-  await app.press("id:open-settings");
+  await app.keyboard.press("mod+,");
   await app.press("id:settings-tab-sync");
   await app.press("id:sign-in");
   await app.waitFor("text:CCCC-DDDD");
@@ -159,10 +159,10 @@ test("renaming a document onto a name an old record still sits on takes its own 
   await app.waitFor("text:mac doc");
   await app.press("id:toggle-sidebar");
   await app.press("id:doc-more-Alpha.md");
-  await app.press("id:doc-rename");
+  await app.chooseMenuItem("改文库名…");
   await app.clear("id:rename-input");
   await app.type("id:rename-input", "Beta");
-  await app.press("id:rename-confirm");
+  await app.keyboard.press("enter");
   await app.waitUntil(() => Object.keys(disk.library()).includes("Beta.md"));
   await app.waitUntil(() => app.storage()[syncRecordKey("Alpha.md", FILES)] === undefined);
   expect(JSON.parse(app.storage()[syncRecordKey("Beta.md", FILES)]).link.gistId).toBe("g1");

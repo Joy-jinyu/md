@@ -58,9 +58,9 @@ test("a receipt still on screen switches language with the interface", async () 
   const disk = memoryFs({});
   const app = await open("../App.tsx", { platform: "macos", width: 1280, height: 860, modules: disk.modules, storage: { [DOC_KEY]: "# Trip plan\n\nday one\n" } });
   await app.waitFor("text:day one");
-  await app.press("id:file-save-as");
+  await app.keyboard.press("mod+shift+s");
   await app.waitFor("text:Saved to /Users/t/Downloads/Trip plan.md");
-  await app.press("id:open-settings");
+  await app.keyboard.press("mod+,");
   await app.press("id:settings-tab-language");
   await app.press("id:language-zh-CN");
   await app.press("id:settings-done");

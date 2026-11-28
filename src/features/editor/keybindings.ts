@@ -93,7 +93,7 @@ const FUNCTION_KEY = /^F([1-9]|1[0-2])$/;
 const KNOWN_BASES = new Set([...RECORD_BASES.map((b) => NAMED_KEYS[b] ?? b), ...FUNCTION_KEYS.map((f) => f.toUpperCase())]);
 /** 留给系统和基本编辑的组合键。Mod-q / h / m、Ctrl-Mod-f、Mod-Alt-h、F11、Alt-F4 是 nsh 的 keymap 明说或实测绑不上的。 */
 const RESERVED = new Set(
-  ["Mod-q", "Mod-h", "Mod-m", "Mod-w", "Mod-t", "Mod-n", "Ctrl-Mod-f", "Mod-Alt-h", "F11", "Alt-F4", "Mod-c", "Mod-v", "Mod-x", "Mod-z", "Mod-Shift-z", "Mod-y", "Mod-a", "Mod-Shift-v"].map(canonical),
+  ["Mod-q", "Mod-h", "Mod-m", "Mod-w", "Mod-t", "Mod-n", "Ctrl-Mod-f", "Mod-Alt-h", "F11", "Alt-F4", "Mod-c", "Mod-v", "Mod-x", "Mod-z", "Mod-Shift-z", "Mod-y", "Mod-a"].map(canonical),
 );
 /** 源码编辑器自己要用的键：绑给查找、命令面板、源码视图这些在源码里也要用的命令，进了源码视图就不灵了。实测到的几个，不全。 */
 const SOURCE_EDITOR_KEYS = new Set(["Mod-/", "Mod-]", "Mod-[", "Mod-Shift-k", "F3"].map(canonical));

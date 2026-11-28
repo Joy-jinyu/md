@@ -158,6 +158,7 @@ test("searching all documents lists matching lines, and a result opens that docu
   const app = await openLibrary();
   await app.waitFor("text:first doc");
   await showDocuments(app);
+  await app.press("id:sidebar-search");
   await app.type("id:doc-search", "SECOND");
   await app.waitFor("id:hit-0");
   expect(app.shows("text:1 篇文档里找到")).toBe(true);
@@ -171,6 +172,7 @@ test("searching all documents lists matching lines, and a result opens that docu
 test("a search with no match says so", async () => {
   const app = await openLibrary();
   await showDocuments(app);
+  await app.press("id:sidebar-search");
   await app.type("id:doc-search", "zebra");
   await app.waitFor("text:没有找到「zebra」");
 });
@@ -367,6 +369,7 @@ test("a search hit that only exists in the Markdown source opens the source view
   const app = await openLibrary({ ...seedLibrary([{ id: "db", name: "Beta", text: "# Beta\n\nsome **bold needle** here\n", updatedAt: 2 }]) });
   await app.waitFor("text:first doc");
   await showDocuments(app);
+  await app.press("id:sidebar-search");
   await app.type("id:doc-search", "**bold");
   await app.waitFor("id:hit-0");
   await app.press("id:hit-0");
@@ -471,4 +474,33 @@ test("a row's ⋯ shows only while the pointer is on that row or its actions are
   expect(app.accessibility("id:doc-more-db")?.label).toBe("「Beta」的更多操作");
   // 「+」和「⋯」在同一条竖线上
   expect(app.layout("id:doc-more-db")?.x).toBe(app.layout("id:doc-new")?.x);
+});
+
+test("the sidebar header switches between documents and the outline, and its search button opens and closes the search field", async () => {
+  const app = await openLibrary();
+  await app.waitFor("text:first doc");
+  await showDocuments(app);
+  expect(app.accessibility("id:sidebar-switch")?.label).toBe("切到大纲");
+  expect(app.shows("id:doc-search")).toBe(false);
+  await app.press("id:sidebar-switch");
+  await app.waitUntil(() => app.accessibility("id:sidebar-switch")?.label === "切到文档");
+  expect(app.shows("id:documents")).toBe(false);
+  await app.press("id:sidebar-search");
+  await app.waitFor("id:documents");
+  await app.wait(50);
+  await app.keyboard.press("z");
+  expect(app.value("id:doc-search")).toBe("z");
+  await app.type("id:doc-search", "ebra");
+  await app.waitFor("text:没有找到「zebra」");
+  await app.press("id:sidebar-switch");
+  await app.waitUntil(() => !app.shows("id:doc-search"));
+  await app.press("id:sidebar-switch");
+  expect(app.shows("id:doc-search")).toBe(false);
+  expect(app.shows("id:doc-da")).toBe(true);
+  await app.press("id:sidebar-search");
+  await app.type("id:doc-search", "zebra");
+  await app.press("id:sidebar-search");
+  await app.waitUntil(() => !app.shows("id:doc-search"));
+  expect(app.shows("id:doc-da")).toBe(true);
+  expect(app.accessibility("id:sidebar-switch")?.label).toBe("切到大纲");
 });

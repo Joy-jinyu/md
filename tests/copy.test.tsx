@@ -25,7 +25,7 @@ test("macOS sign-in: the user code has its own copy button", async () => {
     },
   });
   await app.waitFor("text:mac doc");
-  await app.press("id:open-settings");
+  await app.keyboard.press("mod+,");
   await app.press("id:settings-tab-sync");
   await app.press("id:sign-in");
   await app.waitFor("text:WDJB-MJHT");
@@ -42,7 +42,7 @@ test("macOS: the edit keys in a dialog's input are left to the system, not taken
   const disk = memoryFs({ "Notes.md": "# Notes\n\nmac doc\n" });
   const app = await open("../App.tsx", { platform: "macos", width: 1280, height: 860, modules: disk.modules, clipboard: "原来的" });
   await app.waitFor("text:mac doc");
-  await app.press("id:open-settings");
+  await app.keyboard.press("mod+,");
   await app.type("id:shortcut-search", "粗体");
   for (const keys of EDIT_KEYS) await app.keyboard.press(keys);
   expect(app.shows("id:settings")).toBe(true);

@@ -54,7 +54,7 @@ test("save as on the desktop writes the document to Downloads under its title, w
   const disk = memoryFs({ "/Users/t/Downloads/Trip plan.md": "older" });
   const app = await openApp("# Trip plan\n\nday one\n", { platform: "macos", modules: disk.modules });
   await app.waitFor("text:day one");
-  await app.press("id:file-save-as");
+  await app.keyboard.press("mod+shift+s");
   await app.waitFor("id:receipt");
   expect(disk.files.get("/Users/t/Downloads/Trip plan.md")).toBe("older");
   expect(disk.files.get("/Users/t/Downloads/Trip plan 2.md")).toBe("# Trip plan\n\nday one\n");

@@ -39,7 +39,7 @@ export function syncLabel(): { text: string; short: string; spoken: string; aler
   return { text, short: "", spoken: text, alert: false };
 }
 
-export function SyncButton(props: { compact: boolean }) {
+export function SyncButton(props: { compact: boolean; dense?: boolean }) {
   const shown = () => (props.compact ? syncLabel().short : syncLabel().text);
   return (
     <If when={syncConfigured(SIGN_IN_FLOW === "web")}>
@@ -48,7 +48,8 @@ export function SyncButton(props: { compact: boolean }) {
         onPress={() => syncOpen.set(true)}
         accessibilityLabel={t(`同步：${syncLabel().spoken}，打开同步面板`, `Sync: ${syncLabel().spoken}. Open the sync panel.`)}
         tooltip={tip(t("同步到 GitHub", "Sync to GitHub"))}
-        class="min-h-7 shrink-0 flex-row items-center gap-1 rounded-(--radius) px-2 transition duration-180 ease-settle hover:bg-hover active:scale-[0.97] active:bg-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none motion-reduce:active:scale-100"
+        classList={{ "min-h-6": !!props.dense, "min-h-7": !props.dense }}
+        class="shrink-0 flex-row items-center gap-1 rounded-(--radius) px-2 transition duration-180 ease-settle hover:bg-hover active:scale-[0.97] active:bg-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none motion-reduce:active:scale-100"
       >
         <If when={props.compact}>
           <Icon name="refresh" size={14} color="muted-foreground" />
