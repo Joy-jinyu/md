@@ -2,10 +2,11 @@
  * 编辑页：读出文档库里开着的那一篇，按大小和能否读进编辑器选富文本或源码方式；换一篇就整个重建。
  * 失焦、切后台、退出时立即保存；窗口重新获得焦点时和存储比对版本（另一个标签页可能改过）。
  */
+import { canStashDocumentWindows, flushDocumentWindows } from "./DocumentWindow";
 import { type Phrase, phrase, t } from "../../i18n";
-import { effect, lifecycle, signal, untracked, View } from "nsh";
+import { computed, effect, type JSX, lifecycle, type Signal, signal, untracked, View } from "nsh";
 import { messageOf } from "../../doc/message";
-import { droppedPaths, fileLibrary, keepWindowOnClose, onOpenFiles, PROBE_GATEWAY, saveBeforeLeaving } from "../../platform";
+import { configureEditorTitleBar, droppedPaths, fileLibrary, IS_MACOS, keepWindowOnClose, onOpenFiles, PROBE_GATEWAY, saveBeforeLeaving } from "../../platform";
 import { chooseBackend, elsewhereWords } from "../../store/backend";
 import { checkExternal, flush, openDocument, saveState, stashUnsaved } from "../../store/document";
 import { currentDocId, markOpened, refreshLibrary, startLibrary } from "../../store/library";
@@ -110,12 +111,19 @@ function watchLifecycle(reload: () => void) {
     });
   });
   const saved = () => flush().then((r) => r.ok);
-  saveBeforeLeaving(stashUnsaved, saved);
+  saveBeforeLeaving(
+    () => stashUnsaved() && canStashDocumentWindows(),
+    async () => {
+      const [mainSaved, windowsSaved] = await Promise.all([saved(), flushDocumentWindows()]);
+      return mainSaved && windowsSaved;
+    },
+  );
   keepWindowOnClose(stashUnsaved, saved, recheck);
 }
 
 export function EditorScreen() {
   const opened = signal<Opened>({ kind: "loading" });
+  configureEditorTitleBar(computed(() => opened().kind === "rich" || opened().kind === "source"));
   /** 读出一篇、换上编辑器。读不到（已经不在了）返回 false，编辑页不变。 */
   const show = async (id: string, find?: string): Promise<boolean> => {
     let text: string | null;
@@ -199,6 +207,12 @@ export function EditorScreen() {
   watchLifecycle(() => {
     void reopen().then(() => say(() => t(`${elsewhereWords().changed}，已载入最新的内容。`, `${elsewhereWords().changed}. The latest version was loaded.`), "info"));
   });
+  const notices = () => (
+    <>
+      <StorageNotice />
+      <ConflictBar onTheirs={() => void reopen()} />
+    </>
+  );
   return (
     <View
       testID={opened().kind === "loading" ? undefined : "pairdown-ready"}
@@ -208,12 +222,9 @@ export function EditorScreen() {
         dropImageFiles(e.files);
       }}
     >
-      <StorageNotice />
-      <If when={settingsProblem()}>{(message) => <Notice testID="settings-problem" message={phrase(message())} onDismiss={() => settingsProblem.set("")} />}</If>
-      <If when={receipt()}>{(m) => <Notice testID="receipt" message={phrase(m().text)} tone={m().tone} copyable={m().tone === "warn"} onDismiss={m().tone === "warn" ? dismissReceipt : undefined} />}</If>
-      <ConflictBar onTheirs={() => void reopen()} />
+      <If when={!IS_MACOS}>{notices()}</If>
       <FileActions />
-      {screen(opened())}
+      {screen(opened(), IS_MACOS ? notices : undefined)}
       <SettingsScreen onApply={(next) => void applyShortcuts(next)} />
       <QuickOpen />
       <HistoryDialog />
@@ -222,19 +233,48 @@ export function EditorScreen() {
       <ImageUploadConfirm />
       <SyncHost reload={reopen} />
       <MermaidRenderer />
+      <Receipts settingsProblem={settingsProblem} />
     </View>
   );
 }
 
-function screen(current: Opened) {
+/** 一次操作的结果（回执、「快捷键没能存」）浮在窗口底部正中，不占一行、不推动正文（DESIGN.md「回执」）。 */
+function Receipts(props: { settingsProblem: Signal<Phrase> }) {
+  const card = "w-full max-w-[480px] overflow-hidden rounded-(--radius) border border-border shadow-md";
+  return (
+    <View style={{ pointerEvents: "box-none" }} class="absolute inset-x-4 bottom-6 items-center gap-2">
+      <If when={props.settingsProblem()}>
+        {(message) => (
+          <View class={card}>
+            <Notice testID="settings-problem" message={phrase(message())} onDismiss={() => props.settingsProblem.set("")} />
+          </View>
+        )}
+      </If>
+      <If when={receipt()}>
+        {(m) => (
+          <View class={card}>
+            <Notice testID="receipt" message={phrase(m().text)} tone={m().tone} copyable={m().tone === "warn"} onDismiss={m().tone === "warn" ? dismissReceipt : undefined} />
+          </View>
+        )}
+      </If>
+    </View>
+  );
+}
+
+function screen(current: Opened, notices?: () => JSX.Element) {
   switch (current.kind) {
     case "loading":
-      return null;
+      return notices?.() ?? null;
     case "rich":
-      return <RichDocument doc={current.doc} tooBig={tooBigForRich} />;
+      return <RichDocument doc={current.doc} tooBig={tooBigForRich} notices={notices} />;
     case "source":
-      return <SourceDocument markdown={current.markdown} notice={current.notice} />;
+      return <SourceDocument markdown={current.markdown} notice={current.notice} notices={notices} />;
     case "failed":
-      return <Notice message={current.message()} />;
+      return (
+        <>
+          {notices?.()}
+          <Notice message={current.message()} />
+        </>
+      );
   }
 }

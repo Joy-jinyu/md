@@ -3,12 +3,13 @@
  * `show(id, find)` 由编辑页给：读出那一篇、重建编辑器；读不到（已经不在了）返回 false。
  */
 import { type Phrase, t } from "../../i18n";
+import { dirOf } from "../../doc/file-name";
 import { messageOf } from "../../doc/message";
 import { locateOpenedFile } from "../../platform";
 import { storageKind } from "../../store/backend";
 import { closeDocument, discardDocument, flush, holdDocument, latestDocument, replaceDocument, type SaveResult, STALE } from "../../store/document";
 import { addSnapshot } from "../../store/history";
-import { allDocs, createDocument, currentDocId, displayName, mostRecent, openDocName, refreshLibrary, removeDocument } from "../../store/library";
+import { allDocs, createDocument, currentDocId, displayName, mostRecent, openDocName, readDocument, refreshLibrary, removeDocument } from "../../store/library";
 import { problemText } from "./external";
 import { clearWarning, say } from "./receipt";
 import type { LibraryRequest } from "./requests";
@@ -69,12 +70,12 @@ export function createLibraryActions(show: Show) {
   };
 
   /** 新建（`text` 为空）或导入：先关当前这篇，再建；建不成就回到当前这篇。`note` 换掉导入成功后的那句回执。 */
-  const create = async (text: string, name?: string, note?: Phrase) => {
+  const create = async (text: string, name?: string, note?: Phrase, folder?: string) => {
     clearWarning();
     const from = currentDocId();
     if (!(await leave(() => (name ? t("打开文件", "open the file") : t("新建", "create a document"))))) return;
     try {
-      const meta = await createDocument(text, name);
+      const meta = await createDocument(text, name, folder);
       await go(meta.id, from);
       if (name) say(note ?? (() => t(`已打开「${name}」，存成了文档库里的一篇新文档。`, `Opened “${name}” as a new document in the library.`)), "info");
     } catch (e) {
@@ -152,6 +153,20 @@ export function createLibraryActions(show: Show) {
     say(() => t(`已把这里的内容存成新文档「${displayName(meta) || meta.name}」。`, `Saved your content as a new document: “${displayName(meta) || meta.name}”.`), "info");
   };
 
+  const duplicate = async (id: string) => {
+    const source = allDocs().find((doc) => doc.id === id);
+    if (!source) return;
+    if (id === currentDocId() && !(await flush()).ok) {
+      say(() => t("保存当前修改后才能复制这篇文档。", "Save your edits before duplicating this document."), "warn");
+      return;
+    }
+    const read = await readDocument(id);
+    if (read === null) throw new Error(t("文档已不存在。", "The document no longer exists."));
+    const base = t(`${source.name} 副本`, `${source.name} copy`);
+    const copy = await createDocument(read.text, base, dirOf(id).slice(0, -1), id);
+    say(() => t(`已复制为「${copy.name}」。`, `Duplicated as “${copy.name}”.`), "info");
+  };
+
   const abandon = async () => {
     discardDocument();
     await openFallback(show);
@@ -166,7 +181,9 @@ export function createLibraryActions(show: Show) {
         case "history":
           return history(request.id);
         case "create":
-          return create("");
+          return create("", undefined, undefined, request.folder);
+        case "duplicate":
+          return duplicate(request.id);
         case "import":
           return create(request.text, request.name);
         case "openPath":

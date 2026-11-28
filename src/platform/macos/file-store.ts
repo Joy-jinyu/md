@@ -6,6 +6,8 @@
  * 要 nsh.json 的 `capabilities.fs` 给这个文件夹读写、`capabilities.homeDir` 给出用户目录。
  */
 import { t } from "../../i18n";
+import { DOC_EXT } from "../../doc/doc-ext";
+import { headOf } from "../../doc/excerpt";
 import { cleanFileStem, dirOf, stemOf as stemWith } from "../../doc/file-name";
 import { ASSET_DIR } from "../../../gateway/src/protocol";
 import { type DocMeta, type DocProblem, type DocumentStore, NameTaken, type ReadResult, type WriteResult } from "../../store/document-store";
@@ -32,16 +34,32 @@ export async function libraryRoot(): Promise<string> {
 
 const codeOf = (e: unknown) => (typeof e === "object" && e !== null ? (e as { code?: unknown }).code : undefined);
 
-/** 文库认的扩展名：和 nsh.json 的 fileTypes 一致，「打开方式」交来的 .markdown 也能原地编辑。 */
-const DOC_EXT = /\.(md|markdown)$/i;
 /** 写入时的临时文件名（点开头，列表里看不见）。 */
 const TEMP_FILE = /^\.pairdown-[0-9a-f-]+\.tmp$/;
 
 /** 文库里一篇的 id 合不合规：相对路径、`/` 分隔、不含 `..` 和空段、不碰隐藏文件、以 .md / .markdown 结尾。不合规抛错。 */
 export function checkId(id: string): void {
-  const parts = id.split("/");
-  const bad = id === "" || id.includes("\\") || id.includes("\u0000") || !DOC_EXT.test(id) || parts.some((p) => p === "" || p === "." || p === ".." || p.startsWith("."));
+  const bad = !validLibraryPath(id) || !DOC_EXT.test(id);
   if (bad) throw new Error(t(`文档路径不对：${id}`, `Invalid document path: ${id}`));
+}
+
+/** 文库内路径校验在文件、文件夹和系统菜单之间共用。 */
+function validLibraryPath(path: string): boolean {
+  return !path.includes("\\") && !path.includes("\u0000") && path.split("/").every((part) => part !== "" && !part.startsWith("."));
+}
+
+function checkFolder(path: string) {
+  if (path === "") return;
+  if (!validLibraryPath(path) || path.split("/").length > MAX_DEPTH || path.split("/").includes(ASSET_DIR)) {
+    throw new Error(t("文件夹路径无效", "Invalid library folder path"));
+  }
+}
+
+export async function macLibraryPath(id: string, folder = false): Promise<string> {
+  if (folder) checkFolder(id);
+  else checkId(id);
+  const root = await libraryRoot();
+  return id ? `${root}/${id}` : root;
 }
 
 const baseOf = (id: string) => id.slice(id.lastIndexOf("/") + 1);
@@ -74,14 +92,18 @@ const isDir = (mode: number) => (mode & S_IFMT) === 0o040000;
 const isFile = (mode: number) => (mode & S_IFMT) === 0o100000;
 
 /** `sweep`：顺手删掉上次写到一半留下的临时文件（应用启动后第一次列表时）。 */
-async function walk(fs: Fs, root: string, rel: string, depth: number, out: string[], sweep: boolean) {
+async function walk(fs: Fs, root: string, rel: string, depth: number, out: string[], sweep: boolean, folders?: string[]) {
   for (const name of await fs.readdir(rel ? `${root}/${rel}` : root)) {
     const path = rel ? `${rel}/${name}` : name;
     if (sweep && TEMP_FILE.test(name)) await fs.unlink(`${root}/${path}`).catch((e: unknown) => console.warn("old temp file not removed", path, e));
     if (name.startsWith(".")) continue;
     try {
       const { mode } = await fs.stat(`${root}/${path}`);
-      if (isDir(mode) && depth < MAX_DEPTH) await walk(fs, root, path, depth + 1, out, sweep);
+      if (isDir(mode) && depth < MAX_DEPTH) {
+        if (folders && name === ASSET_DIR) continue;
+        folders?.push(path);
+        await walk(fs, root, path, depth + 1, out, sweep, folders);
+      }
       else if (isFile(mode) && DOC_EXT.test(name)) out.push(path);
     } catch (e) {
       // 链接指到文库外、读不了的子文件夹：跳过它，不挡住整个列表
@@ -90,15 +112,17 @@ async function walk(fs: Fs, root: string, rel: string, depth: number, out: strin
   }
 }
 
-/** 每个文件上次判出的编码问题，按改动时间和大小认：没变就不再整篇读一遍。 */
-const encodingSeen = new Map<string, { mtimeMs: number; size: number; problem?: DocProblem }>();
+/** 每个文件上次读出的结果（编码问题、开头一段），按改动时间和大小认：没变就不再整篇读一遍。 */
+const inspected = new Map<string, { mtimeMs: number; size: number; problem?: DocProblem; head?: string }>();
 
-async function encodingProblem(fs: Fs, path: string, mtimeMs: number, size: number): Promise<DocProblem | undefined> {
-  const seen = encodingSeen.get(path);
-  if (seen && seen.mtimeMs === mtimeMs && seen.size === size) return seen.problem;
-  const problem = decode(await fs.readFile(path)) === null ? ("not-utf8" as const) : undefined;
-  encodingSeen.set(path, problem ? { mtimeMs, size, problem } : { mtimeMs, size });
-  return problem;
+/** nsh 的 fs 没有按长度读，只能整篇读：顺便判 UTF-8、取开头给列表摘要。 */
+async function inspect(fs: Fs, path: string, mtimeMs: number, size: number): Promise<{ problem?: DocProblem; head?: string }> {
+  const seen = inspected.get(path);
+  if (seen && seen.mtimeMs === mtimeMs && seen.size === size) return seen;
+  const text = decode(await fs.readFile(path));
+  const found = text === null ? { problem: "not-utf8" as const } : { head: headOf(text) };
+  inspected.set(path, { mtimeMs, size, ...found });
+  return found;
 }
 
 /** 列表里的一项：太大的、不是 UTF-8 的标上 problem（照样列出来，不能打开）。读不了的返回 null。 */
@@ -106,7 +130,9 @@ async function describe(fs: Fs, root: string, id: string): Promise<DocMeta | nul
   try {
     const stat = await fs.stat(`${root}/${id}`);
     if (stat.size > MAX_FILE_BYTES) return metaOf(id, stat.size, stat.mtimeMs, "", "too-large");
-    return metaOf(id, stat.size, stat.mtimeMs, "", await encodingProblem(fs, `${root}/${id}`, stat.mtimeMs, stat.size));
+    const { problem, head } = await inspect(fs, `${root}/${id}`, stat.mtimeMs, stat.size);
+    const meta = metaOf(id, stat.size, stat.mtimeMs, "", problem);
+    return head === undefined ? meta : { ...meta, head };
   } catch (e) {
     console.warn("library file skipped", id, e);
     return null;
@@ -148,7 +174,7 @@ async function writeAtomic(fs: Fs, path: string, data: string | Uint8Array, befo
 
 async function written(fs: Fs, root: string, id: string, text: string): Promise<DocMeta> {
   const stat = await fs.stat(`${root}/${id}`);
-  return metaOf(id, stat.size, stat.mtimeMs, hashOf(text));
+  return { ...metaOf(id, stat.size, stat.mtimeMs, hashOf(text)), head: headOf(text) };
 }
 
 /**
@@ -174,13 +200,62 @@ async function listLibrary(fs: Fs, root: string): Promise<DocMeta[]> {
   return (await Promise.all(ids.map((id) => describe(fs, root, id)))).filter((m): m is DocMeta => m !== null);
 }
 
+async function ready() {
+  const [fs, root] = await Promise.all([fsModule(), libraryRoot()]);
+  await fs.mkdir(root, { recursive: true });
+  return { fs, root };
+}
+
+const fileName = (dir: string, name: string, ext = ".md") => `${dir}${cleanFileStem(name) || "未命名"}${ext}`;
+
+export async function macLibraryFolders(): Promise<string[]> {
+  const { fs, root } = await ready();
+  const folders: string[] = [];
+  await walk(fs, root, "", 0, [], false, folders);
+  return folders;
+}
+
+export async function createMacLibraryFolder(parent: string, name: string): Promise<string> {
+  const clean = cleanFileStem(name);
+  if (!clean || clean !== name.trim() || clean === ASSET_DIR) throw new Error(t("请输入合法的文件夹名称", "Enter a valid folder name"));
+  const folder = parent ? `${parent}/${clean}` : clean;
+  const path = await macLibraryPath(folder, true);
+  const { fs } = await ready();
+  if (await fs.exists(path)) throw new Error(t("这个文件夹已经存在", "This folder already exists"));
+  await fs.mkdir(path);
+  return folder;
+}
+
+export async function macLibraryInfo(id: string) {
+  const path = await macLibraryPath(id);
+  const fs = await fsModule();
+  const info = await fs.stat(path);
+  return { path, size: info.size, updatedAt: info.mtimeMs };
+}
+
+const pendingWrites = new Map<string, Promise<unknown>>();
+function serializeWrite<T>(path: string, action: () => Promise<T>): Promise<T> {
+  const next = (pendingWrites.get(path) ?? Promise.resolve()).catch(() => undefined).then(action);
+  pendingWrites.set(path, next);
+  return next.finally(() => {
+    if (pendingWrites.get(path) === next) pendingWrites.delete(path);
+  });
+}
+
+export async function createMacLibraryDocument(name: string, text: string, folder = "", sourceId?: string): Promise<DocMeta> {
+  checkFolder(folder);
+  if (sourceId) checkId(sourceId);
+  const { fs, root } = await ready();
+  const id = fileName(folder ? `${folder}/` : "", name, sourceId ? extOf(sourceId) : ".md");
+  return serializeWrite(`${root}/${id}`, async () => {
+    const free = () => freeTarget(fs, root, id);
+    await free();
+    await writeAtomic(fs, `${root}/${id}`, text, free);
+    return written(fs, root, id, text);
+  });
+}
+
 export function createFileStore(): DocumentStore {
-  const ready = async () => {
-    const [fs, root] = await Promise.all([fsModule(), libraryRoot()]);
-    await fs.mkdir(root, { recursive: true });
-    return { fs, root };
-  };
-  const fileName = (dir: string, name: string, ext = ".md") => `${dir}${cleanFileStem(name) || "未命名"}${ext}`;
   return {
     async list() {
       const { fs, root } = await ready();
@@ -193,21 +268,16 @@ export function createFileStore(): DocumentStore {
     },
     async write(id, text, baseVersion): Promise<WriteResult> {
       const { fs, root } = await ready();
-      const now = await readText(fs, root, id);
-      if (now === null) return { ok: false, version: "" };
-      const version = hashOf(now);
-      if (version !== baseVersion) return { ok: false, version };
-      await writeAtomic(fs, `${root}/${id}`, text);
-      return { ok: true, meta: await written(fs, root, id, text) };
+      return serializeWrite(`${root}/${id}`, async () => {
+        const now = await readText(fs, root, id);
+        if (now === null) return { ok: false, version: "" };
+        const version = hashOf(now);
+        if (version !== baseVersion) return { ok: false, version };
+        await writeAtomic(fs, `${root}/${id}`, text);
+        return { ok: true, meta: await written(fs, root, id, text) };
+      });
     },
-    async create(name, text) {
-      const { fs, root } = await ready();
-      const id = fileName("", name);
-      const free = () => freeTarget(fs, root, id);
-      await free();
-      await writeAtomic(fs, `${root}/${id}`, text, free);
-      return written(fs, root, id, text);
-    },
+    create: createMacLibraryDocument,
     async rename(id, name) {
       checkId(id);
       const { fs, root } = await ready();
@@ -218,7 +288,8 @@ export function createFileStore(): DocumentStore {
         await fs.rename(`${root}/${id}`, `${root}/${to}`);
       }
       const stat = await fs.stat(`${root}/${to}`);
-      return metaOf(to, stat.size, stat.mtimeMs, "");
+      const { head } = inspected.get(`${root}/${id}`) ?? {};
+      return head === undefined ? metaOf(to, stat.size, stat.mtimeMs, "") : { ...metaOf(to, stat.size, stat.mtimeMs, ""), head };
     },
     async remove(id) {
       checkId(id);

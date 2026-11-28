@@ -4,12 +4,13 @@
  * 没配时写空字符串：页面照常能用，只是不出同步入口、网关面板不给安装命令。
  */
 import { writeFileSync } from "node:fs";
-import { clientId, site } from "./deploy-config.mjs";
+import { clientId, repo, site } from "./deploy-config.mjs";
 
 const text = [
   "// 由 scripts/app-config.mjs 按部署配置生成，不提交，不要手改。",
   `export const SITE_ORIGIN: string = ${JSON.stringify(site())};`,
   `export const GITHUB_CLIENT_ID: string = ${JSON.stringify(clientId())};`,
+  `export const REPO: string = ${JSON.stringify(repo())};`,
   "",
 ].join("\n");
 writeFileSync(new URL("../src/app-config.gen.ts", import.meta.url), text);

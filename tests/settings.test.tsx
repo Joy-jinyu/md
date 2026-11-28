@@ -264,7 +264,7 @@ test("the macOS app has no gateway category, and its image host category says on
   const disk = memoryFs({ "Alpha.md": "hello\n" });
   const app = await open("../App.tsx", { platform: "macos", width: 1280, height: 860, modules: disk.modules });
   await app.waitFor("text:hello");
-  await app.press("id:open-settings");
+  await app.keyboard.press("mod+,");
   await app.waitFor("id:settings");
   expect(app.shows("id:settings-tab-gateway")).toBe(false);
   await app.press("id:settings-tab-image-host");
@@ -293,7 +293,7 @@ test("the shortcut keys line up on their right edge, and the clear buttons in on
     const box = app.layout(sel);
     return box ? box.x + box.width : undefined;
   };
-  expect(right("id:shortcut-edit-block.task")).toBe(right("id:shortcut-edit-block.bullet"));
-  expect(app.shows("id:shortcut-clear-block.task")).toBe(false);
+  expect(right("id:shortcut-edit-block.toc")).toBe(right("id:shortcut-edit-block.bullet"));
+  expect(app.shows("id:shortcut-clear-block.toc")).toBe(false);
   expect(x("id:shortcut-clear-block.bullet")).toBe(x("id:shortcut-clear-block.quote"));
 });

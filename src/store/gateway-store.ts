@@ -19,6 +19,7 @@ import {
   type RequestMap,
   type ServerMessage,
 } from "../../gateway/src/protocol";
+import { headOf } from "../doc/excerpt";
 import { cleanFileStem, dirOf, stemOf as stemWith } from "../doc/file-name";
 import { type DocMeta, type DocumentStore, type ImageHostApi, ImageHostUnsupported, NameTaken, type StoreChange, type WriteResult } from "./document-store";
 import { assetPathFromSrc, base64ToBytes, bytesToBase64, checkImage } from "./image-file";
@@ -116,7 +117,7 @@ const isHostView = (h: unknown) =>
 /** 每种请求的成功结果要长什么样；不合的当成看不懂的回复。没列的只要求是个对象。 */
 const RESULT_SHAPE: Partial<Record<Op, (r: Obj) => boolean>> = {
   hello: (r) => r.version === PROTOCOL_VERSION && typeof r.library === "string" && r.library !== "",
-  list: (r) => Array.isArray(r.docs) && r.docs.every((d) => isObj(d) && typeof d.path === "string" && typeof d.size === "number" && typeof d.mtimeMs === "number"),
+  list: (r) => Array.isArray(r.docs) && r.docs.every((d) => isObj(d) && typeof d.path === "string" && typeof d.size === "number" && typeof d.mtimeMs === "number" && (d.head === undefined || typeof d.head === "string")),
   read: (r) => typeof r.text === "string" && isVersion(r),
   write: isVersion,
   create: isVersion,
@@ -321,7 +322,8 @@ const stemOf = (path: string) => stemWith(path, DOC_EXT);
 
 function toMeta(m: GatewayMeta): DocMeta {
   const meta: DocMeta = { id: m.path, name: stemOf(m.path), title: "", updatedAt: m.mtimeMs, version: "", size: m.size };
-  return m.problem ? { ...meta, problem: m.problem } : meta;
+  const withHead = typeof m.head === "string" ? { ...meta, head: m.head } : meta;
+  return m.problem ? { ...withHead, problem: m.problem } : withHead;
 }
 
 type Action = "read" | "write" | "other";
@@ -527,7 +529,7 @@ const rethrow = (e: unknown, path: string, action: Action) => {
 
 type Known = Map<string, string | null>;
 
-const fresh = (path: string, text: string, version: string): DocMeta => ({ id: path, name: stemOf(path), title: "", updatedAt: Date.now(), version, size: text.length });
+const fresh = (path: string, text: string, version: string): DocMeta => ({ id: path, name: stemOf(path), title: "", updatedAt: Date.now(), version, size: text.length, head: headOf(text) });
 
 async function readDoc(call: Call, known: Known, id: string) {
   try {

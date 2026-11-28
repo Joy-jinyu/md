@@ -83,8 +83,18 @@ export type ErrorCode =
 /** 打不开编辑的文档：不是 UTF-8，或超过 MAX_DOC_BYTES。照样列出来，但页面不能打开编辑（read 回同名错误码）。 */
 export type DocProblem = "not-utf8" | "too-large";
 
+/** list 里每篇文档带回的开头字节数上限（head）。 */
+export const HEAD_BYTES = 512;
+
 /** 文档列表里的一项。path 是文库内的相对路径，用 / 分隔，也是文档的 id。能正常编辑的文档没有 problem 字段。 */
-export type DocMeta = { path: string; size: number; mtimeMs: number; problem?: DocProblem };
+export type DocMeta = {
+  path: string;
+  size: number;
+  mtimeMs: number;
+  problem?: DocProblem;
+  /** 文件开头最多 HEAD_BYTES 字节的原文，按字符边界截断，去掉开头的 BOM；有 problem 时不发；旧网关不发。 */
+  head?: string;
+};
 
 /**
  * 图床有两种，配置都存在网关的 config.json 里，上传由网关发。

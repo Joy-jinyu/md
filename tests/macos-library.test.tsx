@@ -149,7 +149,7 @@ test("quitting while the file changed elsewhere does not quit and shows the conf
   await next.waitFor("text:上次关闭前有一段修改没存上，而这篇后来在别处改过：那段修改存进了这篇的版本历史（「⋯」→「版本历史」）。");
   await showDocuments(next);
   await next.press("id:doc-more-Alpha.md");
-  await next.press("id:doc-history");
+  await next.chooseMenuItem("版本历史…");
   await next.waitFor("id:history-preview >> text:# Alpha\n\nfirst doc mine\n");
 });
 
@@ -177,17 +177,18 @@ test("a file deleted by another app while open offers to keep the text as a new 
   await app.waitFor("text:已把这里的内容存成新文档「Alpha」。");
 });
 
-test("the top bar names a document without a heading by its file name, as the list does", async () => {
+test("the library names a document without a heading by its file name", async () => {
   const disk = memoryFs({ "smoke-a.md": "just words, no heading\n" });
   const app = await openMac(disk);
   await app.waitFor("text:just words, no heading");
-  expect(app.shows("text:smoke-a")).toBe(true);
-  expect(app.shows("text:未命名")).toBe(false);
-  await app.press("text:just words, no heading");
+  await app.press("id:toggle-sidebar");
+  await app.waitFor("id:documents >> text:smoke-a.md");
+  expect(app.shows("id:documents >> text:未命名")).toBe(false);
+  await app.press("id:editor >> text:just words, no heading");
   await app.keyboard.press("mod+arrowup");
   await app.type("label:正文", "# Heading now\n");
   await app.waitFor("text:已保存", { timeout: 3000 });
-  expect(app.texts().filter((t) => t === "Heading now").length).toBeGreaterThan(1);
+  expect(app.shows("id:editor >> text:Heading now")).toBe(true);
 });
 
 test("an error receipt stays with a close button until closed, and picking another document clears it", async () => {
@@ -195,8 +196,12 @@ test("an error receipt stays with a close button until closed, and picking anoth
   const app = await openMac(disk, { [LAST_OPENED_KEY]: "Alpha.md" });
   await app.waitFor("text:first doc");
   await showDocuments(app);
+  const docTop = app.layout("text:first doc")?.y;
   await app.press("id:doc-gbk.md");
   await app.waitFor("text:「gbk」不是 UTF-8 编码的文本，打不开。");
+  // 回执浮在窗口底部，不占一行、不把正文往下推
+  expect(app.layout("text:first doc")?.y).toBe(docTop);
+  expect((app.layout("id:receipt")?.y ?? 0) > MAC.height / 2).toBe(true);
   await app.press("label:关掉这条提示");
   await app.waitUntil(() => !app.shows("id:receipt"), { timeout: 3000 });
   await app.press("id:doc-gbk.md");
@@ -210,12 +215,20 @@ test("renaming the open document renames its file with a clean name, and later e
   const disk = memoryFs({ "Alpha.md": ALPHA });
   const app = await openMac(disk);
   await showDocuments(app);
-  await app.press("id:doc-more-Alpha.md");
-  await app.press("id:doc-rename");
-  await app.waitFor("id:rename");
-  await app.type("id:rename-input", " v2:");
-  await app.press("id:rename-confirm");
-  await app.waitFor("id:documents >> text:Alpha v2");
+  const row = "id:doc-Alpha.md";
+  const before = app.layout(row);
+  await app.rightClick(row);
+  expect(app.menu()?.map((item) => item.label)).toEqual([
+    "打开", "在新窗口打开", "新建文件", "新建文件夹…", "搜索", "文章（列表视图）", "文件树（树状视图）",
+    "制作副本", "改文库名…", "版本历史…", "显示简介…", "删除…", "复制文件路径", "在访达中显示",
+  ]);
+  expect(app.layout(row)).toEqual(before);
+  await app.chooseMenuItem("改文库名…");
+  await app.waitFor("id:rename-input");
+  await app.clear("id:rename-input");
+  await app.type("id:rename-input", "Alpha v2:");
+  await app.keyboard.press("enter");
+  await app.waitFor("id:documents >> text:Alpha v2.md");
   expect(Object.keys(disk.library())).toEqual(["Alpha v2.md"]);
   await app.press("text:first doc");
   await app.keyboard.press("end");
@@ -278,22 +291,24 @@ test(".markdown files are documents too and keep their extension when renamed; o
   const app = await openMac(disk);
   await showDocuments(app);
   await app.press("id:doc-more-notes.markdown");
-  await app.press("id:doc-rename");
-  await app.type("id:rename-input", " 2");
-  await app.press("id:rename-confirm");
-  await app.waitFor("id:documents >> text:notes 2");
+  await app.chooseMenuItem("改文库名…");
+  await app.waitFor("id:rename-input");
+  await app.clear("id:rename-input");
+  await app.type("id:rename-input", "notes 2");
+  await app.keyboard.press("enter");
+  await app.waitFor("id:documents >> text:notes 2.markdown");
   expect(disk.library()["notes 2.markdown"]).toBe("# Notes\n\nlong extension\n");
   await app.press("id:doc-more-Alpha.md");
-  await app.press("id:doc-rename");
-  await app.waitFor("id:rename");
+  await app.chooseMenuItem("改文库名…");
+  await app.waitFor("id:rename-input");
   await app.clear("id:rename-input");
   await app.type("id:rename-input", "beta");
-  await app.press("id:rename-confirm");
+  await app.keyboard.press("enter");
   await app.waitFor("text:没能改名：已经有一篇叫「beta」的文档了，换一个名字");
   await app.clear("id:rename-input");
   await app.type("id:rename-input", "ALPHA");
-  await app.press("id:rename-confirm");
-  await app.waitFor("id:documents >> text:ALPHA");
+  await app.keyboard.press("enter");
+  await app.waitFor("id:documents >> text:ALPHA.md");
   expect(disk.library()["ALPHA.md"]).toBe(ALPHA);
 });
 
@@ -303,4 +318,209 @@ test("temporary files left by an interrupted save are cleared on start", async (
   await app.waitFor("text:first doc");
   await app.wait(200);
   expect(tempFiles(disk)).toEqual([]);
+});
+
+
+test("the macOS library menu creates empty folders and files, copies paths, and switches between tree and articles", async () => {
+  const disk = memoryFs({ "Notes/A.md": "# A\n\nbody\n", "Notes/A 副本.md": "existing copy\n" });
+  const app = await openMac(disk);
+  await showDocuments(app);
+  await app.rightClick("id:doc-Notes/A.md");
+  await app.chooseMenuItem("复制文件路径");
+  expect(app.clipboard()).toBe("/Users/t/Documents/Pairdown/Notes/A.md");
+  await app.rightClick("id:doc-Notes/A.md");
+  await app.chooseMenuItem("显示简介…");
+  await app.waitFor("id:file-info");
+  expect(app.texts()).toContain("/Users/t/Documents/Pairdown/Notes/A.md");
+  await app.press("id:close-file-info");
+  await app.rightClick("id:doc-Notes/A.md");
+  await app.chooseMenuItem("制作副本");
+  await app.waitFor("id:doc-Notes/A 副本 2.md");
+  expect(disk.library()["Notes/A 副本.md"]).toBe("existing copy\n");
+  expect(disk.library()["Notes/A 副本 2.md"]).toBe("# A\n\nbody\n");
+
+  await app.rightClick("id:doc-Notes/A.md");
+  await app.chooseMenuItem("新建文件夹…");
+  await app.type("id:folder-name", "Empty");
+  await app.press("id:create-folder-confirm");
+  await app.waitFor("id:folder-Notes/Empty");
+  await app.rightClick("id:folder-Notes/Empty");
+  expect(app.menu()?.find((item) => item.label === "文件树（树状视图）")?.checked).toBe(true);
+  await app.chooseMenuItem("新建文件");
+  await app.waitUntil(() => disk.library()["Notes/Empty/未命名.md"] === "");
+  await app.rightClick("id:folder-Notes/Empty");
+  await app.chooseMenuItem("文章（列表视图）");
+  await app.waitFor("id:doc-Notes/Empty/未命名.md");
+  expect(app.shows("id:folder-Notes/Empty")).toBe(false);
+});
+
+test("the macOS library menu reveals documents and folders in Finder, focuses search, and deletes after confirming", async () => {
+  const disk = memoryFs({ "Notes/A.md": "# A\n\nbody\n", "B.md": "# B\n\nbeta words\n" });
+  const runs: string[][] = [];
+  let finderFails = false;
+  const process = {
+    run: async (command: string, args: string[]) => {
+      runs.push([command, ...args]);
+      return finderFails
+        ? { code: 1, signal: null, stdout: "", stderr: "The file does not exist." }
+        : { code: 0, signal: null, stdout: "", stderr: "" };
+    },
+  };
+  const app = await open("../App.tsx", { ...MAC, storage: {}, modules: { ...disk.modules, process } as never });
+  await showDocuments(app);
+
+  await app.rightClick("id:doc-Notes/A.md");
+  await app.chooseMenuItem("在访达中显示");
+  await app.waitUntil(() => runs.length === 1);
+  expect(runs[0]).toEqual(["/usr/bin/open", "-R", "/Users/t/Documents/Pairdown/Notes/A.md"]);
+
+  await app.rightClick("id:doc-Notes/A.md");
+  await app.chooseMenuItem("文件树（树状视图）");
+  await app.rightClick("id:folder-Notes");
+  await app.chooseMenuItem("在访达中显示");
+  await app.waitUntil(() => runs.length === 2);
+  expect(runs[1]).toEqual(["/usr/bin/open", "-R", "/Users/t/Documents/Pairdown/Notes"]);
+
+  await app.press("id:library-actions");
+  await app.chooseMenuItem("在访达中显示");
+  await app.waitUntil(() => runs.length === 3);
+  expect(runs[2]).toEqual(["/usr/bin/open", "-R", "/Users/t/Documents/Pairdown"]);
+
+  finderFails = true;
+  await app.rightClick("id:folder-Notes");
+  await app.chooseMenuItem("在访达中显示");
+  await app.waitFor("text:The file does not exist.");
+
+  await app.rightClick("id:folder-Notes");
+  await app.chooseMenuItem("搜索");
+  await app.keyboard.press("w");
+  await app.waitUntil(() => app.texts().some((text) => text.includes("1 篇文档里找到")));
+  await app.keyboard.press("backspace");
+
+  await app.rightClick("id:doc-B.md");
+  await app.chooseMenuItem("删除…");
+  await app.press("id:delete-now");
+  await app.waitUntil(() => !("B.md" in disk.library()));
+  expect(Object.keys(disk.library())).toEqual(["Notes/A.md"]);
+});
+
+test("article cards show the folder, the file name with its extension and a two-line excerpt; the tree shows the library and file names with extensions", async () => {
+  const disk = memoryFs({ "Notes/Report.md": "---\ntag: x\n---\n# Weekly **Report**\n\nfirst line\nsecond line\n", "Top.markdown": "plain top\n" });
+  const app = await openMac(disk);
+  await showDocuments(app);
+  const report = "id:doc-Notes/Report.md";
+  await app.waitFor(report);
+  expect(app.shows(`${report} >> text:Notes`)).toBe(true);
+  expect(app.shows(`${report} >> text:Report.md`)).toBe(true);
+  expect(app.shows(`${report} >> text:Weekly Report\nfirst line`)).toBe(true);
+  expect(app.shows("id:doc-Top.markdown >> text:Pairdown")).toBe(true);
+  expect(app.shows("id:doc-Top.markdown >> text:Top.markdown")).toBe(true);
+  expect(app.shows("id:doc-Top.markdown >> text:plain top")).toBe(true);
+
+  await app.rightClick("id:doc-Top.markdown");
+  await app.chooseMenuItem("改文库名…");
+  await app.clear("id:rename-input");
+  await app.type("id:rename-input", "Renamed");
+  await app.keyboard.press("enter");
+  await app.waitFor("id:doc-Renamed.markdown >> text:plain top");
+
+  await app.rightClick("id:doc-Renamed.markdown");
+  await app.chooseMenuItem("文件树（树状视图）");
+  await app.waitFor("id:library-root >> text:Pairdown");
+  expect(app.shows(report)).toBe(false);
+  await app.press("id:folder-Notes");
+  await app.waitFor(`${report} >> text:Report.md`);
+  expect(app.shows(`${report} >> text:first line`)).toBe(false);
+  expect(app.shows("id:doc-Renamed.markdown >> text:Renamed.markdown")).toBe(true);
+});
+
+test("renaming on macOS happens in place: the row's name becomes an input holding the file name; Esc cancels, clicking elsewhere saves", async () => {
+  const disk = memoryFs({ "Alpha.md": ALPHA, "Beta.md": BETA });
+  const app = await openMac(disk);
+  await showDocuments(app);
+  await app.rightClick("id:doc-Alpha.md");
+  await app.chooseMenuItem("改文库名…");
+  await app.waitFor("id:doc-Alpha.md >> id:rename-input");
+  expect(app.shows("id:rename")).toBe(false);
+  expect(app.value("id:rename-input")).toBe("Alpha.md");
+  await app.clear("id:rename-input");
+  await app.type("id:rename-input", "Gamma");
+  await app.keyboard.press("escape");
+  await app.waitUntil(() => !app.shows("id:rename-input"));
+  expect(Object.keys(disk.library()).sort()).toEqual(["Alpha.md", "Beta.md"]);
+
+  await app.rightClick("id:doc-Alpha.md");
+  await app.chooseMenuItem("改文库名…");
+  await app.waitFor("id:rename-input");
+  await app.clear("id:rename-input");
+  await app.type("id:rename-input", "Gamma.md");
+  await app.press("id:doc-Beta.md");
+  await app.waitUntil(() => Object.keys(disk.library()).includes("Gamma.md"));
+  expect(disk.library()["Gamma.md"]).toBe(ALPHA);
+});
+
+test("a rename that cannot be saved keeps the input and does not switch documents; closing the sidebar while renaming saves the name", async () => {
+  const disk = memoryFs({ "Alpha.md": ALPHA, "Beta.md": BETA });
+  const app = await openMac(disk);
+  await app.waitFor("text:first doc");
+  await showDocuments(app);
+  await app.rightClick("id:doc-Alpha.md");
+  await app.chooseMenuItem("改文库名…");
+  await app.waitFor("id:rename-input");
+  await app.clear("id:rename-input");
+  await app.type("id:rename-input", "beta");
+  await app.press("id:doc-Beta.md");
+  await app.waitFor("text:没能改名：已经有一篇叫「beta」的文档了，换一个名字");
+  expect(app.shows("id:rename-input")).toBe(true);
+  expect(app.shows("id:editor >> text:first doc")).toBe(true);
+
+  await app.clear("id:rename-input");
+  await app.type("id:rename-input", "Gamma");
+  await app.press("id:toggle-sidebar");
+  await app.waitUntil(() => Object.keys(disk.library()).includes("Gamma.md"));
+  await app.press("id:toggle-sidebar");
+  await app.waitFor("id:doc-Gamma.md");
+  expect(app.shows("id:rename-input")).toBe(false);
+});
+
+test("the sidebar's search, ⋯ and + show only while the pointer is over the sidebar", async () => {
+  const disk = memoryFs({ "Alpha.md": ALPHA });
+  const app = await openMac(disk);
+  await app.waitFor("text:first doc");
+  await showDocuments(app);
+  await app.hover("id:macos-title-toolbar");
+  expect(app.viewStyle("id:library-row-actions")?.opacity).toBe(0);
+  expect(app.viewStyle("id:sidebar-search-slot")?.opacity).toBe(0);
+  await app.hover("id:doc-sort");
+  expect(app.viewStyle("id:library-row-actions")?.opacity).toBe(1);
+  expect(app.viewStyle("id:sidebar-search-slot")?.opacity).toBe(1);
+  await app.hover("id:sidebar-title");
+  expect(app.viewStyle("id:library-row-actions")?.opacity).toBe(1);
+  await app.hover("id:macos-title-toolbar");
+  expect(app.viewStyle("id:library-row-actions")?.opacity).toBe(0);
+  // 指针在侧栏里时用快捷键收起，再打开时不该还亮着
+  await app.hover("id:doc-sort");
+  await app.keyboard.press("mod+shift+l");
+  await app.wait(100);
+  await app.keyboard.press("mod+shift+l");
+  await app.wait(100);
+  expect(app.shows("id:sidebar")).toBe(false);
+  await app.keyboard.press("ctrl+mod+2");
+  await app.waitFor("id:documents");
+  expect(app.viewStyle("id:library-row-actions")?.opacity).toBe(0);
+});
+
+test("the table bar shows right above the table the caret is in, without moving the text", async () => {
+  const disk = memoryFs({ "Alpha.md": "# Alpha\n\nfirst doc\n\n| h1 | h2 |\n| --- | --- |\n| cell1 | cell2 |\n" });
+  const app = await openMac(disk);
+  await app.waitFor("text:first doc");
+  const before = app.layout("text:first doc")?.y;
+  const cell = app.layout("text:h1");
+  await app.press("text:cell1");
+  await app.waitFor("id:table-bar");
+  const bar = app.layout("id:table-bar");
+  expect(bar && cell && bar.y + bar.height <= cell.y && cell.y - (bar.y + bar.height) < 30).toBe(true);
+  expect(bar && app.layout("text:first doc") && bar.y > (app.layout("text:first doc")?.y ?? 0)).toBe(true);
+  expect(app.layout("text:first doc")?.y).toBe(before);
+  expect(app.layout("text:h1")?.y).toBe(cell?.y);
 });

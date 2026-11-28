@@ -18,7 +18,7 @@ export const EDITOR_CLASSES: RichEditorClasses = {
   placeholder: "text-faint",
   listMarker: "text-muted-foreground",
   // 上边 13 = 段落的上留白 6 + 让 16 高的框在 30 的行高里居中的 7
-  taskCheckbox: "mr-2 mt-[13px] size-4 rounded-[4px] border border-border-strong checked:border-primary checked:bg-primary",
+  taskCheckbox: "mr-2 mt-[13px] size-4 rounded-[4px] border border-border-strong checked:ml-[5px] checked:mr-[13px] checked:mt-[14px] checked:h-[11px] checked:w-[6px] checked:rotate-45 checked:rounded-none checked:border-0 checked:border-b-2 checked:border-r-2 checked:border-primary",
   // 行、列的拖动把手：平时很淡，鼠标移上去才显出来，不抢表格边线
   tableGrip: "rounded-full bg-border-strong opacity-50 hover:bg-primary hover:opacity-100",
   nodes: {
@@ -43,7 +43,8 @@ export const EDITOR_CLASSES: RichEditorClasses = {
     listItem: ITEM,
     taskItem: ITEM,
     horizontalRule: "my-4 h-px bg-border",
-    table: "my-3",
+    // 上面留 40：光标进表格时工具条（28 高）就出现在这道空位里，不盖住上一段，也不让正文跳（DESIGN.md「表格工具条」）
+    table: "mb-3 mt-10",
     tableCell: "border border-border px-3 py-0.5",
     tableHeader: "border border-border bg-muted px-3 py-0.5 font-semibold",
     "tableCell[align=center]": "text-center",

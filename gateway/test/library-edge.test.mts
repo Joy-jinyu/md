@@ -150,3 +150,39 @@ test("监听：目录改名、删除 → 推 relist", async (t) => {
   await rm(join(dir, "notes2"), { recursive: true });
   await until(() => c.signals.find((s) => s.type === "relist"));
 });
+
+test("list 带 head：开头最多 HEAD_BYTES 字节，按字符边界截断，去掉 BOM", async (t) => {
+  const { dir, connect } = await setup(t);
+  await writeFile(join(dir, "a.md"), "# 标题\n正文");
+  await writeFile(join(dir, "bom.md"), `${String.fromCharCode(0xfeff)}# 有 BOM`);
+  await writeFile(join(dir, "empty.md"), "");
+  // "a" 加汉字（3 字节），第 512 字节落在汉字中间
+  const long = "a" + "汉".repeat(400);
+  await writeFile(join(dir, "long.md"), long);
+  await writeFile(join(dir, "gbk.md"), Buffer.from([0xc4, 0xe3, 0xba, 0xc3]));
+  const c = await connect();
+  type HeadDocs = { docs: { path: string; head?: string; problem?: string }[] };
+  const docs = resultOf<HeadDocs>(await c.request("list")).docs;
+  const head = (p: string) => docs.find((d) => d.path === p)?.head;
+  assert.equal(head("a.md"), "# 标题\n正文");
+  assert.equal(head("bom.md"), "# 有 BOM");
+  assert.equal(head("empty.md"), "");
+  const cut = head("long.md");
+  assert.ok(cut !== undefined);
+  assert.ok(!cut.includes("�"));
+  assert.ok(Buffer.byteLength(cut, "utf8") <= P.HEAD_BYTES);
+  assert.equal(cut, "a" + "汉".repeat(170));
+  assert.ok(long.startsWith(cut));
+  const gbk = docs.find((d) => d.path === "gbk.md");
+  assert.equal(gbk?.problem, "not-utf8");
+  assert.equal("head" in (gbk ?? {}), false);
+});
+
+test("list 带 head：四字节字符被截在中间也不留半个", async (t) => {
+  const { dir, connect } = await setup(t);
+  // 2 字节前缀 + 表情（4 字节）：512 = 2 + 4×127 + 2，最后一个表情只读到一半
+  await writeFile(join(dir, "emoji.md"), "ab" + "😀".repeat(200));
+  const c = await connect();
+  const { docs } = resultOf<{ docs: { head?: string }[] }>(await c.request("list"));
+  assert.equal(docs[0].head, "ab" + "😀".repeat(127));
+});

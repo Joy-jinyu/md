@@ -43,6 +43,15 @@ test("new and renamed documents get clean file names and never replace an existi
   expect([...gw.docs.keys()].sort()).toEqual(["Plan.md", "Trip.md"]);
 });
 
+test("the list carries the start of each file for the card excerpt, and an older gateway without it still lists", async () => {
+  const { store } = await connected({ "ok.md": "# Fine\n\nbody\n", "old.md": "older\n", "bad.md": "" });
+  expect((await store.list()).map((d) => [d.id, d.head ?? null])).toEqual([
+    ["ok.md", "# Fine\n\nbody\n"],
+    ["old.md", null],
+    ["bad.md", null],
+  ]);
+});
+
 test("files the gateway cannot hand over are listed with the reason", async () => {
   const { store } = await connected({ "bad.md": "", "ok.md": "fine\n" });
   expect((await store.list()).map((d) => [d.id, d.problem ?? null])).toEqual([

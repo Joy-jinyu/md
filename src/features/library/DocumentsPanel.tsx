@@ -1,29 +1,22 @@
 /**
- * 侧栏的「文档」页：上面一个跨文档的搜索框、排序和新建；下面是文档列表，或者（有搜索词时）搜索结果。
- * 每行右边的「⋯」展开这一行的操作（重命名、版本历史、删除）。有鼠标时悬停这一行才出现（键盘移到它上面、展开着时也在）；
+ * 侧栏的「文档」页：上面排序和新建；下面是文档列表，或者（侧栏顶部的搜索框有搜索词时）搜索结果。
+ * macOS 从右键或「⋯」弹出系统菜单，网页用「⋯」展开行内操作。有鼠标时悬停这一行才出现（键盘移到它上面、展开着时也在）；
  * 触屏没有悬停，一直显示。
  */
 import { t } from "../../i18n";
-import { Scroll, Text, View } from "nsh";
-import { Button as BaseButton, Input } from "nsh/base";
-import type { DocMeta } from "../../store/document-store";
-import { CAN_HOVER } from "../../platform";
-import { allDocs, currentDocId, displayName } from "../../store/library";
-import { Button } from "../../ui/button";
+import { computed, effect, Scroll, Text, View } from "nsh";
+import { Button as BaseButton } from "nsh/base";
+import { IS_MACOS } from "../../platform";
+import { allDocs, displayName } from "../../store/library";
 import { Icon } from "../../ui/icon";
 import { IconButton } from "../../ui/icon-button";
 import { tip } from "../../ui/tooltip";
 import { SIDE_LIST, SIDE_PAD, SIDE_ROW, SIDE_TEXT } from "../editor/sidebar-style";
-import { problemText } from "./external";
-import { panel, setQuery, sorted, timeLabel } from "./panel-state";
+import { macFolders, macLibraryView, refreshMacFolders, restoreMacLibraryView, showMacLibraryMenu } from "./mac-library";
+import { DocCards, LibraryTree, type ListActions, RIGHT_INSET } from "./LibraryRows";
+import { openSearch, panel, sidebarToolsHidden } from "./panel-state";
 import { requestLibrary } from "./requests";
 import type { SearchResult } from "./search";
-
-/** 左右内边距 7 不是 8：边框占 1，这样框里的字落在侧栏的内容线（x=16）上，和下面行里的标题对齐。 */
-const FIELD = "h-7 rounded-(--radius-sm) border border-input bg-background px-[7px] text-[13px] text-foreground placeholder:text-faint focus:border-primary";
-
-/** 「+」和每行的「⋯」离底色边线 8（和行里上下的留白一样），两者中心在同一条竖线上。 */
-const RIGHT_INSET = "mr-2";
 
 /** 排序按钮：图标 + 现在的排法，和工具行右边的「+」一样 28 高；图标落在内容线上（左内边距 8）。 */
 function SortButton() {
@@ -45,93 +38,57 @@ function SortButton() {
 
 /** `onPicked`：选了一篇（或一个搜索结果），盖在正文上的侧栏这时该收起。 */
 export function DocumentsPanel(props: { onPicked: () => void }) {
+  const focusSearch = openSearch;
+  if (IS_MACOS) {
+    restoreMacLibraryView();
+    // 自动保存也会换掉 allDocs（改动时间、开头变了）；文件夹只在文档增删改名时才可能变，按 id 集合比
+    const ids = computed(() => allDocs().map((doc) => doc.id).join("\n"));
+    effect(() => {
+      if (macLibraryView() !== "tree") return;
+      ids();
+      void refreshMacFolders();
+    });
+  }
   const searching = () => panel.query().trim() !== "";
   return (
     <View testID="documents" accessibilityLabel={t("文档", "Documents")} class="flex-1">
       <View class={`gap-1 pb-1 pt-1 ${SIDE_PAD}`}>
-        <Input
-          testID="doc-search"
-          value={panel.query()}
-          onChange={({ value }) => setQuery(value)}
-          placeholder={t("搜索所有文档", "Search all documents")}
-          accessibilityLabel={t("搜索所有文档的正文", "Search the contents of all documents")}
-          autoCapitalize="none"
-          autoCorrect={false}
-          class={FIELD}
-        />
-        <View class="flex-row items-center justify-between">
+        <View
+          class="flex-row items-center justify-between"
+          onContextMenu={IS_MACOS ? ({ pagePosition }) => void showMacLibraryMenu({ folder: "", focusSearch }, pagePosition) : undefined}
+        >
           <SortButton />
-          <IconButton testID="doc-new" icon="plus" label={t("新建文档", "New document")} compact class={RIGHT_INSET} onPress={() => requestLibrary({ kind: "create" })} />
+          <View
+            testID="library-row-actions"
+            class="flex-row items-center transition-opacity duration-180 ease-settle motion-reduce:transition-none"
+            classList={{ "opacity-0": sidebarToolsHidden() }}
+            focusWithinStyle={{ opacity: 1 }}
+          >
+            <If when={IS_MACOS}>
+              <IconButton testID="library-actions" icon="ellipsis" label={t("文库操作", "Library actions")} compact onPress={() => void showMacLibraryMenu({ folder: "", focusSearch })} />
+            </If>
+            <IconButton testID="doc-new" icon="plus" label={t("新建文档", "New document")} compact class={RIGHT_INSET} onPress={() => requestLibrary({ kind: "create" })} />
+          </View>
         </View>
       </View>
-      <If when={searching()} else={<DocList onPicked={props.onPicked} />}>
+      <If when={searching()} else={<DocList onPicked={props.onPicked} focusSearch={focusSearch} />}>
         <SearchResults onPicked={props.onPicked} />
       </If>
     </View>
   );
 }
 
-function DocList(props: { onPicked: () => void }) {
+function DocList(props: ListActions) {
   return (
     <Scroll class="flex-1">
-      <If when={allDocs().length > 0} else={<Text class={`pt-1 ${SIDE_TEXT}`}>{t("还没有文档。点「+」新建一篇。", "No documents yet. Select + to create one.")}</Text>}>
+      <If when={allDocs().length > 0 || (IS_MACOS && macFolders().length > 0)} else={<Text class={`pt-1 ${SIDE_TEXT}`}>{t("还没有文档。点「+」新建一篇。", "No documents yet. Select + to create one.")}</Text>}>
         <View class={SIDE_LIST}>
-          <Each of={sorted(allDocs(), panel.sort())} key={(d) => d.id}>
-            {(doc) => <DocRow doc={doc()} onPicked={props.onPicked} />}
-          </Each>
+          <If when={IS_MACOS && macLibraryView() === "tree"} else={<DocCards {...props} />}>
+            <LibraryTree {...props} />
+          </If>
         </View>
       </If>
     </Scroll>
-  );
-}
-
-function DocRow(props: { doc: DocMeta; onPicked: () => void }) {
-  const current = () => props.doc.id === currentDocId();
-  const expanded = () => panel.expanded() === props.doc.id;
-  const name = () => displayName(props.doc);
-  const problem = () => (props.doc.problem ? problemText(props.doc.problem) : null);
-  const sub = () => problem() ?? (props.doc.title && props.doc.title !== props.doc.name ? t(`文库名：${props.doc.name}.md · ${timeLabel(props.doc.updatedAt)}`, `Library name: ${props.doc.name}.md · ${timeLabel(props.doc.updatedAt)}`) : timeLabel(props.doc.updatedAt));
-  const open = () => {
-    if (!current()) requestLibrary({ kind: "open", id: props.doc.id });
-    props.onPicked();
-  };
-  return (
-    <View class="group rounded-(--radius-sm)" classList={{ "bg-pressed": current(), "bg-hover": expanded() && !current(), "hover:bg-hover": !current() }}>
-      <View class="flex-row items-center">
-        <View
-          testID={`doc-${props.doc.id}`}
-          role="button"
-          accessibilityLabel={problem() ? t(`${name()}（${problem()}）`, `${name()} (${problem()})`) : name()}
-          accessibilityState={{ selected: current() }}
-          onPress={open}
-          class="min-h-11 min-w-0 flex-1 justify-center rounded-(--radius-sm) py-1 pl-2 pr-1 active:bg-pressed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          <Text style={{ numberOfLines: 1 }} class="text-[13px] leading-5" classList={{ "font-semibold text-strong": current(), "text-foreground": !current() && !problem(), "text-muted-foreground": !!problem() }}>
-            {name() || t("未命名", "Untitled")}
-          </Text>
-          <Text style={{ numberOfLines: 1 }} class="text-[11px] leading-4" classList={{ "text-subtle": !problem(), "text-warn-text": !!problem() }}>
-            {sub()}
-          </Text>
-        </View>
-        <IconButton
-          testID={`doc-more-${props.doc.id}`}
-          icon="ellipsis"
-          label={t(`「${name()}」的更多操作`, `More actions for “${name()}”`)}
-          tooltip={t("更多操作", "More actions")}
-          active={expanded()}
-          compact
-          class={CAN_HOVER && !expanded() ? `${RIGHT_INSET} opacity-0 group-hover:opacity-100 focus-visible:opacity-100` : RIGHT_INSET}
-          onPress={() => panel.expanded.set(expanded() ? null : props.doc.id)}
-        />
-      </View>
-      <If when={expanded()}>
-        <View class="flex-row flex-wrap gap-1 pb-1 pl-2">
-          <Button testID="doc-rename" label={t("改文库名", "Rename in library")} onPress={() => panel.renaming.set(props.doc)} />
-          <Button testID="doc-history" label={t("版本历史", "Version history")} onPress={() => requestLibrary({ kind: "history", id: props.doc.id })} />
-          <Button testID="doc-delete" label={t("删除", "Delete")} onPress={() => panel.deleting.set(props.doc)} />
-        </View>
-      </If>
-    </View>
   );
 }
 

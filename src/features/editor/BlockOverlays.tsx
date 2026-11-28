@@ -1,6 +1,6 @@
 /**
  * 盖在正文上、跟着滚动的两样东西（放进 RichEditor 的 contentLayer）：
- * 提示块左上角的类型标签，和光标所在代码块右上角的「语言 / 复制」。
+ * 提示块左上角的类型标签，和光标所在代码块右上角的「语言 / 复制」；还量出光标所在表格的位置给表格工具条用。
  * 位置用 nodeRect 现量：选区或文档变了（编辑页每次修订调 `sync` / `docChanged`）、编辑器大小变了（编辑器的 onLayout 调 `sync`）就重量。
  */
 import { cleanup, effect, keymap, signal, Text, untracked, View } from "nsh";
@@ -57,6 +57,8 @@ function alertPositions(doc: Node): { pos: number; alert: string }[] {
 export function createBlockOverlays(session: RichEditorSession) {
   const alerts = signal<(Placed & { alert: string })[]>([]);
   const code = signal<(Placed & { language: string | null; text: string }) | null>(null);
+  /** 光标所在表格的位置：表格工具条贴在它上面。 */
+  const table = signal<Placed | null>(null);
   /** 按了「复制」之后按钮上的回执：复制成了，或者没有剪贴板权限、改成选中了代码。 */
   const copied = signal<"copied" | "selected" | null>(null);
   /** 语言列表开着没有：命令「设置代码块语言」从键盘打开它。 */
@@ -77,6 +79,9 @@ export function createBlockOverlays(session: RichEditorSession) {
       const rect = blockRect(session, a.pos);
       return rect ? [{ ...a, rect }] : [];
     }));
+    const inTable = session.findParentNode("table") as Found | null;
+    const tableRect = inTable ? blockRect(session, inTable.pos) : null;
+    table.set(inTable && tableRect ? { pos: inTable.pos, rect: tableRect } : null);
     const found = session.findParentNode("codeBlock") as Found | null;
     const rect = found ? blockRect(session, found.pos) : null;
     if (!found || !rect) {
@@ -148,7 +153,7 @@ export function createBlockOverlays(session: RichEditorSession) {
     if (scrollTimer !== undefined) clearTimeout(scrollTimer);
     if (flashTimer !== undefined) clearTimeout(flashTimer);
   });
-  return { alerts, code, copied, languageOpen, sync, scrolled, docChanged, setLanguage, copy, chooseLanguage };
+  return { alerts, code, table, copied, languageOpen, sync, scrolled, docChanged, setLanguage, copy, chooseLanguage };
 }
 
 export type BlockOverlaysState = ReturnType<typeof createBlockOverlays>;

@@ -31,20 +31,31 @@ test("the command filter puts prefix matches first and ignores case and spaces",
 
 test("only find, replace, the document list, the palette, settings, appearance and the file commands work in source-only documents", () => {
   const ctx: CommandContext = { ui: createUi(), session: null, askLink: () => undefined, askAtom: () => undefined, toggleSource: null };
-  const usable = ids(COMMANDS.filter((c) => available(c, ctx)));
+  // 网站、更新日志、反馈的链接按打包时的部署配置拼，配没配都可能，不在这里断言
+  const byDeployConfig = new Set(["help.website", "help.changelog", "help.feedback"]);
+  const usable = ids(COMMANDS.filter((c) => available(c, ctx) && !byDeployConfig.has(c.id)));
   expect(usable).toEqual([
     "view.find",
     "view.replace",
+    "view.findNext",
+    "view.findPrevious",
+    "view.sidebar",
     "view.documents",
+    "view.search",
     "view.palette",
     "view.settings",
     "view.appearance",
+    "theme.system",
+    "theme.light",
+    "theme.dark",
     "file.new",
     "file.quickOpen",
     "file.history",
     "file.open",
     "file.saveAs",
     "file.exportHtml",
+    "help.markdown",
+    "help.shortcuts",
   ]);
 });
 

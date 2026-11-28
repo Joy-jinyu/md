@@ -1,10 +1,10 @@
 /**
- * 编辑页顶栏。左边：侧栏开关、文档名；右边：保存状态、字数、打开 / 另存为 / 设置三个图标按钮、明暗切换。
- * 专注、打字机和源码几种模式平时不占位置（用快捷键或命令面板进），进去以后才在文档名后面出一个可以点掉的小标签。
+ * 编辑页顶栏。浏览器和 macOS 都在这一行放文档名、保存状态、字数和同步入口；macOS 这一行同时是标题栏。
  */
-import { colorScheme, computed, type JSX, setColorScheme, Text, View, windowSize } from "nsh";
-import { Button as BaseButton } from "nsh/base";
+import { colorScheme, computed, Text, View, windowSize } from "nsh";
+import { Button as BaseButton, Toolbar } from "nsh/base";
 import { t } from "../../i18n";
+import { bindDocumentWindowTitle, editorTitleBarArea, IS_MACOS } from "../../platform";
 import { elsewhereWords } from "../../store/backend";
 import { saveState } from "../../store/document";
 import { openDisplayName } from "../../store/library";
@@ -12,8 +12,10 @@ import { Icon } from "../../ui/icon";
 import { IconButton } from "../../ui/icon-button";
 import { tip } from "../../ui/tooltip";
 import { requestFile } from "../files/requests";
+import { quickOpenOpen } from "../library/requests";
 import { settingsOpen } from "../settings/open";
 import { SyncButton } from "../sync/SyncButton";
+import { toggleAppearance } from "./commands";
 import { sidebar, toggleSidebar, type Ui } from "./ui-state";
 
 /** 顶栏上的视图开关；只能用源码打开的文档没有这些。 */
@@ -48,36 +50,93 @@ function ModeChip(props: { testID: string; label: string; onExit: () => void }) 
   );
 }
 
-/** `title`：正文第一个标题（编辑器里最新的，没有是空串）。`context`：跟着光标所在位置出现的工具（表格工具条），排在文档名后面。 */
-export function TopBar(props: { title: string; counts: string; toggles?: ViewToggles; context?: JSX.Element }) {
+interface TopBarProps {
+  title: string;
+  counts: string;
+  toggles?: ViewToggles;
+}
+
+function SidebarButton() {
+  return <IconButton testID="toggle-sidebar" icon="sidebar" label={sidebar.open() ? t("收起侧栏", "Collapse sidebar") : t("展开侧栏（文档、大纲）", "Expand sidebar (documents and outline)")} active={sidebar.open()} onPress={() => toggleSidebar()} />;
+}
+
+function ModeChips(props: { toggles?: ViewToggles }) {
+  return (
+    <If when={props.toggles}>
+      {(toggles) => (
+        <>
+          <If when={toggles().ui.focusOn() && !toggles().sourceOn}>
+            <ModeChip testID="exit-focus" label={t("专注模式", "Focus Mode")} onExit={() => toggles().ui.focusOn.set(false)} />
+          </If>
+          <If when={toggles().ui.typewriterOn() && !toggles().sourceOn}>
+            <ModeChip testID="exit-typewriter" label={t("打字机模式", "Typewriter Mode")} onExit={() => toggles().ui.typewriterOn.set(false)} />
+          </If>
+          <If when={!IS_MACOS && toggles().sourceOn}>
+            <ModeChip testID="toggle-source" label={t("源码模式", "Source Mode")} onExit={toggles().onToggleSource} />
+          </If>
+        </>
+      )}
+    </If>
+  );
+}
+
+function MacToolbar(props: TopBarProps) {
+  const title = () => openDisplayName(props.title);
+  bindDocumentWindowTitle(title);
+  return (
+    <>
+      <View desktop={{ windowDrag: true }}>
+        <Toolbar
+          testID="macos-title-toolbar"
+          accessibilityLabel={t("编辑工具栏", "Editor toolbar")}
+          style={{ paddingLeft: editorTitleBarArea().left }}
+          class="min-h-10 flex-row items-center gap-2 border-b border-border bg-card pr-3"
+        >
+          <SidebarButton />
+          <Text style={{ numberOfLines: 1 }} class="min-w-0 flex-1 text-sm font-semibold text-strong">
+            {title()}
+          </Text>
+          <ModeChips toggles={props.toggles} />
+          <SaveStatus />
+          <If when={windowSize().width >= NARROW}>
+            <Counts text={props.counts} />
+          </If>
+          <SyncButton compact={windowSize().width < NARROW} dense />
+          <IconButton testID="toolbar-quick-open" icon="fileSearch" label={t("快速打开…", "Quick Open…")} compact onPress={() => quickOpenOpen.set(true)} />
+          <If when={props.toggles}>
+            {(toggles) => (
+              <IconButton
+                testID="toggle-source"
+                icon="code"
+                label={t("源码视图", "Source View")}
+                tooltip={toggles().sourceOn ? t("回到所见即所得", "Back to rich text") : t("Markdown 源码", "Markdown source")}
+                active={toggles().sourceOn}
+                selected={toggles().sourceOn}
+                compact
+                onPress={toggles().onToggleSource}
+              />
+            )}
+          </If>
+        </Toolbar>
+      </View>
+    </>
+  );
+}
+
+/** `title`：正文第一个标题（编辑器里最新的，没有是空串）。 */
+export function TopBar(props: TopBarProps) {
+  if (IS_MACOS) return <MacToolbar {...props} />;
   const narrow = () => windowSize().width < NARROW;
   return (
     <View class="min-h-11 flex-row items-center border-b border-border pl-3 pr-4" classList={{ "gap-3": !narrow(), "gap-2": narrow() }}>
-      <IconButton testID="toggle-sidebar" icon="sidebar" label={sidebar.open() ? t("收起侧栏", "Collapse sidebar") : t("展开侧栏（文档、大纲）", "Expand sidebar (documents and outline)")} active={sidebar.open()} onPress={() => toggleSidebar()} />
+      <SidebarButton />
       <Text style={{ numberOfLines: 1 }} class="min-w-0 flex-1 pl-1 text-sm font-medium text-strong">
         {openDisplayName(props.title)}
       </Text>
-      <If when={props.toggles}>
-        {(toggles) => (
-          <>
-            <If when={toggles().ui.focusOn() && !toggles().sourceOn}>
-              <ModeChip testID="exit-focus" label={t("专注模式", "Focus Mode")} onExit={() => toggles().ui.focusOn.set(false)} />
-            </If>
-            <If when={toggles().ui.typewriterOn() && !toggles().sourceOn}>
-              <ModeChip testID="exit-typewriter" label={t("打字机模式", "Typewriter Mode")} onExit={() => toggles().ui.typewriterOn.set(false)} />
-            </If>
-            <If when={toggles().sourceOn}>
-              <ModeChip testID="toggle-source" label={t("源码模式", "Source Mode")} onExit={toggles().onToggleSource} />
-            </If>
-          </>
-        )}
-      </If>
-      {props.context}
+      <ModeChips toggles={props.toggles} />
       <SaveStatus />
       <If when={!narrow()}>
-        <Text style={{ fontVariant: ["tabular-nums"], numberOfLines: 1 }} class="min-w-0 shrink text-xs text-muted-foreground">
-          {props.counts}
-        </Text>
+        <Counts text={props.counts} />
       </If>
       <SyncButton compact={narrow()} />
       <View class="flex-row items-center gap-0.5">
@@ -87,6 +146,14 @@ export function TopBar(props: { title: string; counts: string; toggles?: ViewTog
       </View>
       <AppearanceToggle />
     </View>
+  );
+}
+
+function Counts(props: { text: string }) {
+  return (
+    <Text style={{ fontVariant: ["tabular-nums"], numberOfLines: 1 }} class="min-w-0 shrink text-xs text-muted-foreground">
+      {props.text}
+    </Text>
   );
 }
 
@@ -133,7 +200,7 @@ function AppearanceToggle() {
       testID="toggle-appearance"
       accessibilityLabel={t(`切换到${dark() ? "浅色" : "深色"}外观`, `Switch to ${dark() ? "light" : "dark"} appearance`)}
       tooltip={tip(t("切换明暗主题", "Toggle light and dark appearance"))}
-      onPress={() => setColorScheme(dark() ? "light" : "dark")}
+      onPress={toggleAppearance}
       class="size-[34px] items-center justify-center rounded-full border border-border-strong bg-secondary transition duration-180 ease-settle hover:border-primary active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none motion-reduce:active:scale-100"
     >
       <View class={GLYPH} classList={{ [AWAY]: dark() }}>

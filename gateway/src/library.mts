@@ -6,7 +6,7 @@ import { basename, dirname, join } from "node:path";
 import { describeError, errno, GatewayError } from "./errors.mts";
 import { sniffImage } from "./image.mts";
 import { assetDirFor, assetPathFromSrc, extOf, foldName, resolveInLibrary, srcFromAssetPath } from "./paths.mts";
-import { ASSET_DIR, IMAGE_TYPES, MAX_ASSET_BYTES, MAX_DOC_BYTES, type DocMeta, type ImageExt } from "./protocol.ts";
+import { ASSET_DIR, HEAD_BYTES, IMAGE_TYPES, MAX_ASSET_BYTES, MAX_DOC_BYTES, type DocMeta, type ImageExt } from "./protocol.ts";
 
 /** 文档的版本：内容的 SHA-256。内容不变版本就不变，和改动时间无关。 */
 export function versionOf(bytes: Uint8Array): string {
@@ -22,6 +22,8 @@ const TEMP_RE = /^\.pairdown-[0-9a-f]{12}\.tmp$/;
 
 /** ignoreBOM：保留开头的 BOM，原样读出、原样写回，字节不变。 */
 const utf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+/** 给 list 的 head 用：和上面不同，开头的 BOM 会被去掉。 */
+const headUtf8 = new TextDecoder("utf-8", { fatal: true });
 
 async function unlinkQuiet(p: string): Promise<void> {
   try {
@@ -131,6 +133,16 @@ async function hashFile(abs: string, rel: string): Promise<string> {
   return h.digest("hex");
 }
 
+/** 末尾半个多字节字符（被字节上限截断的）去掉。 */
+function wholeChars(bytes: Uint8Array): Uint8Array {
+  let i = bytes.length - 1;
+  while (i >= 0 && bytes.length - i <= 3 && (bytes[i] & 0xc0) === 0x80) i--;
+  if (i < 0) return bytes;
+  const lead = bytes[i];
+  const need = lead >= 0xf0 ? 4 : lead >= 0xe0 ? 3 : lead >= 0xc0 ? 2 : 1;
+  return bytes.length - i < need ? bytes.subarray(0, i) : bytes;
+}
+
 async function exists(abs: string): Promise<boolean> {
   try {
     await lstat(abs);
@@ -199,14 +211,16 @@ export class Library {
     }
   }
 
-  /** 列表里的一项；超过上限或不是 UTF-8 的标上 problem。读不了返回 null。 */
+  /** 列表里的一项；超过上限或不是 UTF-8 的标上 problem，能编辑的带上 head。读不了返回 null。 */
   private async meta(child: string): Promise<DocMeta | null> {
     const abs = join(this.root, child);
     try {
       const s = await stat(abs);
       const base = { path: child, size: s.size, mtimeMs: Math.floor(s.mtimeMs) };
       if (s.size > MAX_DOC_BYTES) return { ...base, problem: "too-large" };
-      return isUtf8(await readFile(abs)) ? base : { ...base, problem: "not-utf8" };
+      const bytes = await readFile(abs);
+      if (!isUtf8(bytes)) return { ...base, problem: "not-utf8" };
+      return { ...base, head: headUtf8.decode(wholeChars(bytes.subarray(0, HEAD_BYTES))) };
     } catch (e) {
       this.log(`列文档时跳过 ${child}：${describeError(e)}`);
       return null;

@@ -6,7 +6,8 @@ export type LibraryRequest =
   | { kind: "open"; id: string; find?: string }
   /** 先打开这一篇，再显示它的版本历史。 */
   | { kind: "history"; id: string }
-  | { kind: "create" }
+  | { kind: "create"; folder?: string }
+  | { kind: "duplicate"; id: string }
   /** 把读进来的文件存成一篇新文档并打开。 */
   | { kind: "import"; name: string; text: string }
   /** 打开系统交来的文件（绝对路径）：在文库里就直接打开，不在就导入一份副本。 */

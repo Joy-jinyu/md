@@ -5,6 +5,7 @@
  */
 import { t } from "../i18n";
 import { Storage } from "nsh";
+import { headOf } from "../doc/excerpt";
 import { markdownTitle } from "../doc/title";
 import type { DocMeta, DocumentStore, ReadResult, StoreChange, Version, WriteResult } from "./document-store";
 import { historyKey } from "./history";
@@ -59,7 +60,8 @@ function parseMeta(id: string, raw: unknown): DocMeta | null {
   try {
     const m = JSON.parse(raw) as Partial<StoredMeta>;
     if (typeof m.name !== "string" || typeof m.version !== "number") return null;
-    return { id, name: m.name, title: typeof m.title === "string" ? m.title : "", updatedAt: typeof m.updatedAt === "number" ? m.updatedAt : 0, version: m.version, size: typeof m.size === "number" ? m.size : 0 };
+    const meta: DocMeta = { id, name: m.name, title: typeof m.title === "string" ? m.title : "", updatedAt: typeof m.updatedAt === "number" ? m.updatedAt : 0, version: m.version, size: typeof m.size === "number" ? m.size : 0 };
+    return typeof m.head === "string" ? { ...meta, head: m.head } : meta;
   } catch (e) {
     console.warn("document meta unreadable", id, e);
     return null;
@@ -69,7 +71,7 @@ function parseMeta(id: string, raw: unknown): DocMeta | null {
 const encodeMeta = ({ id: _id, ...rest }: DocMeta) => JSON.stringify(rest);
 
 function describe(id: string, name: string, text: string, version: number): DocMeta {
-  return { id, name, title: markdownTitle(text), updatedAt: Date.now(), version, size: text.length };
+  return { id, name, title: markdownTitle(text), updatedAt: Date.now(), version, size: text.length, head: headOf(text) };
 }
 
 /** 新文档的 id：`d` 开头，和 `md.` 后面别的键（settings、meta.…）不会撞。 */
@@ -85,7 +87,7 @@ function cleanName(name: string): string {
 async function legacyMeta(kv: Kv): Promise<DocMeta | null> {
   const body = await kv.get(LEGACY_DOC_KEY);
   if (typeof body !== "string") return null;
-  return { id: FIRST_DOC_ID, name: markdownTitle(body) || "未命名", title: markdownTitle(body), updatedAt: 0, version: 0, size: body.length };
+  return { id: FIRST_DOC_ID, name: markdownTitle(body) || "未命名", title: markdownTitle(body), updatedAt: 0, version: 0, size: body.length, head: headOf(body) };
 }
 
 async function list(kv: Kv): Promise<DocMeta[]> {
